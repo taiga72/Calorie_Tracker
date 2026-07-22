@@ -11,24 +11,6 @@ type FoodInput = 'text' | 'image' | 'both';
 
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
-// Helper function to compress images before saving to localStorage
-function compressImage(base64Str: string, maxWidth = 300): Promise<string> {
-  return new Promise((resolve) => {
-    const img = new Image();
-    img.src = base64Str;
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const scale = maxWidth / img.width;
-      canvas.width = maxWidth;
-      canvas.height = img.height * scale;
-      const ctx = canvas.getContext('2d');
-      ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-      resolve(canvas.toDataURL('image/jpeg', 0.6)); // 60% JPEG quality (~20KB)
-    };
-    img.onerror = () => resolve(base64Str);
-  });
-}
-
 export function LogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, addMeal, logWeight } = useStore();
   const [mode, setMode] = useState<Mode>('food');
@@ -61,12 +43,8 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
 
   const onFile = async (file: File) => {
     const b64 = await fileToBase64(file);
-    setImageB64(b64); // Full quality sent to Gemini AI
-    
-    const rawPreview = `data:${b64.mimeType};base64,${b64.data}`;
-    const compressed = await compressImage(rawPreview, 300); // Scaled down for UI/storage
-    setImagePreview(compressed);
-
+    setImageB64(b64);
+    setImagePreview(`data:${b64.mimeType};base64,${b64.data}`);
     setFoodInput((prev) => (text.trim() ? 'both' : 'image'));
   };
 
@@ -106,7 +84,7 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
       fat: result.fat,
       fiber: result.fiber,
       reasoning: result.reasoning,
-      imageData: imagePreview ?? undefined, // Tiny thumbnail string saves safely!
+      imageData: imagePreview ?? undefined,
     });
     close();
   };
