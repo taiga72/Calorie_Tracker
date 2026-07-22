@@ -1,26 +1,36 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useStore } from '@/store';
 import { exportToCsv } from '@/lib/csvExport';
 import { isApiKeyConfigured } from '@/lib/gemini';
+import { getGuestMeals, getGuestWeights } from '@/lib/guestStorage';
 import type { MealEntry, WeightLog } from '@/types';
-import { Sun, Moon, Download, Loader2, LogOut, Sparkles, Sparkles as SparkIcon } from 'lucide-react';
+import { Sun, Moon, Download, Loader2, LogOut, Sparkles } from 'lucide-react';
 
 export function Settings() {
   const { theme, toggleTheme } = useStore();
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isGuest } = useAuth();
   const [exporting, setExporting] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const [mealsRes, weightsRes] = await Promise.all([
-        supabase.from('meals').select('*').order('logged_at', { ascending: false }),
-        supabase.from('weight_logs').select('*').order('logged_at', { ascending: false }),
-      ]);
-      const meals = (mealsRes.data as MealEntry[]) || [];
-      const weights = (weightsRes.data as WeightLog[]) || [];
+      let meals: MealEntry[] = [];
+      let weights: WeightLog[] = [];
+
+      if (isGuest) {
+        meals = getGuestMeals();
+        weights = getGuestWeights();
+      } else {
+        const [mealsRes, weightsRes] = await Promise.all([
+          supabase.from('meals').select('*').order('logged_at', { ascending: false }),
+          supabase.from('weight_logs').select('*').order('logged_at', { ascending: false }),
+        ]);
+        meals = (mealsRes.data as MealEntry[]) || [];
+        weights = (weightsRes.data as WeightLog[]) || [];
+      }
+
       exportToCsv(meals, weights, profile?.display_name || 'user');
     } catch (e) {
       console.error('Export failed:', e);
@@ -33,7 +43,6 @@ export function Settings() {
     <div className="p-6 md:p-8 max-w-2xl mx-auto pb-24 md:pb-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Settings</h1>
 
-      {/* Appearance */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
           Appearance
@@ -63,14 +72,13 @@ export function Settings() {
         </div>
       </div>
 
-      {/* AI Configuration */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
           AI Configuration
         </h2>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <SparkIcon size={20} className="text-primary-500" />
+            <Sparkles size={20} className="text-primary-500" />
             <div>
               <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Gemini AI</p>
               <p className="text-xs text-gray-400 dark:text-gray-500">
@@ -90,7 +98,6 @@ export function Settings() {
         </div>
       </div>
 
-      {/* Data Export */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
           Data Export
@@ -116,7 +123,6 @@ export function Settings() {
         </div>
       </div>
 
-      {/* About */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-primary-500 flex items-center justify-center">
@@ -129,11 +135,10 @@ export function Settings() {
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-500">
           AI-powered nutrition tracking with Mifflin-St Jeor calorie calculations. Your data is securely stored
-          and encrypted in the cloud, tied to your Google account.
+          and encrypted in the cloud, tied to your account.
         </p>
       </div>
 
-      {/* Account */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
           Account
@@ -148,14 +153,16 @@ export function Settings() {
           )}
           <div>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{profile?.display_name}</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">{profile?.email}</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              {isGuest ? 'Guest mode — data stored locally' : (profile?.email || 'Signed in')}
+            </p>
           </div>
         </div>
         <button
           onClick={signOut}
           className="w-full py-3 rounded-xl text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors flex items-center justify-center gap-2"
         >
-          <LogOut size={16} /> Sign Out
+          <LogOut size={16} /> {isGuest ? 'Exit Guest Mode' : 'Sign Out'}
         </button>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import { useAuth } from '@/context/AuthContext';
-import { useStore } from '@/store';
 
 type Tab = 'dashboard' | 'stats' | 'profile' | 'settings';
 
@@ -16,11 +15,10 @@ const TABS: { id: Tab; label: string; icon: React.FC<{ size?: number }> }[] = [
 ];
 
 export function Navigation({ activeTab, onTabChange }: NavProps) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, isGuest } = useAuth();
 
   return (
     <>
-      {/* Desktop sidebar */}
       <nav className="hidden md:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-30">
         <div className="flex items-center gap-2 px-6 h-16 border-b border-gray-100 dark:border-gray-700">
           <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center">
@@ -56,17 +54,21 @@ export function Navigation({ activeTab, onTabChange }: NavProps) {
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
               {profile?.display_name || 'User'}
             </span>
+            {isGuest && (
+              <span className="text-[10px] font-medium text-amber-600 bg-amber-50 dark:bg-amber-900/30 dark:text-amber-400 px-1.5 py-0.5 rounded-full">
+                Guest
+              </span>
+            )}
           </div>
           <button
             onClick={signOut}
             className="w-full text-left px-4 py-2.5 rounded-xl text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
           >
-            Sign out
+            {isGuest ? 'Exit Guest Mode' : 'Sign out'}
           </button>
         </div>
       </nav>
 
-      {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 z-30">
         <div className="flex justify-around items-center h-16">
           {TABS.map((tab) => (

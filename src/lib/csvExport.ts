@@ -11,7 +11,7 @@ function csvEscape(val: string | number | null | undefined): string {
 export function exportToCsv(meals: MealEntry[], weights: WeightLog[], userName: string) {
   const lines: string[] = [];
 
-  lines.push(`# MacroFlow Export — ${userName}`);
+  lines.push(`# MacroFlow Export - ${userName}`);
   lines.push(`# Generated: ${new Date().toISOString()}`);
   lines.push('');
   lines.push('## Meals');

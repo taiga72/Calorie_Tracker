@@ -6,7 +6,6 @@
   * { @apply border-gray-200 dark:border-gray-700; }
   body {
     @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 antialiased;
-    font-feature-settings: 'cv11', 'ss01';
   }
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { @apply bg-transparent; }

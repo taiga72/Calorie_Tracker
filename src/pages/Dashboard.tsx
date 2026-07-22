@@ -3,11 +3,12 @@ import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { todayKey, toKey } from '@/lib/dateUtils';
 import { LogModal } from '@/modals/LogModal';
+import { getGuestMeals, deleteGuestMeal } from '@/lib/guestStorage';
 import type { MealEntry } from '@/types';
 import { Plus, Flame, Beef, Wheat, Droplet, Trash2, Sparkles, type LucideIcon } from 'lucide-react';
 
 export function Dashboard() {
-  const { profile } = useAuth();
+  const { profile, isGuest } = useAuth();
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -15,6 +16,17 @@ export function Dashboard() {
 
   const loadMeals = useCallback(async () => {
     if (!profile) return;
+    if (isGuest) {
+      const all = getGuestMeals();
+      const start = new Date(selectedDate + 'T00:00:00');
+      const end = new Date(selectedDate + 'T23:59:59');
+      setMeals(all.filter((m) => {
+        const d = new Date(m.logged_at);
+        return d >= start && d <= end;
+      }));
+      setLoading(false);
+      return;
+    }
     const startOfDay = new Date(selectedDate + 'T00:00:00');
     const endOfDay = new Date(selectedDate + 'T23:59:59');
     const { data, error } = await supabase
@@ -29,7 +41,7 @@ export function Dashboard() {
     }
     setMeals((data as MealEntry[]) || []);
     setLoading(false);
-  }, [profile, selectedDate]);
+  }, [profile, selectedDate, isGuest]);
 
   useEffect(() => {
     loadMeals();
@@ -52,6 +64,11 @@ export function Dashboard() {
   const targetFat = profile?.target_fat_g || 67;
 
   const deleteMeal = async (id: string) => {
+    if (isGuest) {
+      deleteGuestMeal(id);
+      setMeals((prev) => prev.filter((m) => m.id !== id));
+      return;
+    }
     const { error } = await supabase.from('meals').delete().eq('id', id);
     if (error) {
       console.error('Delete failed:', error.message);
@@ -72,15 +89,12 @@ export function Dashboard() {
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto pb-24 md:pb-8">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Dashboard</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
             {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', {
-              weekday: 'long',
-              month: 'long',
-              day: 'numeric',
+              weekday: 'long', month: 'long', day: 'numeric',
             })}
           </p>
         </div>
@@ -102,7 +116,6 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Calorie ring */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <div className="flex items-center gap-6">
           <div className="relative w-32 h-32 flex-shrink-0">
@@ -130,14 +143,12 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Macro cards */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <MacroCard icon={Beef} label="Protein" value={totals.protein} target={targetProtein} color="blue" />
         <MacroCard icon={Wheat} label="Carbs" value={totals.carbs} target={targetCarbs} color="amber" />
         <MacroCard icon={Droplet} label="Fat" value={totals.fat} target={targetFat} color="rose" />
       </div>
 
-      {/* Log button */}
       <button
         onClick={() => setLogOpen(true)}
         className="w-full bg-primary-500 text-white font-semibold py-4 rounded-2xl text-sm flex items-center justify-center gap-2 hover:bg-primary-600 transition-colors shadow-lg shadow-primary-500/20 mb-6"
@@ -145,7 +156,6 @@ export function Dashboard() {
         <Sparkles size={18} /> Log a Meal with AI
       </button>
 
-      {/* Meal list */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           Today's Meals
@@ -220,11 +230,11 @@ function MacroCard({
 }) {
   const pct = Math.min(100, (value / target) * 100);
   const colorMap = {
-    blue: 'bg-blue-500 text-blue-600 dark:text-blue-400',
-    amber: 'bg-amber-500 text-amber-600 dark:text-amber-400',
-    rose: 'bg-rose-500 text-rose-600 dark:text-rose-400',
+    blue: { bg: 'bg-blue-500', text: 'text-blue-600 dark:text-blue-400' },
+    amber: { bg: 'bg-amber-500', text: 'text-amber-600 dark:text-amber-400' },
+    rose: { bg: 'bg-rose-500', text: 'text-rose-600 dark:text-rose-400' },
   };
-  const [bg, text] = colorMap[color].split(' ');
+  const { bg, text } = colorMap[color];
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm">

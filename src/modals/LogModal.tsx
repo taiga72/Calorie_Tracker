@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { estimateMeal, fileToBase64, RateLimitError, isApiKeyConfigured } from '@/lib/gemini';
+import { addGuestMeal } from '@/lib/guestStorage';
 import { Modal } from '@/components/Modal';
-import { todayKey } from '@/lib/dateUtils';
 import type { MealType, ParsedMeal } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Clock, Check, Plus } from 'lucide-react';
 
@@ -16,7 +16,7 @@ interface LogModalProps {
 type MealTypeOption = MealType | 'auto';
 
 export function LogModal({ open, onClose, onSaved }: LogModalProps) {
-  const { user } = useAuth();
+  const { isGuest } = useAuth();
   const [mode, setMode] = useState<'text' | 'photo'>('text');
   const [text, setText] = useState('');
   const [mealType, setMealType] = useState<MealTypeOption>('auto');
@@ -26,7 +26,7 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [rateLimitSecs, setRateLimitSecs] = useState<number | null>(null);
   const [result, setResult] = useState<ParsedMeal | null>(null);
-  const [weightVal, setWeightVal] = useState('');
+  const [portionPct, setPortionPct] = useState('100');
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -47,7 +47,7 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
     setImagePreview(null);
     setError(null);
     setResult(null);
-    setWeightVal('');
+    setPortionPct('100');
     setRateLimitSecs(null);
   };
 
@@ -98,8 +98,8 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
   };
 
   const onSave = async () => {
-    if (!result || !user) return;
-    const scaleFactor = weightVal ? parseFloat(weightVal) / 100 : 1;
+    if (!result) return;
+    const scaleFactor = (parseInt(portionPct, 10) || 100) / 100;
     const scaled: ParsedMeal = {
       ...result,
       calories: Math.round(result.calories * scaleFactor),
@@ -116,6 +116,24 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
         fiber: Math.round(it.fiber * scaleFactor),
       })),
     };
+
+    if (isGuest) {
+      addGuestMeal({
+        meal_type: scaled.mealType,
+        logged_at: new Date().toISOString(),
+        calories: scaled.calories,
+        protein: scaled.protein,
+        carbs: scaled.carbs,
+        fat: scaled.fat,
+        fiber: scaled.fiber,
+        food_items: scaled.items,
+        reasoning: scaled.reasoning,
+      });
+      reset();
+      onSaved();
+      onClose();
+      return;
+    }
 
     const { error: insertError } = await supabase.from('meals').insert({
       meal_type: scaled.mealType,
@@ -144,7 +162,6 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
     <Modal open={open} onClose={handleClose} title="Log a Meal" maxWidth="max-w-lg">
       {!result ? (
         <div className="space-y-4">
-          {/* Mode toggle */}
           <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-2xl">
             <button
               onClick={() => setMode('text')}
@@ -168,7 +185,6 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
             </button>
           </div>
 
-          {/* Meal type selector */}
           <div className="flex flex-wrap gap-2">
             {mealTypes.map((mt) => (
               <button
@@ -185,7 +201,6 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
             ))}
           </div>
 
-          {/* Text input */}
           {mode === 'text' && (
             <textarea
               value={text}
@@ -196,7 +211,6 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
             />
           )}
 
-          {/* Photo input */}
           {mode === 'photo' && (
             <div
               onClick={() => fileRef.current?.click()}
@@ -252,22 +266,15 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
             className="w-full bg-primary-500 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[.99] transition-transform hover:bg-primary-600"
           >
             {loading ? (
-              <>
-                <Loader2 size={18} className="animate-spin" /> Estimating…
-              </>
+              <><Loader2 size={18} className="animate-spin" /> Estimating…</>
             ) : rateLimitSecs !== null && rateLimitSecs > 0 ? (
-              <>
-                <Clock size={18} /> Retry in {rateLimitSecs}s
-              </>
+              <><Clock size={18} /> Retry in {rateLimitSecs}s</>
             ) : (
-              <>
-                <Sparkles size={18} /> Estimate with AI
-              </>
+              <><Sparkles size={18} /> Estimate with AI</>
             )}
           </button>
         </div>
       ) : (
-        /* Results view */
         <div className="space-y-4">
           <div className="flex items-center gap-2 text-primary-600 dark:text-primary-400">
             <Check size={20} />
@@ -306,7 +313,6 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
             )}
           </div>
 
-          {/* Portion adjustment */}
           <div>
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
               Portion size (100% = as estimated)
@@ -317,12 +323,12 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
                 min="25"
                 max="300"
                 step="5"
-                value={weightVal || '100'}
-                onChange={(e) => setWeightVal(e.target.value)}
+                value={portionPct}
+                onChange={(e) => setPortionPct(e.target.value)}
                 className="flex-1 accent-primary-500"
               />
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300 tabular-nums w-12 text-right">
-                {weightVal || '100'}%
+                {portionPct}%
               </span>
             </div>
           </div>
@@ -336,10 +342,7 @@ export function LogModal({ open, onClose, onSaved }: LogModalProps) {
 
           <div className="flex gap-3">
             <button
-              onClick={() => {
-                setResult(null);
-                setError(null);
-              }}
+              onClick={() => { setResult(null); setError(null); }}
               className="flex-1 py-3.5 rounded-2xl text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               Redo

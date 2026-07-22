@@ -1,20 +1,69 @@
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { Loader2, AlertCircle, Mail, Lock, UserPlus, LogIn } from 'lucide-react';
+
+type AuthTab = 'signin' | 'signup';
 
 export function SignInPage() {
-  const { signInWithGoogle } = useAuth();
+  const { signInWithGoogle, signInWithEmail, signUpWithEmail, continueAsGuest } = useAuth();
+  const [tab, setTab] = useState<AuthTab>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const validate = (): string | null => {
+    if (!email.trim()) return 'Please enter your email address.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Please enter a valid email address.';
+    if (password.length < 6) return 'Password must be at least 6 characters.';
+    return null;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const v = validate();
+    if (v) {
+      setError(v);
+      return;
+    }
+    setLoading(true);
+    try {
+      if (tab === 'signin') {
+        await signInWithEmail(email, password);
+      } else {
+        await signUpWithEmail(email, password);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Authentication failed.';
+      if (msg.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please try again.');
+      } else if (msg.includes('already registered') || msg.includes('already been registered')) {
+        setError('This email is already registered. Try signing in instead.');
+      } else if (msg.includes('Password should be at least')) {
+        setError('Password must be at least 6 characters.');
+      } else {
+        setError(msg);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGoogle = async () => {
     setError(null);
-    setLoading(true);
+    setGoogleLoading(true);
     try {
       await signInWithGoogle();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to sign in.');
-      setLoading(false);
+      const msg = e instanceof Error ? e.message : 'Google sign-in failed.';
+      if (msg.includes('refused to connect') || msg.includes('provider') || msg.includes('not enabled')) {
+        setError('Google sign-in is not available right now. Try email/password instead.');
+      } else {
+        setError(msg);
+      }
+      setGoogleLoading(false);
     }
   };
 
@@ -32,30 +81,128 @@ export function SignInPage() {
         </div>
 
         <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Welcome</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-            Sign in to start tracking your meals, macros, and weight progress.
-          </p>
+          {/* Tabs */}
+          <div className="grid grid-cols-2 gap-2 bg-gray-100 dark:bg-gray-700/50 p-1 rounded-2xl mb-6">
+            <button
+              onClick={() => { setTab('signin'); setError(null); }}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                tab === 'signin'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <LogIn size={16} /> Sign In
+            </button>
+            <button
+              onClick={() => { setTab('signup'); setError(null); }}
+              className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                tab === 'signup'
+                  ? 'bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <UserPlus size={16} /> Sign Up
+            </button>
+          </div>
 
+          {/* Email/password form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5">
+                Password
+              </label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={tab === 'signup' ? 'At least 6 characters' : 'Your password'}
+                  disabled={loading}
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs rounded-xl p-3">
+                <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-primary-500 text-white font-semibold py-3.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-primary-600 transition-colors disabled:opacity-50"
+            >
+              {loading ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : tab === 'signin' ? (
+                <LogIn size={18} />
+              ) : (
+                <UserPlus size={18} />
+              )}
+              {loading ? 'Please wait…' : tab === 'signin' ? 'Sign In' : 'Create Account'}
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-5">
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            <span className="text-xs text-gray-400 dark:text-gray-500">or</span>
+            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          </div>
+
+          {/* Google OAuth */}
           <button
             onClick={handleGoogle}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium py-3.5 rounded-2xl text-sm hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors disabled:opacity-50"
+            disabled={googleLoading || loading}
+            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-medium py-3.5 rounded-xl text-sm hover:bg-gray-50 dark:hover:bg-gray-600/50 transition-colors disabled:opacity-50"
           >
-            {loading ? (
-              <span className="w-5 h-5 border-2 border-gray-300 border-t-primary-500 rounded-full animate-spin" />
+            {googleLoading ? (
+              <Loader2 size={20} className="animate-spin" />
             ) : (
               <GoogleIcon />
             )}
-            {loading ? 'Connecting…' : 'Continue with Google'}
+            {googleLoading ? 'Connecting…' : 'Continue with Google'}
           </button>
 
-          {error && (
-            <p className="mt-4 text-sm text-red-600 dark:text-red-400 text-center">{error}</p>
-          )}
+          {/* Guest mode */}
+          <button
+            onClick={continueAsGuest}
+            disabled={loading || googleLoading}
+            className="w-full mt-4 text-sm text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors py-2"
+          >
+            Continue as Guest
+          </button>
 
-          <p className="mt-6 text-xs text-gray-400 dark:text-gray-500 text-center">
-            By signing in, you agree to our Terms of Service and Privacy Policy.
+          <p className="mt-4 text-xs text-gray-400 dark:text-gray-500 text-center">
+            {tab === 'signin'
+              ? "Don't have an account? "
+              : 'Already have an account? '}
+            <button
+              onClick={() => { setTab(tab === 'signin' ? 'signup' : 'signin'); setError(null); }}
+              className="text-primary-600 dark:text-primary-400 font-medium hover:underline"
+            >
+              {tab === 'signin' ? 'Sign up' : 'Sign in'}
+            </button>
           </p>
         </div>
       </div>

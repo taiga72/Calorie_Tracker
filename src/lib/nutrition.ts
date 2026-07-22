@@ -15,9 +15,9 @@ export const ACTIVITY_FACTORS: Record<ActivityLevel, number> = {
 
 export const ACTIVITY_LABELS: Record<ActivityLevel, string> = {
   sedentary: 'Sedentary (little or no exercise)',
-  lightly_active: 'Lightly Active (1–3 days/week)',
-  moderately_active: 'Moderately Active (3–5 days/week)',
-  very_active: 'Very Active (6–7 days/week)',
+  lightly_active: 'Lightly Active (1-3 days/week)',
+  moderately_active: 'Moderately Active (3-5 days/week)',
+  very_active: 'Very Active (6-7 days/week)',
   extra_active: 'Extra Active (physical job + training)',
 };
 
@@ -48,14 +48,11 @@ export function calculateTargets(
   const bmr = calculateBMR(weightKg, heightCm, ageYears, sex);
   const tdee = bmr * ACTIVITY_FACTORS[activity];
 
-  // Target weekly rate: -0.5 kg/week for loss, +0.25 kg/week for gain
-  // 1 kg fat ~ 7700 kcal; per day = weekly_rate * 7700 / 7
   let targetCalories = tdee;
   if (goal === 'lose') targetCalories = tdee - (0.5 * 7700) / 7;
   if (goal === 'gain') targetCalories = tdee + (0.25 * 7700) / 7;
   targetCalories = Math.max(1200, Math.round(targetCalories));
 
-  // Macro split: protein 30%, carbs 40%, fat 30%
   const protein = Math.round((targetCalories * 0.3) / 4);
   const carbs = Math.round((targetCalories * 0.4) / 4);
   const fat = Math.round((targetCalories * 0.3) / 9);

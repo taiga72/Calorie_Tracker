@@ -6,6 +6,7 @@ import {
   ACTIVITY_LABELS,
   GOAL_LABELS,
 } from '@/lib/nutrition';
+import { saveGuestProfile, addGuestWeight } from '@/lib/guestStorage';
 import type {
   BiologicalSex,
   ActivityLevel,
@@ -21,7 +22,7 @@ const ACTIVITIES = Object.entries(ACTIVITY_LABELS) as [ActivityLevel, string][];
 const GOALS = Object.entries(GOAL_LABELS) as [TargetGoal, string][];
 
 export function SetupWizard() {
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, isGuest, updateGuestProfile } = useAuth();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -34,10 +35,7 @@ export function SetupWizard() {
   const [error, setError] = useState<string | null>(null);
 
   const steps = ['About You', 'Body Metrics', 'Activity & Goal'];
-  const canNext =
-    step === 0 ||
-    (step === 1 && age && height && weight) ||
-    step === 2;
+  const canNext = step === 0 || (step === 1 && age && height && weight) || step === 2;
 
   const handleFinish = async () => {
     setError(null);
@@ -52,6 +50,26 @@ export function SetupWizard() {
         return;
       }
       const targets = calculateTargets(weightNum, heightNum, ageNum, sex, activity, goal);
+
+      if (isGuest) {
+        updateGuestProfile({
+          display_name: 'Guest',
+          biological_sex: sex,
+          age: ageNum,
+          height_cm: heightNum,
+          current_weight_kg: weightNum,
+          activity_level: activity,
+          target_goal: goal,
+          target_daily_calories: targets.targetCalories,
+          target_protein_g: targets.protein,
+          target_carbs_g: targets.carbs,
+          target_fat_g: targets.fat,
+          setup_complete: true,
+        });
+        addGuestWeight(weightNum);
+        setSaving(false);
+        return;
+      }
 
       const { error: upsertError } = await supabase
         .from('profiles')
@@ -74,7 +92,6 @@ export function SetupWizard() {
 
       if (upsertError) throw upsertError;
 
-      // Log initial weight
       await supabase.from('weight_logs').insert({
         weight_kg: weightNum,
         logged_at: new Date().toISOString(),
@@ -109,7 +126,6 @@ export function SetupWizard() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Let's set up your nutrition profile</p>
         </div>
 
-        {/* Stepper */}
         <div className="flex items-center justify-center gap-2 mb-6">
           {steps.map((label, i) => (
             <div key={label} className="flex items-center gap-2">

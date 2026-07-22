@@ -6,12 +6,18 @@ import {
   ACTIVITY_LABELS,
   GOAL_LABELS,
 } from '@/lib/nutrition';
+import {
+  saveGuestProfile,
+  addGuestWeight,
+  getGuestWeightLogs,
+  deleteGuestWeight as deleteGuestWeightFn,
+} from '@/lib/guestStorage';
 import type { WeightLog, BiologicalSex, ActivityLevel, TargetGoal } from '@/types';
 import { formatDate } from '@/lib/dateUtils';
 import { Save, Loader2, Check, Plus, Trash2, User, Scale } from 'lucide-react';
 
 export function Profile() {
-  const { user, profile, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile, isGuest, updateGuestProfile } = useAuth();
   const [displayName, setDisplayName] = useState(profile?.display_name || '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || '');
   const [weight, setWeight] = useState(profile?.current_weight_kg?.toString() || '');
@@ -39,6 +45,10 @@ export function Profile() {
   }, [profile]);
 
   const loadWeightLogs = async () => {
+    if (isGuest) {
+      setWeightLogs(getGuestWeightLogs());
+      return;
+    }
     if (!user) return;
     const { data } = await supabase
       .from('weight_logs')
@@ -50,7 +60,7 @@ export function Profile() {
 
   useEffect(() => {
     loadWeightLogs();
-  }, [user]);
+  }, [user, isGuest]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -60,6 +70,27 @@ export function Profile() {
       const heightNum = parseFloat(height) || profile?.height_cm || 170;
       const weightNum = parseFloat(weight) || profile?.current_weight_kg || 70;
       const targets = calculateTargets(weightNum, heightNum, ageNum, sex, activity, goal);
+
+      if (isGuest) {
+        updateGuestProfile({
+          display_name: displayName,
+          avatar_url: avatarUrl,
+          current_weight_kg: weightNum,
+          height_cm: heightNum,
+          biological_sex: sex,
+          age: ageNum,
+          activity_level: activity,
+          target_goal: goal,
+          target_daily_calories: targets.targetCalories,
+          target_protein_g: targets.protein,
+          target_carbs_g: targets.carbs,
+          target_fat_g: targets.fat,
+        });
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+        setSaving(false);
+        return;
+      }
 
       const { error } = await supabase
         .from('profiles')
@@ -93,6 +124,16 @@ export function Profile() {
   const logWeight = async () => {
     const w = parseFloat(newWeight);
     if (!w) return;
+
+    if (isGuest) {
+      addGuestWeight(w);
+      saveGuestProfile({ current_weight_kg: w });
+      updateGuestProfile({ current_weight_kg: w });
+      setNewWeight('');
+      loadWeightLogs();
+      return;
+    }
+
     const { error } = await supabase.from('weight_logs').insert({
       weight_kg: w,
       logged_at: new Date().toISOString(),
@@ -108,6 +149,11 @@ export function Profile() {
   };
 
   const deleteWeightLog = async (id: string) => {
+    if (isGuest) {
+      deleteGuestWeightFn(id);
+      setWeightLogs((prev) => prev.filter((w) => w.id !== id));
+      return;
+    }
     const { error } = await supabase.from('weight_logs').delete().eq('id', id);
     if (error) return;
     setWeightLogs((prev) => prev.filter((w) => w.id !== id));
@@ -120,7 +166,6 @@ export function Profile() {
     <div className="p-6 md:p-8 max-w-2xl mx-auto pb-24 md:pb-8">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Profile</h1>
 
-      {/* Avatar + name */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <div className="flex items-center gap-4 mb-5">
           {avatarUrl ? (
@@ -131,8 +176,12 @@ export function Profile() {
             </div>
           )}
           <div>
-            <p className="text-sm text-gray-400 dark:text-gray-500">{profile?.email || user?.email}</p>
-            <p className="text-xs text-gray-400 dark:text-gray-500">Member since {new Date(profile?.created_at || Date.now()).toLocaleDateString()}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500">
+              {isGuest ? 'Guest mode' : (profile?.email || user?.email)}
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Member since {new Date(profile?.created_at || Date.now()).toLocaleDateString()}
+            </p>
           </div>
         </div>
 
@@ -159,7 +208,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Body metrics */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">
           Body Metrics
@@ -240,7 +288,6 @@ export function Profile() {
         </div>
       </div>
 
-      {/* Save button */}
       <button
         onClick={handleSave}
         disabled={saving}
@@ -255,7 +302,6 @@ export function Profile() {
         )}
       </button>
 
-      {/* Weight history */}
       <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
         <div className="flex items-center gap-2 mb-4">
           <Scale size={18} className="text-gray-400 dark:text-gray-500" />

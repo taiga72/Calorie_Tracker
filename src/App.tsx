@@ -11,18 +11,18 @@ import { Settings } from '@/pages/Settings';
 type Tab = 'dashboard' | 'stats' | 'profile' | 'settings';
 
 function AppContent() {
-  const { session, profile, loading } = useAuth();
+  const { profile, loading, authMode } = useAuth();
   const [tab, setTab] = useState<Tab>('dashboard');
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="w-8 h-8 border-3 border-gray-200 dark:border-gray-700 border-t-primary-500 rounded-full animate-spin" />
+        <div className="w-8 h-8 border-[3px] border-gray-200 dark:border-gray-700 border-t-primary-500 rounded-full animate-spin" />
       </div>
     );
   }
 
-  if (!session) {
+  if (authMode === 'none') {
     return <SignInPage />;
   }
 

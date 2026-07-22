@@ -5,6 +5,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   AreaChart, Area, CartesianGrid, Legend,
 } from 'recharts';
+import { getGuestMeals, getGuestWeights } from '@/lib/guestStorage';
 import type { MealEntry, WeightLog } from '@/types';
 import { toKey } from '@/lib/dateUtils';
 
@@ -18,7 +19,7 @@ const RANGES: { key: RangeKey; label: string; days: number }[] = [
 ];
 
 export function Statistics() {
-  const { profile } = useAuth();
+  const { profile, isGuest } = useAuth();
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [weights, setWeights] = useState<WeightLog[]>([]);
   const [range, setRange] = useState<RangeKey>('7d');
@@ -33,29 +34,29 @@ export function Statistics() {
     setLoading(true);
     const startISO = startDate.toISOString();
 
+    if (isGuest) {
+      const allMeals = getGuestMeals();
+      const allWeights = getGuestWeights();
+      setMeals(allMeals.filter((m) => new Date(m.logged_at) >= startDate));
+      setWeights(allWeights.filter((w) => new Date(w.logged_at) >= startDate));
+      setLoading(false);
+      return;
+    }
+
     const [mealsRes, weightsRes] = await Promise.all([
-      supabase
-        .from('meals')
-        .select('*')
-        .gte('logged_at', startISO)
-        .order('logged_at', { ascending: true }),
-      supabase
-        .from('weight_logs')
-        .select('*')
-        .gte('logged_at', startISO)
-        .order('logged_at', { ascending: true }),
+      supabase.from('meals').select('*').gte('logged_at', startISO).order('logged_at', { ascending: true }),
+      supabase.from('weight_logs').select('*').gte('logged_at', startISO).order('logged_at', { ascending: true }),
     ]);
 
     if (mealsRes.data) setMeals(mealsRes.data as MealEntry[]);
     if (weightsRes.data) setWeights(weightsRes.data as WeightLog[]);
     setLoading(false);
-  }, [profile, startDate.toISOString()]);
+  }, [profile, startDate.toISOString(), isGuest]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
-  // Aggregate macros by day
   const macroData = (() => {
     const byDay = new Map<string, { p: number; c: number; f: number; count: number }>();
     for (const m of meals) {
@@ -83,7 +84,6 @@ export function Statistics() {
     return daysArr;
   })();
 
-  // Weight trend
   const weightData = weights.map((w) => ({
     date: new Date(w.logged_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
     weight: w.weight_kg,
@@ -91,15 +91,12 @@ export function Statistics() {
 
   const currentWeight = weights.length > 0 ? weights[weights.length - 1].weight_kg : profile?.current_weight_kg;
   const startWeight = weights.length > 0 ? weights[0].weight_kg : null;
-  const weightChange = currentWeight && startWeight ? (currentWeight - startWeight) : null;
+  const weightChange = currentWeight && startWeight ? currentWeight - startWeight : null;
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto pb-24 md:pb-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Statistics</h1>
-      </div>
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">Statistics</h1>
 
-      {/* Range selector */}
       <div className="flex gap-2 mb-6 overflow-x-auto">
         {RANGES.map((r) => (
           <button
@@ -120,7 +117,6 @@ export function Statistics() {
         <div className="text-center py-16 text-sm text-gray-400 dark:text-gray-500">Loading data…</div>
       ) : (
         <div className="space-y-6">
-          {/* Macro Breakdown Bar Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-1">Macro Breakdown</h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-4">
@@ -133,11 +129,8 @@ export function Statistics() {
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: 'none',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    color: '#f3f4f6',
+                    backgroundColor: '#1f2937', border: 'none', borderRadius: '12px',
+                    fontSize: '12px', color: '#f3f4f6',
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '12px' }} />
@@ -148,7 +141,6 @@ export function Statistics() {
             </ResponsiveContainer>
           </div>
 
-          {/* Weight Trend Area Chart */}
           <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weight Trend</h2>
@@ -181,27 +173,16 @@ export function Statistics() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:opacity-20" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} interval="preserveStartEnd" />
-                  <YAxis
-                    tick={{ fontSize: 11, fill: '#9ca3af' }}
-                    domain={['dataMin - 1', 'dataMax + 1']}
-                  />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} domain={['dataMin - 1', 'dataMax + 1']} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: '#1f2937',
-                      border: 'none',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      color: '#f3f4f6',
+                      backgroundColor: '#1f2937', border: 'none', borderRadius: '12px',
+                      fontSize: '12px', color: '#f3f4f6',
                     }}
                   />
                   <Area
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="#10b981"
-                    strokeWidth={2.5}
-                    fill="url(#weightGrad)"
-                    name="Weight (kg)"
-                    dot={{ r: 3, fill: '#10b981' }}
+                    type="monotone" dataKey="weight" stroke="#10b981" strokeWidth={2.5}
+                    fill="url(#weightGrad)" name="Weight (kg)" dot={{ r: 3, fill: '#10b981' }}
                   />
                 </AreaChart>
               </ResponsiveContainer>
@@ -213,7 +194,6 @@ export function Statistics() {
             )}
           </div>
 
-          {/* Summary stats */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <SummaryCard label="Current Weight" value={currentWeight ? `${currentWeight} kg` : '—'} />
             <SummaryCard label="Total Meals" value={`${meals.length}`} />
