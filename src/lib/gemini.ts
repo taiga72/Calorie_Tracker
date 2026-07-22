@@ -1,7 +1,7 @@
 import type { MealType, FoodItem } from '@/types';
 
 // Models ordered by priority
-const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const VERSION = 'v1beta';
 
 function endpoint(modelName: string, apiKey: string): string {
