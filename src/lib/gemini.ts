@@ -1,10 +1,11 @@
-import type { MealType, FoodItem } from '@/types';
+import type { MealType, FoodItem, ParsedMeal } from '@/types';
 
 const MODEL = 'gemini-3.5-flash';
 const VERSION = 'v1beta';
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
-function endpoint(apiKey: string): string {
-  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+function endpoint(): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${API_KEY}`;
 }
 
 export class RateLimitError extends Error {
@@ -16,15 +17,13 @@ export class RateLimitError extends Error {
   }
 }
 
-export interface ParsedMeal {
-  mealType: MealType;
-  items: FoodItem[];
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  fiber: number;
-  reasoning: string;
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+interface GeminiErrorBody {
+  error?: { message?: string; details?: { retryDelay?: string }[] };
 }
 
 const SYSTEM_PROMPT = `You are a precise nutrition estimator. The user will describe or show a meal via text and/or an image.
@@ -47,25 +46,11 @@ Rules:
 - reasoning should be one or two short sentences explaining how you estimated portions/macros.
 - Output ONLY the JSON object.`;
 
-interface GeminiPart {
-  text?: string;
-  inlineData?: { mimeType: string; data: string };
-}
-
-interface GeminiErrorBody {
-  error?: { message?: string; details?: { retryDelay?: string }[] };
-}
-
 function parseRetrySecs(res: Response, body: GeminiErrorBody | null): number {
   const retryAfter = res.headers.get('Retry-After');
   if (retryAfter) {
     const secs = parseInt(retryAfter, 10);
     if (!Number.isNaN(secs)) return Math.min(Math.max(secs, 1), 120);
-  }
-  const retryInfo = res.headers.get('Retry-Info');
-  if (retryInfo) {
-    const m = retryInfo.match(/(\d+)\s*s/i);
-    if (m) return Math.min(Math.max(parseInt(m[1], 10), 1), 120);
   }
   if (body?.error?.details && Array.isArray(body.error.details)) {
     for (const d of body.error.details) {
@@ -78,12 +63,15 @@ function parseRetrySecs(res: Response, body: GeminiErrorBody | null): number {
   return 30;
 }
 
+export function isApiKeyConfigured(): boolean {
+  return API_KEY.length > 0;
+}
+
 export async function estimateMeal(
-  apiKey: string,
   text: string,
   imageBase64?: { data: string; mimeType: string }
 ): Promise<ParsedMeal> {
-  if (!apiKey) throw new Error('No Gemini API key set. Add one in Settings.');
+  if (!API_KEY) throw new Error('Gemini API key is not configured. Set VITE_GEMINI_API_KEY in your environment.');
 
   const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
   const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
@@ -97,7 +85,7 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json' },
   };
 
-  const res = await fetch(endpoint(apiKey), {
+  const res = await fetch(endpoint(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -128,17 +116,13 @@ export async function estimateMeal(
 
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
-let parsed: ParsedMeal;
-  // Always extract only the inner JSON object between curly braces
-  const match = textOut.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Could not parse Gemini response as JSON.');
-  }
-
+  let parsed: ParsedMeal;
   try {
+    parsed = JSON.parse(textOut);
+  } catch {
+    const match = textOut.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error('Could not parse Gemini response as JSON.');
     parsed = JSON.parse(match[0]);
-  } catch (err) {
-    throw new Error('Failed to parse clean JSON object from Gemini response.');
   }
 
   if (!parsed.items || !Array.isArray(parsed.items)) {
@@ -148,7 +132,7 @@ let parsed: ParsedMeal;
   if (!validTypes.includes(parsed.mealType)) {
     parsed.mealType = 'Snack';
   }
-  parsed.items = parsed.items.map((it) => ({
+  parsed.items = parsed.items.map((it: FoodItem) => ({
     name: String(it.name || 'Item'),
     calories: Number(it.calories) || 0,
     protein: Number(it.protein) || 0,

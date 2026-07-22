@@ -1,34 +1,52 @@
 import { useState } from 'react';
-import { StoreProvider } from '@/store';
-import { BottomNav } from '@/components/BottomNav';
-import { FAB } from '@/components/FAB';
-import { LogModal } from '@/modals/LogModal';
-import { HomeTab } from '@/tabs/HomeTab';
-import { StatsTab } from '@/tabs/StatsTab';
-import { CalendarTab } from '@/tabs/CalendarTab';
-import { SettingsTab } from '@/tabs/SettingsTab';
-import type { TabKey } from '@/types';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { Navigation } from '@/components/Navigation';
+import { SignInPage } from '@/pages/SignInPage';
+import { SetupWizard } from '@/pages/SetupWizard';
+import { Dashboard } from '@/pages/Dashboard';
+import { Statistics } from '@/pages/Statistics';
+import { Profile } from '@/pages/Profile';
+import { Settings } from '@/pages/Settings';
 
-function App() {
-  const [tab, setTab] = useState<TabKey>('home');
-  const [logOpen, setLogOpen] = useState(false);
+type Tab = 'dashboard' | 'stats' | 'profile' | 'settings';
+
+function AppContent() {
+  const { session, profile, loading } = useAuth();
+  const [tab, setTab] = useState<Tab>('dashboard');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="w-8 h-8 border-3 border-gray-200 dark:border-gray-700 border-t-primary-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <SignInPage />;
+  }
+
+  if (profile && !profile.setup_complete) {
+    return <SetupWizard />;
+  }
 
   return (
-    <StoreProvider>
-      <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
-        <main className="pb-24">
-          {tab === 'home' && <HomeTab />}
-          {tab === 'stats' && <StatsTab />}
-          {tab === 'calendar' && <CalendarTab />}
-          {tab === 'settings' && <SettingsTab />}
-        </main>
-
-        <FAB onClick={() => setLogOpen(true)} />
-        <BottomNav active={tab} onChange={setTab} />
-        <LogModal open={logOpen} onClose={() => setLogOpen(false)} />
-      </div>
-    </StoreProvider>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Navigation activeTab={tab} onTabChange={setTab} />
+      <main className="md:ml-64">
+        {tab === 'dashboard' && <Dashboard />}
+        {tab === 'stats' && <Statistics />}
+        {tab === 'profile' && <Profile />}
+        {tab === 'settings' && <Settings />}
+      </main>
+    </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}
