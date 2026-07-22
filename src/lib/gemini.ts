@@ -1,16 +1,17 @@
 import type { MealType, FoodItem } from '@/types';
 
-const MODEL = 'gemini-3.5-flash';
+// Models ordered by priority
+const MODELS = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
 const VERSION = 'v1beta';
 
-function endpoint(apiKey: string): string {
-  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+function endpoint(modelName: string, apiKey: string): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${modelName}:generateContent?key=${apiKey}`;
 }
 
 export class RateLimitError extends Error {
   retryAfterSec: number;
   constructor(retryAfterSec: number, detail: string) {
-    super(`Rate limit reached. ${detail}`);
+    super(`Rate limit reached across all fallback models. ${detail}`);
     this.name = 'RateLimitError';
     this.retryAfterSec = retryAfterSec;
   }
@@ -97,73 +98,92 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json' },
   };
 
-  const res = await fetch(endpoint(apiKey), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  let lastErrorDetail = '';
+  let maxRetrySecs = 30;
 
-  if (!res.ok) {
-    let detail = '';
-    let parsedBody: GeminiErrorBody | null = null;
+  // Try each model in sequence until one succeeds
+  for (const modelName of MODELS) {
     try {
-      parsedBody = (await res.json()) as GeminiErrorBody;
-      detail = parsedBody?.error?.message || JSON.stringify(parsedBody);
-    } catch {
-      detail = await res.text().catch(() => '');
+      const res = await fetch(endpoint(modelName, apiKey), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        let detail = '';
+        let parsedBody: GeminiErrorBody | null = null;
+        try {
+          parsedBody = (await res.json()) as GeminiErrorBody;
+          detail = parsedBody?.error?.message || JSON.stringify(parsedBody);
+        } catch {
+          detail = await res.text().catch(() => '');
+        }
+
+        // If rate-limited (429), catch it and attempt the next model in the list
+        if (res.status === 429) {
+          console.warn(`[Gemini Fallback] Model ${modelName} hit rate limit (429). Trying next fallback model...`);
+          lastErrorDetail = detail || 'Rate limit exceeded.';
+          maxRetrySecs = parseRetrySecs(res, parsedBody);
+          continue; // Move to the next model in MODELS
+        }
+
+        throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
+      }
+
+      const data: { candidates?: { content?: { parts?: GeminiPart[] } }[] } = await res.json();
+      const textOut: string | undefined =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+        data?.candidates?.[0]?.content?.parts?.map((p: GeminiPart) => p.text).join('');
+
+      if (!textOut) throw new Error('Gemini returned an empty response.');
+
+      let parsed: ParsedMeal;
+      const match = textOut.match(/\{[\s\S]*\}/);
+      if (!match) {
+        throw new Error('Could not parse Gemini response as JSON.');
+      }
+
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        throw new Error('Failed to parse clean JSON object from Gemini response.');
+      }
+
+      if (!parsed.items || !Array.isArray(parsed.items)) {
+        throw new Error('Gemini response missing items array.');
+      }
+      const validTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+      if (!validTypes.includes(parsed.mealType)) {
+        parsed.mealType = 'Snack';
+      }
+      parsed.items = parsed.items.map((it) => ({
+        name: String(it.name || 'Item'),
+        calories: Number(it.calories) || 0,
+        protein: Number(it.protein) || 0,
+        carbs: Number(it.carbs) || 0,
+        fat: Number(it.fat) || 0,
+        fiber: Number(it.fiber) || 0,
+      }));
+      const sum = (sel: (i: FoodItem) => number) => parsed.items.reduce((a, b) => a + sel(b), 0);
+      parsed.calories = Number(parsed.calories) || sum((i) => i.calories);
+      parsed.protein = Number(parsed.protein) || sum((i) => i.protein);
+      parsed.carbs = Number(parsed.carbs) || sum((i) => i.carbs);
+      parsed.fat = Number(parsed.fat) || sum((i) => i.fat);
+      parsed.fiber = Number(parsed.fiber) || sum((i) => i.fiber);
+      parsed.reasoning = String(parsed.reasoning || '');
+
+      return parsed; // Return successfully on the first model that works
+    } catch (err: any) {
+      // If it's a non-429 error (e.g. invalid JSON, bad request), rethrow immediately
+      if (!err?.message?.includes('429') && err.name !== 'RateLimitError') {
+        throw err;
+      }
     }
-
-    if (res.status === 429) {
-      const secs = parseRetrySecs(res, parsedBody);
-      throw new RateLimitError(secs, detail || 'Too many requests. Please slow down.');
-    }
-
-    throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
   }
 
-  const data: { candidates?: { content?: { parts?: GeminiPart[] } }[] } = await res.json();
-  const textOut: string | undefined =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-    data?.candidates?.[0]?.content?.parts?.map((p: GeminiPart) => p.text).join('');
-
-  if (!textOut) throw new Error('Gemini returned an empty response.');
-
-let parsed: ParsedMeal;
-  // Always extract only the inner JSON object between curly braces
-  const match = textOut.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Could not parse Gemini response as JSON.');
-  }
-
-  try {
-    parsed = JSON.parse(match[0]);
-  } catch (err) {
-    throw new Error('Failed to parse clean JSON object from Gemini response.');
-  }
-
-  if (!parsed.items || !Array.isArray(parsed.items)) {
-    throw new Error('Gemini response missing items array.');
-  }
-  const validTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
-  if (!validTypes.includes(parsed.mealType)) {
-    parsed.mealType = 'Snack';
-  }
-  parsed.items = parsed.items.map((it) => ({
-    name: String(it.name || 'Item'),
-    calories: Number(it.calories) || 0,
-    protein: Number(it.protein) || 0,
-    carbs: Number(it.carbs) || 0,
-    fat: Number(it.fat) || 0,
-    fiber: Number(it.fiber) || 0,
-  }));
-  const sum = (sel: (i: FoodItem) => number) => parsed.items.reduce((a, b) => a + sel(b), 0);
-  parsed.calories = Number(parsed.calories) || sum((i) => i.calories);
-  parsed.protein = Number(parsed.protein) || sum((i) => i.protein);
-  parsed.carbs = Number(parsed.carbs) || sum((i) => i.carbs);
-  parsed.fat = Number(parsed.fat) || sum((i) => i.fat);
-  parsed.fiber = Number(parsed.fiber) || sum((i) => i.fiber);
-  parsed.reasoning = String(parsed.reasoning || '');
-  return parsed;
+  // If all models in the list failed due to rate limits
+  throw new RateLimitError(maxRetrySecs, lastErrorDetail || 'All fallback models reached their free rate limits.');
 }
 
 export function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
