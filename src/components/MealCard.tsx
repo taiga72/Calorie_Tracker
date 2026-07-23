@@ -24,7 +24,6 @@ export function MealCard({ meal, onDelete, onEdit }: MealCardProps) {
             src={meal.imageData}
             alt="meal"
             className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
         ) : (
           <div className="w-16 h-16 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
@@ -33,7 +32,7 @@ export function MealCard({ meal, onDelete, onEdit }: MealCardProps) {
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-semibold text-gray-900">{MEAL_ICON[meal.mealType]} {meal.mealType}</span>
+            <span className="text-sm font-semibold text-gray-900">{meal.mealType}</span>
             <div className="flex items-center gap-1.5">
               {onEdit && (
                 <button
@@ -62,7 +61,9 @@ export function MealCard({ meal, onDelete, onEdit }: MealCardProps) {
         </div>
       </div>
       {meal.reasoning && (
-        <p className="mt-2.5 pt-2.5 border-t border-gray-50 text-[11px] text-gray-400 italic leading-relaxed">{meal.reasoning}</p>
+        <p className="mt-2.5 pt-2.5 border-t border-gray-50 text-[11px] text-gray-400 italic leading-relaxed">
+          {meal.reasoning}
+        </p>
       )}
     </div>
   );

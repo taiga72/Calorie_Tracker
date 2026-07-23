@@ -1,273 +1,119 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { addDays, format, isSameDay, isToday, startOfDay, subDays } from 'date-fns'
-import {
-  ChevronLeft, ChevronRight, Scale, Plus, Utensils, Trash2, Flame,
-  Beef, Wheat, Droplet,
-} from 'lucide-react'
-import { useProfile } from '../context/ProfileContext'
-import { getMealsForDay, getWeightLogForDay, deleteMeal } from '../lib/storage'
-import type { Meal, WeightLog, MealType } from '../types'
-import WeightLogModal from '../components/WeightLogModal'
-import MealLogModal from '../components/MealLogModal'
+import { useState } from 'react';
+import { useStore } from '@/store';
+import { toKey, formatHeaderDate } from '@/lib/dateUtils';
+import { fmtWeight } from '@/lib/units';
+import { CalorieRing } from '@/components/CalorieRing';
+import { MealCard } from '@/components/MealCard';
+import { LogModal } from '@/modals/LogModal';
+import { Scale, Coffee, Sun, Moon, Cookie } from 'lucide-react';
+import type { MealEntry } from '@/types';
 
-const MEAL_ICONS: Record<MealType, string> = {
-  Breakfast: '🌅',
-  Lunch: '☀️',
-  Dinner: '🌙',
-  Snack: '🍎',
-}
+const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+const MEAL_ICON: Record<string, typeof Coffee> = {
+  Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
+};
 
-export default function HomeTab() {
-  const { profile } = useProfile()
-  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()))
-  const [meals, setMeals] = useState<Meal[]>([])
-  const [weightLog, setWeightLog] = useState<WeightLog | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [weightModalOpen, setWeightModalOpen] = useState(false)
-  const [mealModalOpen, setMealModalOpen] = useState(false)
-  const [mealType, setMealType] = useState<MealType>('Breakfast')
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
+export function HomeTab() {
+  const { getDay, settings, deleteMeal } = useStore();
+  const [editing, setEditing] = useState<MealEntry | null>(null);
+  const todayKey = toKey(new Date());
+  const day = getDay(todayKey);
+  const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
+  const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
+  const latestWeight = [...day.weight ? [day.weight] : []][0];
 
-  const loadData = useCallback(() => {
-    setLoading(true)
-    setMeals(getMealsForDay(selectedDate))
-    setWeightLog(getWeightLogForDay(selectedDate))
-    setLoading(false)
-  }, [selectedDate])
-
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
-  const totals = useMemo(() => {
-    return meals.reduce(
-      (acc, m) => ({
-        calories: acc.calories + m.calories,
-        protein: acc.protein + m.protein,
-        carbs: acc.carbs + m.carbs,
-        fat: acc.fat + m.fat,
-      }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0 }
-    )
-  }, [meals])
-
-  const targetCals = profile?.target_daily_calories ?? 2000
-  const calProgress = Math.min((totals.calories / targetCals) * 100, 100)
-  const remaining = Math.max(targetCals - totals.calories, 0)
-
-  const mealsByType = useMemo(() => {
-    const grouped: Record<MealType, Meal[]> = { Breakfast: [], Lunch: [], Dinner: [], Snack: [] }
-    meals.forEach((m) => grouped[m.meal_type]?.push(m))
-    return grouped
-  }, [meals])
-
-  const goPrev = () => setSelectedDate((d) => subDays(d, 1))
-  const goNext = () => setSelectedDate((d) => addDays(d, 1))
-
-  const openMealModal = (type: MealType) => {
-    setMealType(type)
-    setMealModalOpen(true)
-    setAddMenuOpen(false)
-  }
-
-  const handleDeleteMeal = (id: string) => {
-    deleteMeal(id)
-    setMeals((prev) => prev.filter((m) => m.id !== id))
-  }
-
-  const dateLabel = isToday(selectedDate) ? 'Today' : isSameDay(selectedDate, subDays(new Date(), 1)) ? 'Yesterday' : format(selectedDate, 'EEE, MMM d')
+  const mealsByType = MEAL_ORDER.map((type) => ({
+    type, meals: day.meals.filter((m) => m.mealType === type),
+  })).filter((g) => g.meals.length > 0);
 
   return (
-    <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
-      {/* Day navigation */}
-      <div className="mb-4 flex items-center justify-between">
-        <button onClick={goPrev} className="rounded-xl p-2 text-neutral-600 transition-colors hover:bg-neutral-100">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <div className="text-center">
-          <h2 className="text-base font-bold text-neutral-900">{dateLabel}</h2>
-          <p className="text-xs text-neutral-400">{format(selectedDate, 'MMMM yyyy')}</p>
-        </div>
-        <button
-          onClick={goNext}
-          disabled={isToday(selectedDate)}
-          className="rounded-xl p-2 text-neutral-600 transition-colors hover:bg-neutral-100 disabled:opacity-30"
-        >
-          <ChevronRight className="h-5 w-5" />
-        </button>
-      </div>
+    <div className="px-5 pt-6 pb-4">
+      <p className="text-sm text-gray-400 font-medium">{formatHeaderDate(new Date())}</p>
+      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Today</h1>
 
-      {/* Weight card — tap to edit/log */}
-      <button
-        onClick={() => setWeightModalOpen(true)}
-        className="card group mb-4 flex w-full items-center gap-4 text-left transition-all hover:shadow-cardLg active:scale-[0.99]"
-      >
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-50 text-primary-600 transition-colors group-hover:bg-primary-100">
-          <Scale className="h-6 w-6" />
-        </div>
-        <div className="flex-1">
-          <p className="text-xs font-medium text-neutral-500">Weight</p>
-          {weightLog ? (
-            <p className="text-xl font-bold text-neutral-900">{weightLog.weight_kg}<span className="text-sm font-medium text-neutral-400"> kg</span></p>
-          ) : (
-            <p className="text-xl font-semibold text-neutral-400">No weight logged</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1 text-xs font-semibold text-primary-600">
-          {weightLog ? 'Edit' : 'Log'}
-          <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-        </div>
-      </button>
-
-      {/* Calories ring */}
-      <div className="card mb-4">
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-neutral-500">Calories</p>
-            <p className="text-2xl font-bold text-neutral-900">{totals.calories}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs font-medium text-neutral-500">Target</p>
-            <p className="text-sm font-semibold text-neutral-700">{targetCals} kcal</p>
-          </div>
-        </div>
-        <div className="mb-3 h-2.5 overflow-hidden rounded-full bg-neutral-100">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-primary-400 to-primary-600 transition-all duration-500"
-            style={{ width: `${calProgress}%` }}
+      {/* Top metric cards */}
+      <div className="grid grid-cols-2 gap-3 mt-5">
+        {/* Calorie card */}
+        <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 flex flex-col items-center">
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 self-start">TODAY'S CALORIES</span>
+          <CalorieRing
+            value={day.totalCalories}
+            goal={settings.calorieGoal}
+            size={108}
+            label={`${Math.round(day.totalCalories)}`}
+            sublabel={`of ${settings.calorieGoal}`}
           />
-        </div>
-        <div className="flex items-center justify-between text-xs">
-          <span className="font-medium text-neutral-500">{remaining} kcal remaining</span>
-          <span className={`font-semibold ${totals.calories > targetCals ? 'text-accent-600' : 'text-primary-600'}`}>
-            {Math.round(calProgress)}%
-          </span>
-        </div>
-        <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-neutral-50 p-2.5 text-center">
-            <div className="mb-0.5 flex items-center justify-center gap-1 text-neutral-400"><Beef className="h-3 w-3" /></div>
-            <p className="text-sm font-bold text-neutral-900">{totals.protein}<span className="text-xs">g</span></p>
-            <p className="text-[10px] text-neutral-400">Protein</p>
+          <div className="w-full mt-2 flex justify-between text-[11px]">
+            <span className="text-gray-400">Remaining</span>
+            <span className="font-semibold text-gray-700">{Math.round(remaining)} kcal</span>
           </div>
-          <div className="rounded-xl bg-neutral-50 p-2.5 text-center">
-            <div className="mb-0.5 flex items-center justify-center gap-1 text-neutral-400"><Wheat className="h-3 w-3" /></div>
-            <p className="text-sm font-bold text-neutral-900">{totals.carbs}<span className="text-xs">g</span></p>
-            <p className="text-[10px] text-neutral-400">Carbs</p>
-          </div>
-          <div className="rounded-xl bg-neutral-50 p-2.5 text-center">
-            <div className="mb-0.5 flex items-center justify-center gap-1 text-neutral-400"><Droplet className="h-3 w-3" /></div>
-            <p className="text-sm font-bold text-neutral-900">{totals.fat}<span className="text-xs">g</span></p>
-            <p className="text-[10px] text-neutral-400">Fat</p>
+          <div className="w-full mt-1 flex justify-between text-[11px]">
+            <span className="text-gray-400">Progress</span>
+            <span className="font-semibold text-orange-500">{pct}%</span>
           </div>
         </div>
-      </div>
 
-      {/* Meals list */}
-      <div className="space-y-3">
-        {(['Breakfast', 'Lunch', 'Dinner', 'Snack'] as MealType[]).map((type) => (
-          <div key={type}>
-            <div className="mb-1.5 flex items-center justify-between">
-              <h3 className="flex items-center gap-1.5 text-sm font-bold text-neutral-700">
-                <span>{MEAL_ICONS[type]}</span> {type}
-              </h3>
-              <button onClick={() => openMealModal(type)} className="btn-ghost py-1 text-xs text-primary-600">
-                <Plus className="h-3.5 w-3.5" /> Add
-              </button>
-            </div>
-            {mealsByType[type].length === 0 ? (
-              <div className="rounded-xl border border-dashed border-neutral-200 py-3 text-center text-xs text-neutral-400">
-                No meals logged
-              </div>
+        {/* Weight card */}
+        <div className="bg-blue-600 rounded-3xl p-4 shadow-sm flex flex-col text-white">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold tracking-wider text-blue-100">TODAY'S WEIGHT</span>
+            <Scale size={16} className="text-blue-100" />
+          </div>
+          <div className="flex-1 flex flex-col items-center justify-center">
+            {latestWeight ? (
+              <>
+                <span className="text-3xl font-bold leading-none">{fmtWeight(latestWeight.weight, settings.weightUnit, 1).split(' ')[0]}</span>
+                <span className="text-xs text-blue-100 mt-1">{settings.weightUnit}</span>
+              </>
             ) : (
-              <div className="space-y-2">
-                {mealsByType[type].map((meal) => (
-                  <div key={meal.id} className="card group flex items-start gap-3 p-3.5">
-                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
-                      <Flame className="h-4 w-4" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-neutral-900">{meal.calories} kcal</p>
-                      <div className="flex gap-2 text-[11px] text-neutral-400">
-                        <span>{meal.protein}p</span>
-                        <span>{meal.carbs}c</span>
-                        <span>{meal.fat}f</span>
-                      </div>
-                      {meal.food_items && meal.food_items.length > 0 && (
-                        <p className="mt-0.5 truncate text-xs text-neutral-500">
-                          {meal.food_items.map((f) => f.name).join(', ')}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteMeal(meal.id)}
-                      className="rounded-lg p-1.5 text-neutral-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <span className="text-sm text-blue-100 mt-6 mb-6">No weight logged</span>
             )}
           </div>
-        ))}
+          <div className="text-[11px] text-blue-100">
+            Goal {fmtWeight(settings.goalWeight, settings.weightUnit, 0)}
+          </div>
+        </div>
       </div>
 
-      {loading && meals.length === 0 && (
-        <div className="mt-8 text-center text-sm text-neutral-400">Loading...</div>
+      {/* Meals today count */}
+      <div className="flex items-center justify-between mt-6">
+        <h2 className="text-base font-bold text-gray-900">Meals today</h2>
+        <span className="text-sm font-semibold text-emerald-600">{day.meals.length}</span>
+      </div>
+
+      {/* Daily overview */}
+      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">Daily overview</h3>
+      {mealsByType.length === 0 ? (
+        <div className="bg-white rounded-2xl p-6 text-center border border-gray-50">
+          <p className="text-sm text-gray-400">No meals logged yet.</p>
+          <p className="text-xs text-gray-300 mt-1">Tap the + button to log your first meal.</p>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          {mealsByType.map(({ type, meals }) => {
+            const Icon = MEAL_ICON[type];
+            const typeCals = meals.reduce((a, b) => a + b.calories, 0);
+            return (
+              <div key={type}>
+                <div className="flex items-center gap-2 mb-1.5 px-1">
+                  <Icon size={14} className="text-gray-400" />
+                  <span className="text-xs font-semibold text-gray-500">{type}</span>
+                  <span className="text-[11px] text-gray-300 ml-auto">{Math.round(typeCals)} kcal</span>
+                </div>
+                {meals.map((m) => <MealCard key={m.id} meal={m} onDelete={deleteMeal} onEdit={(meal) => setEditing(meal)} />)}
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {/* Floating + Log meal/weight button */}
-      <div className="fixed bottom-20 left-1/2 z-30 -translate-x-1/2">
-        {addMenuOpen && (
-          <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-neutral-100 bg-white p-2 shadow-cardLg animate-scale-in">
-            <button
-              onClick={() => openMealModal('Snack')}
-              className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
-            >
-              <Utensils className="h-4 w-4 text-primary-600" /> Log Meal
-            </button>
-            <button
-              onClick={() => { setWeightModalOpen(true); setAddMenuOpen(false) }}
-              className="flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold text-neutral-700 transition-colors hover:bg-neutral-50"
-            >
-              <Scale className="h-4 w-4 text-primary-600" /> Log Weight
-            </button>
-          </div>
-        )}
-        <button
-          onClick={() => setAddMenuOpen((v) => !v)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-cardLg transition-all hover:bg-primary-700 active:scale-95"
-        >
-          <Plus className={`h-6 w-6 transition-transform ${addMenuOpen ? 'rotate-45' : ''}`} />
-        </button>
+      {/* Total banner */}
+      <div className="mt-4 bg-gray-900 rounded-2xl p-4 flex items-center justify-between text-white">
+        <span className="text-sm font-medium text-gray-300">Total today</span>
+        <span className="text-lg font-bold">{Math.round(day.totalCalories)} kcal</span>
       </div>
 
-      <WeightLogModal
-        open={weightModalOpen}
-        date={selectedDate}
-        currentWeight={weightLog?.weight_kg ?? null}
-        existingId={weightLog?.id}
-        onClose={() => setWeightModalOpen(false)}
-        onSaved={() => {
-          setWeightModalOpen(false)
-          loadData()
-        }}
-        onDeleted={() => {
-          setWeightModalOpen(false)
-          loadData()
-        }}
-      />
-
-      <MealLogModal
-        open={mealModalOpen}
-        date={selectedDate}
-        mealType={mealType}
-        onClose={() => setMealModalOpen(false)}
-        onLogged={() => {
-          setMealModalOpen(false)
-          loadData()
-        }}
-      />
+      <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
     </div>
-  )
+  );
 }
