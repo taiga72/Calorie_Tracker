@@ -1,87 +1,320 @@
-import { useState } from 'react';
-import { useStore } from '@/store';
-import { toKey, fromKey, addDays, formatHeaderDate } from '@/lib/dateUtils';
-import { DayDetailModal } from '@/modals/DayDetailModal';
-import { ChevronLeft, ChevronRight, Flame } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format,
+  isSameDay, isSameMonth, isToday, startOfMonth, startOfWeek, subMonths,
+} from 'date-fns'
+import {
+  ChevronLeft, ChevronRight, Scale, Plus, Pencil, X, Utensils, Flame, Trash2,
+} from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
+import {
+  getMealsForRange, getWeightLogsForRange, deleteMeal,
+} from '../lib/api'
+import type { Meal, WeightLog } from '../types'
+import WeightLogModal from '../components/WeightLogModal'
+import MealLogModal from '../components/MealLogModal'
 
-const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+export default function CalendarTab() {
+  const { user } = useAuth()
+  const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()))
+  const [meals, setMeals] = useState<Meal[]>([])
+  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null)
+  const [weightModalOpen, setWeightModalOpen] = useState(false)
+  const [mealModalOpen, setMealModalOpen] = useState(false)
 
-export function CalendarTab() {
-  const { getDay, meals } = useStore();
-  const [cursor, setCursor] = useState(toKey(new Date()));
-  const [selected, setSelected] = useState<string | null>(null);
+  const loadMonthData = useCallback(async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      const monthStart = startOfWeek(startOfMonth(monthCursor), { weekStartsOn: 0 })
+      const monthEnd = endOfWeek(endOfMonth(monthCursor), { weekStartsOn: 0 })
+      const [rangeMeals, rangeWeights] = await Promise.all([
+        getMealsForRange(user.id, monthStart, monthEnd),
+        getWeightLogsForRange(user.id, monthStart, monthEnd),
+      ])
+      setMeals(rangeMeals)
+      setWeightLogs(rangeWeights)
+    } catch (e) {
+      console.error('Failed to load month', e)
+    } finally {
+      setLoading(false)
+    }
+  }, [user, monthCursor])
 
-  const d = fromKey(cursor);
-  const year = d.getFullYear();
-  const month = d.getMonth();
+  useEffect(() => {
+    loadMonthData()
+  }, [loadMonthData])
 
-  const firstDay = new Date(year, month, 1);
-  const startWeekday = firstDay.getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const days = useMemo(() => {
+    const start = startOfWeek(startOfMonth(monthCursor), { weekStartsOn: 0 })
+    const end = endOfWeek(endOfMonth(monthCursor), { weekStartsOn: 0 })
+    return eachDayOfInterval({ start, end })
+  }, [monthCursor])
 
-  const todayKey = toKey(new Date());
+  const weightByDay = useMemo(() => {
+    const map = new Map<string, WeightLog>()
+    weightLogs.forEach((w) => map.set(format(new Date(w.logged_at), 'yyyy-MM-dd'), w))
+    return map
+  }, [weightLogs])
 
-  const calorieMap = new Map<string, number>();
-  meals.forEach((m) => calorieMap.set(m.date, (calorieMap.get(m.date) ?? 0) + m.calories));
+  const mealsByDay = useMemo(() => {
+    const map = new Map<string, Meal[]>()
+    meals.forEach((m) => {
+      const key = format(new Date(m.logged_at), 'yyyy-MM-dd')
+      const arr = map.get(key) || []
+      arr.push(m)
+      map.set(key, arr)
+    })
+    return map
+  }, [meals])
 
-  const cells: (string | null)[] = [];
-  for (let i = 0; i < startWeekday; i++) cells.push(null);
-  for (let day = 1; day <= daysInMonth; day++) cells.push(toKey(new Date(year, month, day)));
+  const selectedDayMeals = useMemo(() => {
+    if (!selectedDay) return []
+    return (mealsByDay.get(format(selectedDay, 'yyyy-MM-dd')) || []).slice().sort(
+      (a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+    )
+  }, [selectedDay, mealsByDay])
+
+  const selectedDayWeight = useMemo(() => {
+    if (!selectedDay) return null
+    return weightByDay.get(format(selectedDay, 'yyyy-MM-dd')) || null
+  }, [selectedDay, weightByDay])
+
+  const selectedDayCalories = useMemo(
+    () => selectedDayMeals.reduce((sum, m) => sum + m.calories, 0),
+    [selectedDayMeals]
+  )
+
+  const goPrevMonth = () => setMonthCursor((m) => subMonths(m, 1))
+  const goNextMonth = () => setMonthCursor((m) => addMonths(m, 1))
+
+  const handleDeleteMeal = async (id: string) => {
+    try {
+      await deleteMeal(id)
+      setMeals((prev) => prev.filter((m) => m.id !== id))
+    } catch (e) {
+      console.error('Failed to delete meal', e)
+    }
+  }
+
+  const handleWeightSaved = async () => {
+    setWeightModalOpen(false)
+    await loadMonthData()
+  }
+
+  const handleWeightDeleted = async () => {
+    setWeightModalOpen(false)
+    await loadMonthData()
+  }
+
+  const handleMealLogged = async () => {
+    setMealModalOpen(false)
+    await loadMonthData()
+  }
 
   return (
-    <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">Track your progress</p>
-      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Calendar</h1>
-
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-5">
-        {/* Month nav */}
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => setCursor(toKey(new Date(year, month - 1, 1)))}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-            <ChevronLeft size={18} />
+    <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-base font-bold text-neutral-900">{format(monthCursor, 'MMMM yyyy')}</h2>
+        <div className="flex gap-1">
+          <button onClick={goPrevMonth} className="rounded-xl p-2 text-neutral-600 transition-colors hover:bg-neutral-100">
+            <ChevronLeft className="h-5 w-5" />
           </button>
-          <h2 className="text-sm font-bold text-gray-900">
-            {d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-          </h2>
-          <button onClick={() => setCursor(toKey(new Date(year, month + 1, 1)))}
-            className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">
-            <ChevronRight size={18} />
+          <button onClick={goNextMonth} className="rounded-xl p-2 text-neutral-600 transition-colors hover:bg-neutral-100">
+            <ChevronRight className="h-5 w-5" />
           </button>
         </div>
+      </div>
 
-        {/* Weekday headers */}
-        <div className="grid grid-cols-7 gap-1 mb-1">
-          {WEEKDAYS.map((w, i) => (
-            <div key={i} className="text-center text-[10px] font-bold text-gray-300 py-1">{w}</div>
+      <div className="card p-3">
+        <div className="mb-2 grid grid-cols-7 gap-1">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+            <div key={i} className="text-center text-[11px] font-semibold text-neutral-400">{d}</div>
           ))}
         </div>
-
-        {/* Day cells */}
         <div className="grid grid-cols-7 gap-1">
-          {cells.map((key, i) => {
-            if (!key) return <div key={i} />;
-            const cals = calorieMap.get(key) ?? 0;
-            const isToday = key === todayKey;
+          {days.map((day) => {
+            const key = format(day, 'yyyy-MM-dd')
+            const inMonth = isSameMonth(day, monthCursor)
+            const today = isToday(day)
+            const weight = weightByDay.get(key)
+            const dayMeals = mealsByDay.get(key)
+            const hasMeals = dayMeals && dayMeals.length > 0
+            const isSelected = selectedDay && isSameDay(day, selectedDay)
+
             return (
               <button
                 key={key}
-                onClick={() => setSelected(key)}
-                className={`aspect-square rounded-xl flex flex-col items-center justify-center transition-colors relative
-                  ${isToday ? 'bg-emerald-600 text-white' : cals > 0 ? 'bg-emerald-50 text-gray-900' : 'bg-gray-50 text-gray-400'}`}
+                onClick={() => setSelectedDay(day)}
+                className={`relative flex aspect-square flex-col items-center justify-center rounded-xl text-sm transition-all ${
+                  isSelected
+                    ? 'bg-primary-600 font-bold text-white shadow-md'
+                    : today
+                    ? 'bg-primary-50 font-bold text-primary-700'
+                    : inMonth
+                    ? 'text-neutral-700 hover:bg-neutral-100'
+                    : 'text-neutral-300 hover:bg-neutral-50'
+                }`}
               >
-                <span className="text-xs font-bold">{fromKey(key).getDate()}</span>
-                {cals > 0 && (
-                  <span className={`text-[8px] flex items-center gap-0.5 ${isToday ? 'text-emerald-100' : 'text-emerald-500'}`}>
-                    <Flame size={7} />{Math.round(cals)}
-                  </span>
-                )}
+                <span>{format(day, 'd')}</span>
+                <div className="absolute bottom-1 flex gap-0.5">
+                  {weight && (
+                    <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-primary-500'}`} />
+                  )}
+                  {hasMeals && (
+                    <span className={`h-1.5 w-1.5 rounded-full ${isSelected ? 'bg-white' : 'bg-accent-400'}`} />
+                  )}
+                </div>
               </button>
-            );
+            )
           })}
         </div>
       </div>
 
-      <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} />
+      {loading && <div className="mt-4 text-center text-sm text-neutral-400">Loading...</div>}
+
+      {/* Day Detail Modal */}
+      {selectedDay && (
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4"
+          onClick={() => setSelectedDay(null)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-md flex-col animate-slide-up overflow-hidden rounded-t-3xl bg-white shadow-cardLg sm:rounded-3xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-neutral-100 p-5">
+              <div>
+                <h3 className="text-base font-bold text-neutral-900">
+                  {isToday(selectedDay) ? 'Today' : format(selectedDay, 'EEEE')}
+                </h3>
+                <p className="text-xs text-neutral-500">{format(selectedDay, 'MMMM d, yyyy')}</p>
+              </div>
+              <button onClick={() => setSelectedDay(null)} className="rounded-lg p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto p-5">
+              {/* Interactive weight section */}
+              <div className="rounded-xl border border-neutral-100 bg-neutral-50/60 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <Scale className="h-4 w-4 text-primary-600" />
+                  <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">Weight</span>
+                </div>
+                {selectedDayWeight ? (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xl font-bold text-neutral-900">
+                        {selectedDayWeight.weight_kg}<span className="text-sm font-medium text-neutral-400"> kg</span>
+                      </p>
+                      <p className="text-[11px] text-neutral-400">Logged weight</p>
+                    </div>
+                    <button
+                      onClick={() => setWeightModalOpen(true)}
+                      className="btn-secondary py-2 text-xs"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Edit
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-medium text-neutral-400">No weight logged</p>
+                    <button
+                      onClick={() => setWeightModalOpen(true)}
+                      className="btn-primary py-2 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Log Weight
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Meals summary */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Utensils className="h-4 w-4 text-accent-500" />
+                    <span className="text-xs font-bold uppercase tracking-wide text-neutral-500">Meals</span>
+                  </div>
+                  <span className="text-xs font-semibold text-neutral-400">
+                    {selectedDayCalories} kcal · {selectedDayMeals.length} item{selectedDayMeals.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+                {selectedDayMeals.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-neutral-200 py-5 text-center">
+                    <p className="text-xs text-neutral-400">No meals logged for this day</p>
+                    <button
+                      onClick={() => setMealModalOpen(true)}
+                      className="btn-ghost mt-2 text-xs text-primary-600"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Log a meal
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedDayMeals.map((meal) => (
+                      <div key={meal.id} className="group flex items-start gap-3 rounded-xl border border-neutral-100 p-3">
+                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-neutral-100 text-neutral-500">
+                          <Flame className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm font-semibold text-neutral-900">{meal.meal_type}</p>
+                            <p className="text-sm font-bold text-neutral-900">{meal.calories} <span className="text-xs font-normal text-neutral-400">kcal</span></p>
+                          </div>
+                          <div className="flex gap-2 text-[11px] text-neutral-400">
+                            <span>{meal.protein}p</span>
+                            <span>{meal.carbs}c</span>
+                            <span>{meal.fat}f</span>
+                          </div>
+                          {meal.food_items && meal.food_items.length > 0 && (
+                            <p className="mt-0.5 truncate text-xs text-neutral-500">
+                              {meal.food_items.map((f) => f.name).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => handleDeleteMeal(meal.id)}
+                          className="rounded-lg p-1.5 text-neutral-300 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="border-t border-neutral-100 p-4">
+              <button onClick={() => setMealModalOpen(true)} className="btn-primary w-full">
+                <Plus className="h-4 w-4" /> Log Meal for {format(selectedDay, 'MMM d')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <WeightLogModal
+        open={weightModalOpen}
+        date={selectedDay ?? new Date()}
+        currentWeight={selectedDayWeight?.weight_kg ?? null}
+        existingId={selectedDayWeight?.id}
+        onClose={() => setWeightModalOpen(false)}
+        onSaved={handleWeightSaved}
+        onDeleted={handleWeightDeleted}
+      />
+
+      <MealLogModal
+        open={mealModalOpen}
+        date={selectedDay ?? new Date()}
+        mealType="Snack"
+        onClose={() => setMealModalOpen(false)}
+        onLogged={handleMealLogged}
+      />
     </div>
-  );
+  )
 }
