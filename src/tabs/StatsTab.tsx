@@ -1,156 +1,152 @@
-import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
-import { rangeKeys, formatShortDate, toKey } from '@/lib/dateUtils';
-import { CalorieLineChart } from '@/components/CalorieLineChart';
-import { MacroBar } from '@/components/MacroBar';
-import { Flame, TrendingUp, Scale } from 'lucide-react';
-
-type Range = '7d' | '30d' | '3m' | '1y';
-const RANGES: { key: Range; label: string; days: number }[] = [
-  { key: '7d', label: '7 Days', days: 7 },
-  { key: '30d', label: '30 Days', days: 30 },
-  { key: '3m', label: '3 Months', days: 90 },
-  { key: '1y', label: '1 Year', days: 365 },
-];
+import { lastNKeys, formatHeaderDate } from '@/lib/dateUtils';
+import { fmtWeight } from '@/lib/units';
+import { Flame, TrendingDown, TrendingUp, Beef, Droplet, Wheat } from 'lucide-react';
 
 export function StatsTab() {
-  const { getDay, weights, settings } = useStore();
-  const [range, setRange] = useState<Range>('7d');
-  const days = RANGES.find((r) => r.key === range)!.days;
+  const { getDay, settings, weights } = useStore();
+  const days = lastNKeys(7);
+  const summaries = days.map((k) => getDay(k));
+  const calories = summaries.map((s) => Math.round(s.totalCalories));
+  const maxCal = Math.max(settings.calorieGoal, ...calories, 500);
 
-  const series = useMemo(() => {
-    const keys = rangeKeys(new Date(), Math.min(days, 60));
-    return keys.map((k) => {
-      const d = getDay(k);
-      return { label: formatShortDate(k), value: d.totalCalories, date: k, day: d };
-    });
-  }, [days, getDay]);
+  // Y-axis ticks — round up to nearest 500
+  const yMax = Math.ceil(maxCal / 500) * 500;
+  const tickStep = 500;
+  const ticks: number[] = [];
+  for (let v = 0; v <= yMax; v += tickStep) ticks.push(v);
+  if (ticks[ticks.length - 1] < yMax) ticks.push(yMax);
 
-  const avgCal = series.length ? Math.round(series.reduce((a, b) => a + b.value, 0) / series.length) : 0;
-  const loggedDays = series.filter((s) => s.value > 0).length;
-  const maxDay = series.reduce((a, b) => (b.value > a.value ? b : a), series[0] ?? { value: 0, date: '' });
+  const chartH = 180;
+  const chartW = 300;
+  const padL = 40;
+  const padR = 8;
+  const padT = 10;
+  const padB = 24;
+  const plotW = chartW - padL - padR;
+  const plotH = chartH - padT - padB;
 
-  // macros aggregated over the range
-  const totals = useMemo(() => {
-    return series.reduce(
-      (acc, s) => ({
-        protein: acc.protein + s.day.totalProtein,
-        carbs: acc.carbs + s.day.totalCarbs,
-        fat: acc.fat + s.day.totalFat,
-        calories: acc.calories + s.day.totalCalories,
-      }),
-      { protein: 0, carbs: 0, fat: 0, calories: 0 }
-    );
-  }, [series]);
+  const xFor = (i: number) => padL + (plotW * i) / Math.max(days.length - 1, 1);
+  const yFor = (v: number) => padT + plotH - (v / yMax) * plotH;
 
-  const weightSeries = useMemo(() => {
-    return weights.filter((w) => {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      return w.date >= toKey(cutoff);
-    }).sort((a, b) => a.date.localeCompare(b.date));
-  }, [weights, days]);
+  const points = calories.map((c, i) => `${xFor(i)},${yFor(c)}`).join(' ');
+  const areaPath = `M ${xFor(0)},${yFor(0)} L ${points.split(' ').join(' L ')} L ${xFor(days.length - 1)},${yFor(0)} Z`;
 
-  const latestWeight = weightSeries[weightSeries.length - 1];
-  const firstWeight = weightSeries[0];
-  const weightDelta = latestWeight && firstWeight ? latestWeight.weight - firstWeight.weight : 0;
+  const avgCal = calories.length ? Math.round(calories.reduce((a, b) => a + b, 0) / calories.length) : 0;
+
+  // Weight trend
+  const recentWeights = weights.slice(-7);
+  const weightDelta = recentWeights.length >= 2
+    ? recentWeights[recentWeights.length - 1].weight - recentWeights[0].weight
+    : 0;
+
+  const avgProtein = Math.round(summaries.reduce((s, d) => s + d.totalProtein, 0) / days.length);
+  const avgCarbs = Math.round(summaries.reduce((s, d) => s + d.totalCarbs, 0) / days.length);
+  const avgFat = Math.round(summaries.reduce((s, d) => s + d.totalFat, 0) / days.length);
 
   return (
     <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">Your trends</p>
+      <p className="text-sm text-gray-400 font-medium">Last 7 days</p>
       <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Statistics</h1>
 
-      {/* Range selector */}
-      <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar -mx-1 px-1">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => setRange(r.key)}
-            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-              range === r.key ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 border border-gray-100'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Calories trend */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-5">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <Flame size={16} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-gray-900">Calories trend</h2>
-          </div>
-          <span className="text-[11px] text-gray-400">{loggedDays} logged days</span>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">Daily average over time</p>
-        <CalorieLineChart data={series} goal={settings.calorieGoal} />
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Avg/day" value={`${avgCal}`} unit="kcal" tone="orange" />
-          <Stat label="Best day" value={`${maxDay.value}`} unit="kcal" tone="gray" />
-          <Stat label="Logged" value={`${loggedDays}`} unit="days" tone="gray" />
-        </div>
-      </div>
-
-      {/* Macros breakdown */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-4">
-        <div className="flex items-center gap-2 mb-1">
-          <TrendingUp size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Macros breakdown</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
-        <MacroBar
-          protein={totals.protein / Math.max(loggedDays, 1)}
-          carbs={totals.carbs / Math.max(loggedDays, 1)}
-          fat={totals.fat / Math.max(loggedDays, 1)}
+      {/* Summary cards */}
+      <div className="grid grid-cols-3 gap-2.5 mt-5">
+        <StatCard Icon={Flame} color="text-orange-500" label="Avg cal" value={`${avgCal}`} unit="kcal" />
+        <StatCard Icon={Beef} color="text-emerald-600" label="Avg protein" value={`${avgProtein}`} unit="g" />
+        <StatCard
+          Icon={weightDelta <= 0 ? TrendingDown : TrendingUp}
+          color={weightDelta <= 0 ? 'text-blue-500' : 'text-amber-500'}
+          label="Weight Δ"
+          value={fmtWeight(Math.abs(weightDelta), settings.weightUnit)}
+          unit={weightDelta <= 0 ? 'lost' : 'gained'}
         />
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Protein" value={`${(totals.protein / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="green" />
-          <Stat label="Carbs" value={`${(totals.carbs / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="orange" />
-          <Stat label="Fat" value={`${(totals.fat / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="amber" />
+      </div>
+
+      {/* Calories trend chart with Y-axis labels */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+        <h2 className="text-sm font-bold text-gray-900 mb-4">Calories Trend</h2>
+        <div className="w-full overflow-x-auto">
+          <svg viewBox={`0 0 ${chartW} ${chartH}`} className="w-full" style={{ minWidth: 280 }}>
+            {/* Y-axis grid lines + labels */}
+            {ticks.map((t) => (
+              <g key={t}>
+                <line x1={padL} y1={yFor(t)} x2={chartW - padR} y2={yFor(t)} stroke="#f3f4f6" strokeWidth={1} />
+                <text x={padL - 6} y={yFor(t) + 3} textAnchor="end" className="fill-gray-400" style={{ fontSize: 9 }}>
+                  {t}
+                </text>
+              </g>
+            ))}
+            {/* Goal line */}
+            {settings.calorieGoal > 0 && settings.calorieGoal <= yMax && (
+              <>
+                <line
+                  x1={padL} y1={yFor(settings.calorieGoal)}
+                  x2={chartW - padR} y2={yFor(settings.calorieGoal)}
+                  stroke="#10b981" strokeWidth={1.5} strokeDasharray="4 3" opacity={0.6}
+                />
+                <text x={chartW - padR} y={yFor(settings.calorieGoal) - 4} textAnchor="end"
+                  className="fill-emerald-500" style={{ fontSize: 8, fontWeight: 600 }}>
+                  Goal {settings.calorieGoal}
+                </text>
+              </>
+            )}
+            {/* Area + line */}
+            <path d={areaPath} fill="url(#calGrad)" opacity={0.2} />
+            <polyline points={points} fill="none" stroke="#f97316" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+            <defs>
+              <linearGradient id="calGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f97316" />
+                <stop offset="100%" stopColor="#f97316" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            {/* Data points + x labels */}
+            {calories.map((c, i) => (
+              <g key={i}>
+                <circle cx={xFor(i)} cy={yFor(c)} r={3.5} fill="#f97316" stroke="white" strokeWidth={1.5} />
+                <text x={xFor(i)} y={chartH - 8} textAnchor="middle" className="fill-gray-400" style={{ fontSize: 8 }}>
+                  {formatHeaderDate(days[i]).slice(0, 3)}
+                </text>
+              </g>
+            ))}
+          </svg>
+        </div>
+        <div className="flex items-center justify-center gap-1 mt-2 text-[10px] text-gray-400">
+          <span className="font-semibold">kcal</span>
         </div>
       </div>
 
-      {/* Weight trend */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Scale size={16} className="text-blue-600" />
-          <h2 className="text-sm font-bold text-gray-900">Weight trend</h2>
+      {/* Macro breakdown */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+        <h2 className="text-sm font-bold text-gray-900 mb-4">Avg Daily Macros</h2>
+        <div className="grid grid-cols-3 gap-3">
+          <MacroBar Icon={Beef} label="Protein" value={avgProtein} color="bg-emerald-500" />
+          <MacroBar Icon={Wheat} label="Carbs" value={avgCarbs} color="bg-orange-500" />
+          <MacroBar Icon={Droplet} label="Fat" value={avgFat} color="bg-amber-500" />
         </div>
-        <p className="text-xs text-gray-400 mb-3">Change over the selected range</p>
-        {weightSeries.length > 0 ? (
-          <div className="flex items-end justify-between">
-            <div>
-              <span className="text-2xl font-bold text-gray-900">
-                {latestWeight ? (settings.weightUnit === 'lb' ? latestWeight.weight * 2.2046 : latestWeight.weight).toFixed(1) : '—'}
-              </span>
-              <span className="text-sm text-gray-400 ml-1">{settings.weightUnit}</span>
-            </div>
-            <div className={`text-sm font-semibold ${weightDelta <= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
-              {weightDelta > 0 ? '+' : ''}{(settings.weightUnit === 'lb' ? weightDelta * 2.2046 : weightDelta).toFixed(1)} {settings.weightUnit}
-            </div>
-          </div>
-        ) : (
-          <p className="text-sm text-gray-400">No weight entries in this range.</p>
-        )}
       </div>
     </div>
   );
 }
 
-function Stat({ label, value, unit, tone }: { label: string; value: string; unit: string; tone: 'orange' | 'green' | 'amber' | 'gray' }) {
-  const toneClass = {
-    orange: 'text-orange-500',
-    green: 'text-emerald-600',
-    amber: 'text-amber-500',
-    gray: 'text-gray-900',
-  }[tone];
+function StatCard({ Icon, color, label, value, unit }: { Icon: typeof Flame; color: string; label: string; value: string; unit: string }) {
   return (
-    <div className="bg-gray-50 rounded-xl p-2.5">
-      <p className="text-[10px] text-gray-400 font-medium">{label}</p>
-      <p className={`text-base font-bold ${toneClass}`}>{value}</p>
-      <p className="text-[9px] text-gray-400">{unit}</p>
+    <div className="bg-white rounded-2xl p-3 shadow-sm border border-gray-50">
+      <Icon size={16} className={color} />
+      <p className="text-lg font-bold text-gray-900 mt-1.5 tabular-nums">{value}</p>
+      <p className="text-[10px] text-gray-400">{label} · {unit}</p>
+    </div>
+  );
+}
+
+function MacroBar({ Icon, label, value, color }: { Icon: typeof Beef; label: string; value: number; color: string }) {
+  return (
+    <div className="text-center">
+      <Icon size={18} className="text-gray-400 mx-auto" />
+      <p className="text-xl font-bold text-gray-900 mt-1 tabular-nums">{value}g</p>
+      <p className="text-[10px] text-gray-400">{label}</p>
+      <div className="h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${Math.min(value / 150 * 100, 100)}%` }} />
+      </div>
     </div>
   );
 }

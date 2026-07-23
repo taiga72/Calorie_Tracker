@@ -1,45 +1,45 @@
 interface CalorieRingProps {
-  value: number;
+  consumed: number;
   goal: number;
   size?: number;
   stroke?: number;
-  label?: string;
-  sublabel?: string;
 }
 
-export function CalorieRing({ value, goal, size = 120, stroke = 10, label, sublabel }: CalorieRingProps) {
+export function CalorieRing({ consumed, goal, size = 140, stroke = 12 }: CalorieRingProps) {
   const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
-  const offset = circumference * (1 - pct);
+  const circ = 2 * Math.PI * radius;
+  const pct = goal > 0 ? Math.min(consumed / goal, 1) : 0;
+  const offset = circ - pct * circ;
+  const over = consumed > goal && goal > 0;
+  const remaining = Math.max(goal - consumed, 0);
 
   return (
-    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#f3f4f6" strokeWidth={stroke} />
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#F1E9DD"
+          stroke={over ? '#ef4444' : '#10b981'}
           strokeWidth={stroke}
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          fill="none"
-          stroke="#F97316"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={circumference}
+          strokeDasharray={circ}
           strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+          strokeLinecap="round"
+          className="transition-all duration-700"
         />
       </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        {label && <span className="text-xl font-bold text-gray-900 leading-none">{label}</span>}
-        {sublabel && <span className="text-[10px] font-medium text-gray-400 mt-1">{sublabel}</span>}
+      <div className="absolute flex flex-col items-center">
+        <span className={`text-3xl font-bold tabular-nums ${over ? 'text-red-500' : 'text-gray-900'}`}>
+          {Math.round(consumed)}
+        </span>
+        <span className="text-[11px] text-gray-400 font-medium">/ {goal} kcal</span>
+        {goal > 0 && (
+          <span className="text-[10px] text-gray-300 mt-0.5">
+            {over ? `${Math.round(consumed - goal)} over` : `${Math.round(remaining)} left`}
+          </span>
+        )}
       </div>
     </div>
   );
