@@ -1,15 +1,13 @@
 import { useEffect, type ReactNode } from 'react';
-import { X } from 'lucide-react';
 
 interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title?: ReactNode;
+  title: string;
   children: ReactNode;
-  maxWidth?: string;
 }
 
-export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
+export function Modal({ open, onClose, title, children }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -25,19 +23,15 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div
-        className={`relative w-full ${maxWidth} bg-[#F8F9FA] rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto animate-[slideUp_.25s_ease]`}
-      >
-        {title && (
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#F8F9FA]/95 backdrop-blur border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500" aria-label="Close">
-              <X size={20} />
-            </button>
-          </div>
-        )}
-        <div className="px-5 py-4">{children}</div>
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full sm:max-w-md max-h-[90vh] overflow-y-auto bg-gray-50 rounded-t-3xl sm:rounded-3xl p-5 shadow-xl animate-slideup">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-gray-900">{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 text-lg">
+            ×
+          </button>
+        </div>
+        {children}
       </div>
     </div>
   );

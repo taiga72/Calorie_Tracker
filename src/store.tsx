@@ -11,7 +11,7 @@ interface StoreValue {
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
-  logWeight: (value: number) => void; // value in display unit
+  logWeight: (value: number) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
@@ -19,10 +19,6 @@ interface StoreValue {
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
-
-function makeId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<MealEntry[]>(() => storage.getMeals());
@@ -35,16 +31,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
-      const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
-      setMeals((prev) => [entry, ...prev]);
+      setMeals((prev) => [...prev, { ...m, id: crypto.randomUUID(), createdAt: Date.now() }]);
+    };
+
+    const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
+      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       setMeals((prev) => prev.filter((m) => m.id !== id));
     };
 
-    const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
-      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    const logWeight: StoreValue['logWeight'] = (val) => {
+      const kg = unitToKg(val, settings.weightUnit);
+      const dateKey = toKey(new Date());
+      setWeights((prev) => {
+        const filtered = prev.filter((w) => w.date !== dateKey);
+        return [...filtered, { date: dateKey, weight: kg, createdAt: Date.now() }];
+      });
+    };
+
+    const updateSettings: StoreValue['updateSettings'] = (patch) => {
+      setSettings((prev) => ({ ...prev, ...patch }));
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
@@ -61,33 +69,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings(storage.getSettings());
     };
 
-    const logWeight: StoreValue['logWeight'] = (displayValue) => {
-      const kg = unitToKg(displayValue, settings.weightUnit);
-      const dateKey = toKey(new Date());
-      const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
-      setWeights((prev) => {
-        const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-      });
-    };
-
-    const updateSettings: StoreValue['updateSettings'] = (patch) => {
-      setSettings((prev) => ({ ...prev, ...patch }));
-    };
-
     const getDay: StoreValue['getDay'] = (dateKey) => {
       const dayMeals = meals.filter((m) => m.date === dateKey);
       const weight = weights.find((w) => w.date === dateKey);
-      const sum = (sel: (m: MealEntry) => number) => dayMeals.reduce((a, b) => a + sel(b), 0);
       return {
         date: dateKey,
         meals: dayMeals,
         weight,
-        totalCalories: sum((m) => m.calories),
-        totalProtein: sum((m) => m.protein),
-        totalCarbs: sum((m) => m.carbs),
-        totalFat: sum((m) => m.fat),
-        totalFiber: sum((m) => m.fiber),
+        totalCalories: dayMeals.reduce((s, m) => s + m.calories, 0),
+        totalProtein: dayMeals.reduce((s, m) => s + m.protein, 0),
+        totalCarbs: dayMeals.reduce((s, m) => s + m.carbs, 0),
+        totalFat: dayMeals.reduce((s, m) => s + m.fat, 0),
+        totalFiber: dayMeals.reduce((s, m) => s + m.fiber, 0),
       };
     };
 

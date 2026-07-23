@@ -1,17 +1,14 @@
 import type { WeightUnit } from '@/types';
 
-export const KG_TO_LB = 2.20462262;
-export const LB_TO_KG = 1 / KG_TO_LB;
+export function unitToKg(value: number, unit: WeightUnit): number {
+  return unit === 'lb' ? value * 0.45359237 : value;
+}
 
 export function kgToUnit(kg: number, unit: WeightUnit): number {
-  return unit === 'lb' ? kg * KG_TO_LB : kg;
+  return unit === 'lb' ? kg / 0.45359237 : kg;
 }
 
-export function unitToKg(value: number, unit: WeightUnit): number {
-  return unit === 'lb' ? value * LB_TO_KG : value;
-}
-
-export function fmtWeight(kg: number, unit: WeightUnit, digits = 1): string {
+export function fmtWeight(kg: number, unit: WeightUnit): string {
   const v = kgToUnit(kg, unit);
-  return `${v.toFixed(digits)} ${unit}`;
+  return unit === 'lb' ? `${v.toFixed(1)} lb` : `${v.toFixed(1)} kg`;
 }
