@@ -14,6 +14,14 @@ const DEFAULT_SETTINGS: Settings = {
   geminiApiKey: '',
 };
 
+export interface BackupPayload {
+  version: 1;
+  exportedAt: string;
+  meals: MealEntry[];
+  weights: WeightEntry[];
+  settings: Settings;
+}
+
 function read<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -41,4 +49,24 @@ export const storage = {
 
   getSettings: (): Settings => ({ ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) }),
   setSettings: (s: Settings) => write(KEYS.settings, s),
+
+  exportBackup: (): BackupPayload => ({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    meals: read<MealEntry[]>(KEYS.meals, []),
+    weights: read<WeightEntry[]>(KEYS.weights, []),
+    settings: { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) },
+  }),
+
+  importBackup: (payload: BackupPayload) => {
+    write(KEYS.meals, payload.meals ?? []);
+    write(KEYS.weights, payload.weights ?? []);
+    write(KEYS.settings, { ...DEFAULT_SETTINGS, ...payload.settings });
+  },
+
+  clearAll: () => {
+    localStorage.removeItem(KEYS.meals);
+    localStorage.removeItem(KEYS.weights);
+    localStorage.removeItem(KEYS.settings);
+  },
 };

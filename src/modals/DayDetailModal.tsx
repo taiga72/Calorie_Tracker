@@ -6,6 +6,7 @@ import { Modal } from '@/components/Modal';
 import { MealCard } from '@/components/MealCard';
 import { LogModal } from '@/modals/LogModal';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus } from 'lucide-react';
+import type { MealEntry } from '@/types';
 
 interface DayDetailModalProps {
   dateKey: string | null;
@@ -13,8 +14,9 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
-  const { getDay, settings } = useStore();
+  const { getDay, settings, deleteMeal } = useStore();
   const [logOpen, setLogOpen] = useState(false);
+  const [editing, setEditing] = useState<MealEntry | null>(null);
   const open = dateKey !== null;
   const day = dateKey ? getDay(dateKey) : null;
 
@@ -74,7 +76,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
               <p className="text-sm text-gray-400 text-center py-4">No meals logged this day.</p>
             ) : (
               <div className="space-y-2.5">
-                {day.meals.map((m) => <MealCard key={m.id} meal={m} />)}
+                {day.meals.map((m) => <MealCard key={m.id} meal={m} onDelete={deleteMeal} onEdit={(meal) => setEditing(meal)} />)}
               </div>
             )}
           </div>
@@ -84,6 +86,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
       {dateKey && (
         <LogModal open={logOpen} onClose={() => setLogOpen(false)} targetDate={dateKey} />
       )}
+      <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
     </>
   );
 }

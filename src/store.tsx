@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, DaySummary } from '@/types';
-import { storage } from '@/lib/storage';
+import { storage, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 
@@ -9,9 +9,12 @@ interface StoreValue {
   weights: WeightEntry[];
   settings: Settings;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
+  updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
   logWeight: (value: number) => void; // value in display unit
   updateSettings: (patch: Partial<Settings>) => void;
+  clearAll: () => void;
+  importBackup: (payload: BackupPayload) => void;
   getDay: (dateKey: string) => DaySummary;
 }
 
@@ -38,6 +41,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       setMeals((prev) => prev.filter((m) => m.id !== id));
+    };
+
+    const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
+      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+    };
+
+    const clearAll: StoreValue['clearAll'] = () => {
+      storage.clearAll();
+      setMeals([]);
+      setWeights([]);
+      setSettings(storage.getSettings());
+    };
+
+    const importBackup: StoreValue['importBackup'] = (payload) => {
+      storage.importBackup(payload);
+      setMeals(storage.getMeals());
+      setWeights(storage.getWeights());
+      setSettings(storage.getSettings());
     };
 
     const logWeight: StoreValue['logWeight'] = (displayValue) => {
@@ -70,7 +91,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, addMeal, deleteMeal, logWeight, updateSettings, getDay };
+    return { meals, weights, settings, addMeal, updateMeal, deleteMeal, logWeight, updateSettings, clearAll, importBackup, getDay };
   }, [meals, weights, settings]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

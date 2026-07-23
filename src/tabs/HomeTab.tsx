@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useStore } from '@/store';
 import { toKey, formatHeaderDate } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MealCard } from '@/components/MealCard';
+import { LogModal } from '@/modals/LogModal';
 import { Scale, Coffee, Sun, Moon, Cookie } from 'lucide-react';
+import type { MealEntry } from '@/types';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_ICON: Record<string, typeof Coffee> = {
@@ -12,6 +15,7 @@ const MEAL_ICON: Record<string, typeof Coffee> = {
 
 export function HomeTab() {
   const { getDay, settings, deleteMeal } = useStore();
+  const [editing, setEditing] = useState<MealEntry | null>(null);
   const todayKey = toKey(new Date());
   const day = getDay(todayKey);
   const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
@@ -96,7 +100,7 @@ export function HomeTab() {
                   <span className="text-xs font-semibold text-gray-500">{type}</span>
                   <span className="text-[11px] text-gray-300 ml-auto">{Math.round(typeCals)} kcal</span>
                 </div>
-                {meals.map((m) => <MealCard key={m.id} meal={m} onDelete={deleteMeal} />)}
+                {meals.map((m) => <MealCard key={m.id} meal={m} onDelete={deleteMeal} onEdit={(meal) => setEditing(meal)} />)}
               </div>
             );
           })}
@@ -108,6 +112,8 @@ export function HomeTab() {
         <span className="text-sm font-medium text-gray-300">Total today</span>
         <span className="text-lg font-bold">{Math.round(day.totalCalories)} kcal</span>
       </div>
+
+      <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
     </div>
   );
 }

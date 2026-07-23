@@ -184,3 +184,40 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
     reader.readAsDataURL(file);
   });
 }
+
+const COMPRESS_MAX = 400;
+const COMPRESS_QUALITY = 0.7;
+
+export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const src = reader.result as string;
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > COMPRESS_MAX || height > COMPRESS_MAX) {
+          const ratio = Math.min(COMPRESS_MAX / width, COMPRESS_MAX / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject(new Error('Canvas not supported.')); return; }
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
+        const comma = dataUrl.indexOf(',');
+        resolve({
+          dataUrl,
+          base64: { data: dataUrl.slice(comma + 1), mimeType: 'image/jpeg' },
+        });
+      };
+      img.onerror = () => reject(new Error('Failed to load image for compression.'));
+      img.src = src;
+    };
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.readAsDataURL(file);
+  });
+}

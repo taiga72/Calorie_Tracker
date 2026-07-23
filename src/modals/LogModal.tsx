@@ -1,18 +1,27 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
-import { estimateMeal, fileToBase64, RateLimitError, type ParsedMeal } from '@/lib/gemini';
+import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
-import type { MealType } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar } from 'lucide-react';
+import type { MealType, MealEntry, FoodItem } from '@/types';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Pencil } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
 
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
-export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose: () => void; targetDate?: string }) {
-  const { settings, addMeal, logWeight } = useStore();
+interface LogModalProps {
+  open: boolean;
+  onClose: () => void;
+  targetDate?: string;
+  editMeal?: MealEntry | null;
+}
+
+export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps) {
+  const { settings, addMeal, updateMeal, logWeight } = useStore();
+  const isEdit = !!editMeal;
+
   const [mode, setMode] = useState<Mode>('food');
   const [foodInput, setFoodInput] = useState<FoodInput>('text');
   const [text, setText] = useState('');
@@ -26,6 +35,14 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
   const [weightVal, setWeightVal] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Edit-mode fields
+  const [editName, setEditName] = useState('');
+  const [editCalories, setEditCalories] = useState('');
+  const [editProtein, setEditProtein] = useState('');
+  const [editCarbs, setEditCarbs] = useState('');
+  const [editFat, setEditFat] = useState('');
+  const [editFiber, setEditFiber] = useState('');
+
   useEffect(() => {
     if (rateLimitSecs === null) return;
     if (rateLimitSecs <= 0) { setRateLimitSecs(null); return; }
@@ -33,19 +50,45 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
     return () => clearTimeout(t);
   }, [rateLimitSecs]);
 
+  // When opening, seed edit fields from editMeal
+  useEffect(() => {
+    if (!open) return;
+    if (editMeal) {
+      setMode('food');
+      setMealType(editMeal.mealType);
+      setEditName(editMeal.items.map((i) => i.name).join(', '));
+      setEditCalories(String(Math.round(editMeal.calories)));
+      setEditProtein(editMeal.protein.toFixed(1));
+      setEditCarbs(editMeal.carbs.toFixed(1));
+      setEditFat(editMeal.fat.toFixed(1));
+      setEditFiber(editMeal.fiber.toFixed(1));
+      setImagePreview(editMeal.imageData ?? null);
+      setResult(null);
+      setError(null);
+    } else {
+      reset();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editMeal]);
+
   const reset = () => {
     setText(''); setImagePreview(null); setImageB64(null);
     setMealType('auto'); setError(null); setResult(null);
     setFoodInput('text'); setWeightVal(''); setRateLimitSecs(null);
+    setEditName(''); setEditCalories(''); setEditProtein(''); setEditCarbs(''); setEditFat(''); setEditFiber('');
   };
 
   const close = () => { reset(); onClose(); };
 
   const onFile = async (file: File) => {
-    const b64 = await fileToBase64(file);
-    setImageB64(b64);
-    setImagePreview(`data:${b64.mimeType};base64,${b64.data}`);
-    setFoodInput((prev) => (text.trim() ? 'both' : 'image'));
+    try {
+      const { dataUrl, base64 } = await compressImage(file);
+      setImageB64(base64);
+      setImagePreview(dataUrl);
+      setFoodInput((prev) => (text.trim() ? 'both' : 'image'));
+    } catch {
+      setError('Could not process the image. Try another photo.');
+    }
   };
 
   const onEstimate = async () => {
@@ -89,6 +132,36 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
     close();
   };
 
+  const onSaveEdit = () => {
+    if (!editMeal) return;
+    const cal = parseFloat(editCalories) || 0;
+    const protein = parseFloat(editProtein) || 0;
+    const carbs = parseFloat(editCarbs) || 0;
+    const fat = parseFloat(editFat) || 0;
+    const fiber = parseFloat(editFiber) || 0;
+    const items: FoodItem[] = editName
+      ? editName.split(',').map((s) => s.trim()).filter(Boolean).map((name) => ({
+          name,
+          calories: Math.round(cal / editName.split(',').length),
+          protein: protein / editName.split(',').length,
+          carbs: carbs / editName.split(',').length,
+          fat: fat / editName.split(',').length,
+          fiber: fiber / editName.split(',').length,
+        }))
+      : [{ name: 'Meal', calories: cal, protein, carbs, fat, fiber }];
+    updateMeal(editMeal.id, {
+      mealType: mealType === 'auto' ? editMeal.mealType : mealType,
+      items,
+      calories: cal,
+      protein,
+      carbs,
+      fat,
+      fiber,
+      imageData: imagePreview ?? undefined,
+    });
+    close();
+  };
+
   const onSaveWeight = () => {
     const v = parseFloat(weightVal);
     if (!v || v <= 0) { setError('Enter a valid weight.'); return; }
@@ -96,13 +169,19 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
     close();
   };
 
+  const title = isEdit
+    ? 'Edit meal'
+    : targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log';
+
   return (
-    <Modal open={open} onClose={close} title={targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log'}>
-      {/* Mode toggle */}
-      <div className="flex gap-2 mb-4">
-        <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
-        <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
-      </div>
+    <Modal open={open} onClose={close} title={title}>
+      {/* Mode toggle (hidden in edit mode) */}
+      {!isEdit && (
+        <div className="flex gap-2 mb-4">
+          <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
+          <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
+        </div>
+      )}
 
       {error && (
         <div className="flex items-start gap-2 bg-red-50 text-red-600 text-xs rounded-xl p-3 mb-4">
@@ -120,14 +199,87 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
         </div>
       )}
 
-      {mode === 'food' && targetDate && !isToday(targetDate) && (
+      {!isEdit && mode === 'food' && targetDate && !isToday(targetDate) && (
         <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-xs rounded-xl p-2.5 mb-4">
           <Calendar size={14} className="flex-shrink-0" />
           <span>Logging for <strong>{formatHeaderDate(fromKey(targetDate))}</strong></span>
         </div>
       )}
 
-      {mode === 'food' ? (
+      {isEdit ? (
+        /* ---- Edit form ---- */
+        <div>
+          {imagePreview && (
+            <div className="relative mb-3">
+              <img src={imagePreview} alt="meal" className="w-full h-40 object-cover rounded-2xl" />
+              <button
+                onClick={() => { setImagePreview(null); setImageB64(null); }}
+                className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+          />
+          {!imagePreview && (
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-3 rounded-xl text-sm mb-3"
+            >
+              <Camera size={16} /> Change photo
+            </button>
+          )}
+
+          <Field label="Food name">
+            <input
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full bg-gray-50 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 outline-none"
+            />
+          </Field>
+
+          <div className="mt-3">
+            <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Meal type</label>
+            <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+              {MEAL_TYPES.map((t) => (
+                <Pill key={t} active={mealType === t} onClick={() => setMealType(t)}>{t}</Pill>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <Field label="Calories (kcal)">
+              <NumInput value={editCalories} onChange={setEditCalories} />
+            </Field>
+            <Field label="Protein (g)">
+              <NumInput value={editProtein} onChange={setEditProtein} />
+            </Field>
+            <Field label="Carbs (g)">
+              <NumInput value={editCarbs} onChange={setEditCarbs} />
+            </Field>
+            <Field label="Fat (g)">
+              <NumInput value={editFat} onChange={setEditFat} />
+            </Field>
+            <Field label="Fiber (g)">
+              <NumInput value={editFiber} onChange={setEditFiber} />
+            </Field>
+          </div>
+
+          <button
+            onClick={onSaveEdit}
+            className="w-full bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm mt-4 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+          >
+            <Check size={16} /> Save changes
+          </button>
+        </div>
+      ) : mode === 'food' ? (
         result ? (
           /* ---- Result view ---- */
           <div>
@@ -255,6 +407,29 @@ export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose
         </div>
       )}
     </Modal>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="text-xs font-semibold text-gray-400 mb-1.5 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function NumInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+      />
+    </div>
   );
 }
 
