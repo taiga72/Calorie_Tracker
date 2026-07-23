@@ -12,7 +12,6 @@ const DEFAULT_SETTINGS: Settings = {
   weeklyWeightTarget: -0.3,
   weightUnit: 'kg',
   geminiApiKey: '',
-  appearance: 'light',
 };
 
 function read<T>(key: string, fallback: T): T {

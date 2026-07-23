@@ -38,7 +38,6 @@ export interface Settings {
   weeklyWeightTarget: number; // stored in kg
   weightUnit: WeightUnit;
   geminiApiKey: string;
-  appearance: 'light';
 }
 
 export interface DaySummary {

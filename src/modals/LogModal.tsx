@@ -215,15 +215,9 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
               ))}
             </div>
 
-            {!settings.geminiApiKey && (
-              <p className="text-[11px] text-amber-600 bg-amber-50 rounded-lg p-2.5 mt-3 flex items-center gap-1.5">
-                <AlertCircle size={13} /> Add your Gemini API key in Settings to enable AI estimation.
-              </p>
-            )}
-
             <button
               onClick={onEstimate}
-              disabled={loading || !settings.geminiApiKey || (rateLimitSecs !== null && rateLimitSecs > 0)}
+              disabled={loading || (rateLimitSecs !== null && rateLimitSecs > 0)}
               className="w-full bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm mt-4 flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[.99] transition-transform"
             >
               {loading ? <><Loader2 size={18} className="animate-spin" /> Estimating…</> : rateLimitSecs !== null && rateLimitSecs > 0 ? <><Clock size={18} /> Retry in {rateLimitSecs}s</> : <><Sparkles size={18} /> Estimate with AI</>}

@@ -1,10 +1,16 @@
 import type { MealType, FoodItem } from '@/types';
 
+const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
+
 const MODEL = 'gemini-3.5-flash';
 const VERSION = 'v1beta';
 
 function endpoint(apiKey: string): string {
   return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+}
+
+export function resolveApiKey(userKey?: string): string {
+  return (userKey && userKey.trim()) || DEFAULT_API_KEY;
 }
 
 export class RateLimitError extends Error {
@@ -83,7 +89,7 @@ export async function estimateMeal(
   text: string,
   imageBase64?: { data: string; mimeType: string }
 ): Promise<ParsedMeal> {
-  if (!apiKey) throw new Error('No Gemini API key set. Add one in Settings.');
+  const key = resolveApiKey(apiKey);
 
   const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
   const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
@@ -97,7 +103,7 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json' },
   };
 
-  const res = await fetch(endpoint(apiKey), {
+  const res = await fetch(endpoint(key), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
