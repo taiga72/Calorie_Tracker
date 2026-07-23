@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Home, Calendar, BarChart3, LogOut } from 'lucide-react'
-import { useAuth } from './context/AuthContext'
-import AuthScreen from './components/AuthScreen'
+import { Home, Calendar, BarChart3 } from 'lucide-react'
+import { useProfile } from './context/ProfileContext'
 import Onboarding from './components/Onboarding'
 import HomeTab from './tabs/HomeTab'
 import CalendarTab from './tabs/CalendarTab'
@@ -10,31 +9,11 @@ import StatisticsTab from './tabs/StatisticsTab'
 type Tab = 'home' | 'calendar' | 'stats'
 
 export default function App() {
-  const { user, profile, loading, profileLoading, signOut } = useAuth()
+  const { profile } = useProfile()
   const [tab, setTab] = useState<Tab>('home')
 
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-3 border-primary-200 border-t-primary-600" />
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <AuthScreen />
-  }
-
-  if (!profile?.setup_complete && !profileLoading) {
+  if (!profile?.setup_complete) {
     return <Onboarding />
-  }
-
-  if (profileLoading && !profile) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-3 border-primary-200 border-t-primary-600" />
-      </div>
-    )
   }
 
   const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -45,7 +24,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-50">
-      {/* Header */}
       <header className="sticky top-0 z-20 border-b border-neutral-100 bg-white/80 backdrop-blur-lg">
         <div className="mx-auto flex max-w-lg items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
@@ -57,20 +35,15 @@ export default function App() {
             </div>
             <span className="text-sm font-bold text-neutral-900">NutriTrack</span>
           </div>
-          <button onClick={signOut} className="rounded-lg p-2 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600">
-            <LogOut className="h-4 w-4" />
-          </button>
         </div>
       </header>
 
-      {/* Tab content */}
       <main>
         {tab === 'home' && <HomeTab />}
         {tab === 'calendar' && <CalendarTab />}
         {tab === 'stats' && <StatisticsTab />}
       </main>
 
-      {/* Bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-20 border-t border-neutral-100 bg-white/90 backdrop-blur-lg">
         <div className="mx-auto flex max-w-lg items-center justify-around px-4 py-2">
           {tabs.map(({ id, label, icon: Icon }) => (

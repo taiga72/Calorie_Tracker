@@ -1,46 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { format, parseISO, differenceInDays, subDays, startOfDay } from 'date-fns'
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, ReferenceLine,
 } from 'recharts'
-import { TrendingDown, TrendingUp, Minus, Scale, Loader2 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
-import { getAllWeightLogs, getMealsForRange } from '../lib/api'
+import { TrendingDown, TrendingUp, Minus, Scale, RefreshCw } from 'lucide-react'
+import { useProfile } from '../context/ProfileContext'
+import { getAllWeightLogs, getMealsForRange } from '../lib/storage'
 import type { WeightLog, Meal } from '../types'
 
 export default function StatisticsTab() {
-  const { user, profile } = useAuth()
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
-  const [recentMeals, setRecentMeals] = useState<Meal[]>([])
-  const [loading, setLoading] = useState(true)
+  const { profile } = useProfile()
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadAll = useCallback(async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      const end = new Date()
-      const start = subDays(end, 6)
-      const [logs, meals] = await Promise.all([
-        getAllWeightLogs(user.id),
-        getMealsForRange(user.id, start, end),
-      ])
-      setWeightLogs(logs)
-      setRecentMeals(meals)
-    } catch (e) {
-      console.error('Failed to load stats', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
-
-  useEffect(() => {
-    loadAll()
-  }, [loadAll, refreshKey])
+  const { weightLogs, recentMeals } = useMemo(() => {
+    const end = new Date()
+    const start = subDays(end, 6)
+    const logs = getAllWeightLogs()
+    const meals: Meal[] = getMealsForRange(start, end)
+    return { weightLogs: logs, recentMeals: meals }
+  }, [refreshKey])
 
   const chartData = useMemo(() => {
     return weightLogs
-      .map((w) => ({
+      .map((w: WeightLog) => ({
         date: format(parseISO(w.logged_at), 'MMM d'),
         weight: parseFloat(w.weight_kg.toFixed(1)),
         raw: w.logged_at,
@@ -98,140 +80,132 @@ export default function StatisticsTab() {
     <div className="mx-auto max-w-lg px-4 pb-28 pt-4">
       <h2 className="mb-4 text-base font-bold text-neutral-900">Statistics</h2>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-neutral-400">
-          <Loader2 className="h-5 w-5 animate-spin" />
+      {/* Summary stat cards */}
+      <div className="mb-4 grid grid-cols-2 gap-3">
+        <div className="card">
+          <div className="mb-1 flex items-center gap-2">
+            <Scale className="h-4 w-4 text-primary-600" />
+            <span className="text-xs font-medium text-neutral-500">Current Weight</span>
+          </div>
+          <p className="text-2xl font-bold text-neutral-900">
+            {currentWeight != null ? currentWeight : '—'}<span className="text-sm font-medium text-neutral-400">{currentWeight != null ? ' kg' : ''}</span>
+          </p>
         </div>
-      ) : (
-        <>
-          {/* Summary stat cards */}
-          <div className="mb-4 grid grid-cols-2 gap-3">
-            <div className="card">
-              <div className="mb-1 flex items-center gap-2">
-                <Scale className="h-4 w-4 text-primary-600" />
-                <span className="text-xs font-medium text-neutral-500">Current Weight</span>
-              </div>
-              <p className="text-2xl font-bold text-neutral-900">
-                {currentWeight != null ? currentWeight : '—'}<span className="text-sm font-medium text-neutral-400">{currentWeight != null ? ' kg' : ''}</span>
-              </p>
-            </div>
-            <div className="card">
-              <div className="mb-1 flex items-center gap-2">
-                <ChangeIcon className={`h-4 w-4 ${changeColor}`} />
-                <span className="text-xs font-medium text-neutral-500">Total Change</span>
-              </div>
-              <p className={`text-2xl font-bold ${changeColor}`}>
-                {weightChange ? `${weightChange.diff > 0 ? '+' : ''}${weightChange.diff} kg` : '—'}
-              </p>
-            </div>
-            <div className="card">
-              <span className="text-xs font-medium text-neutral-500">Avg Daily Calories</span>
-              <p className="mt-1 text-2xl font-bold text-neutral-900">{avgDailyCalories}</p>
-              <p className="text-[11px] text-neutral-400">last 7 days</p>
-            </div>
-            <div className="card">
-              <span className="text-xs font-medium text-neutral-500">Logging Streak</span>
-              <p className="mt-1 text-2xl font-bold text-neutral-900">{streak}</p>
-              <p className="text-[11px] text-neutral-400">consecutive days</p>
-            </div>
+        <div className="card">
+          <div className="mb-1 flex items-center gap-2">
+            <ChangeIcon className={`h-4 w-4 ${changeColor}`} />
+            <span className="text-xs font-medium text-neutral-500">Total Change</span>
           </div>
+          <p className={`text-2xl font-bold ${changeColor}`}>
+            {weightChange ? `${weightChange.diff > 0 ? '+' : ''}${weightChange.diff} kg` : '—'}
+          </p>
+        </div>
+        <div className="card">
+          <span className="text-xs font-medium text-neutral-500">Avg Daily Calories</span>
+          <p className="mt-1 text-2xl font-bold text-neutral-900">{avgDailyCalories}</p>
+          <p className="text-[11px] text-neutral-400">last 7 days</p>
+        </div>
+        <div className="card">
+          <span className="text-xs font-medium text-neutral-500">Logging Streak</span>
+          <p className="mt-1 text-2xl font-bold text-neutral-900">{streak}</p>
+          <p className="text-[11px] text-neutral-400">consecutive days</p>
+        </div>
+      </div>
 
-          {/* Weight Trend Graph */}
-          <div className="card p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-bold text-neutral-900">Weight Trend</h3>
-                <p className="text-xs text-neutral-400">{weightLogs.length} data point{weightLogs.length !== 1 ? 's' : ''}</p>
-              </div>
-              {profile?.target_daily_calories && (
-                <span className="rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">
-                  Goal: {profile.target_goal === 'lose' ? 'Lose' : profile.target_goal === 'gain' ? 'Gain' : 'Maintain'}
-                </span>
-              )}
-            </div>
-
-            {chartData.length === 0 ? (
-              <div className="flex h-48 flex-col items-center justify-center text-center">
-                <Scale className="mb-2 h-8 w-8 text-neutral-300" />
-                <p className="text-sm text-neutral-400">No weight data yet</p>
-                <p className="text-xs text-neutral-300">Log your weight to see the trend</p>
-              </div>
-            ) : chartData.length === 1 ? (
-              <div className="flex h-48 flex-col items-center justify-center text-center">
-                <Scale className="mb-2 h-8 w-8 text-neutral-300" />
-                <p className="text-sm text-neutral-400">One entry: {chartData[0].weight} kg</p>
-                <p className="text-xs text-neutral-300">Log more days to see a trend</p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#eef0f0" vertical={false} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fontSize: 11, fill: '#919b9d' }}
-                    tickLine={false}
-                    axisLine={false}
-                    interval="preserveStartEnd"
-                  />
-                  <YAxis
-                    domain={['auto', 'auto']}
-                    tick={{ fontSize: 11, fill: '#919b9d' }}
-                    tickLine={false}
-                    axisLine={false}
-                    tickFormatter={(v) => `${v}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid #eef0f0',
-                      fontSize: 12,
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                    }}
-                    formatter={(v: number) => [`${v} kg`, 'Weight']}
-                    labelStyle={{ fontWeight: 600 }}
-                  />
-                  <ReferenceLine y={chartData[0].weight} stroke="#bbc1c2" strokeDasharray="4 4" />
-                  <Line
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="#2a9974"
-                    strokeWidth={2.5}
-                    dot={{ fill: '#2a9974', r: 4 }}
-                    activeDot={{ r: 6, fill: '#1d7c5e' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+      {/* Weight Trend Graph */}
+      <div className="card p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-neutral-900">Weight Trend</h3>
+            <p className="text-xs text-neutral-400">{weightLogs.length} data point{weightLogs.length !== 1 ? 's' : ''}</p>
           </div>
-
-          {/* Days tracked info */}
-          {weightLogs.length > 0 && (
-            <div className="card mt-4 p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-500">Tracking span</span>
-                <span className="text-sm font-semibold text-neutral-900">
-                  {differenceInDays(
-                    parseISO(weightLogs[weightLogs.length - 1].logged_at),
-                    parseISO(weightLogs[0].logged_at)
-                  )} days
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-neutral-500">Starting weight</span>
-                <span className="text-sm font-semibold text-neutral-900">
-                  {weightChange?.first} kg
-                </span>
-              </div>
-            </div>
+          {profile?.target_daily_calories && (
+            <span className="rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-semibold text-primary-700">
+              Goal: {profile.target_goal === 'lose' ? 'Lose' : profile.target_goal === 'gain' ? 'Gain' : 'Maintain'}
+            </span>
           )}
-        </>
+        </div>
+
+        {chartData.length === 0 ? (
+          <div className="flex h-48 flex-col items-center justify-center text-center">
+            <Scale className="mb-2 h-8 w-8 text-neutral-300" />
+            <p className="text-sm text-neutral-400">No weight data yet</p>
+            <p className="text-xs text-neutral-300">Log your weight to see the trend</p>
+          </div>
+        ) : chartData.length === 1 ? (
+          <div className="flex h-48 flex-col items-center justify-center text-center">
+            <Scale className="mb-2 h-8 w-8 text-neutral-300" />
+            <p className="text-sm text-neutral-400">One entry: {chartData[0].weight} kg</p>
+            <p className="text-xs text-neutral-300">Log more days to see a trend</p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#eef0f0" vertical={false} />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 11, fill: '#919b9d' }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+              />
+              <YAxis
+                domain={['auto', 'auto']}
+                tick={{ fontSize: 11, fill: '#919b9d' }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={(v) => `${v}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  borderRadius: 12,
+                  border: '1px solid #eef0f0',
+                  fontSize: 12,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
+                }}
+                formatter={(v: number) => [`${v} kg`, 'Weight']}
+                labelStyle={{ fontWeight: 600 }}
+              />
+              <ReferenceLine y={chartData[0].weight} stroke="#bbc1c2" strokeDasharray="4 4" />
+              <Line
+                type="monotone"
+                dataKey="weight"
+                stroke="#2a9974"
+                strokeWidth={2.5}
+                dot={{ fill: '#2a9974', r: 4 }}
+                activeDot={{ r: 6, fill: '#1d7c5e' }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* Days tracked info */}
+      {weightLogs.length > 0 && (
+        <div className="card mt-4 p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-neutral-500">Tracking span</span>
+            <span className="text-sm font-semibold text-neutral-900">
+              {differenceInDays(
+                parseISO(weightLogs[weightLogs.length - 1].logged_at),
+                parseISO(weightLogs[0].logged_at)
+              )} days
+            </span>
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-neutral-500">Starting weight</span>
+            <span className="text-sm font-semibold text-neutral-900">
+              {weightChange?.first} kg
+            </span>
+          </div>
+        </div>
       )}
 
       <button
         onClick={() => setRefreshKey((k) => k + 1)}
         className="btn-ghost mx-auto mt-4 flex"
       >
-        <Loader2 className="h-3.5 w-3.5" /> Refresh
+        <RefreshCw className="h-3.5 w-3.5" /> Refresh
       </button>
     </div>
   )

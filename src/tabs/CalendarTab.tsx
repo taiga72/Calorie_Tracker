@@ -6,16 +6,14 @@ import {
 import {
   ChevronLeft, ChevronRight, Scale, Plus, Pencil, X, Utensils, Flame, Trash2,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
 import {
   getMealsForRange, getWeightLogsForRange, deleteMeal,
-} from '../lib/api'
+} from '../lib/storage'
 import type { Meal, WeightLog } from '../types'
 import WeightLogModal from '../components/WeightLogModal'
 import MealLogModal from '../components/MealLogModal'
 
 export default function CalendarTab() {
-  const { user } = useAuth()
   const [monthCursor, setMonthCursor] = useState(() => startOfMonth(new Date()))
   const [meals, setMeals] = useState<Meal[]>([])
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
@@ -24,24 +22,14 @@ export default function CalendarTab() {
   const [weightModalOpen, setWeightModalOpen] = useState(false)
   const [mealModalOpen, setMealModalOpen] = useState(false)
 
-  const loadMonthData = useCallback(async () => {
-    if (!user) return
+  const loadMonthData = useCallback(() => {
     setLoading(true)
-    try {
-      const monthStart = startOfWeek(startOfMonth(monthCursor), { weekStartsOn: 0 })
-      const monthEnd = endOfWeek(endOfMonth(monthCursor), { weekStartsOn: 0 })
-      const [rangeMeals, rangeWeights] = await Promise.all([
-        getMealsForRange(user.id, monthStart, monthEnd),
-        getWeightLogsForRange(user.id, monthStart, monthEnd),
-      ])
-      setMeals(rangeMeals)
-      setWeightLogs(rangeWeights)
-    } catch (e) {
-      console.error('Failed to load month', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [user, monthCursor])
+    const monthStart = startOfWeek(startOfMonth(monthCursor), { weekStartsOn: 0 })
+    const monthEnd = endOfWeek(endOfMonth(monthCursor), { weekStartsOn: 0 })
+    setMeals(getMealsForRange(monthStart, monthEnd))
+    setWeightLogs(getWeightLogsForRange(monthStart, monthEnd))
+    setLoading(false)
+  }, [monthCursor])
 
   useEffect(() => {
     loadMonthData()
@@ -90,28 +78,24 @@ export default function CalendarTab() {
   const goPrevMonth = () => setMonthCursor((m) => subMonths(m, 1))
   const goNextMonth = () => setMonthCursor((m) => addMonths(m, 1))
 
-  const handleDeleteMeal = async (id: string) => {
-    try {
-      await deleteMeal(id)
-      setMeals((prev) => prev.filter((m) => m.id !== id))
-    } catch (e) {
-      console.error('Failed to delete meal', e)
-    }
+  const handleDeleteMeal = (id: string) => {
+    deleteMeal(id)
+    setMeals((prev) => prev.filter((m) => m.id !== id))
   }
 
-  const handleWeightSaved = async () => {
+  const handleWeightSaved = () => {
     setWeightModalOpen(false)
-    await loadMonthData()
+    loadMonthData()
   }
 
-  const handleWeightDeleted = async () => {
+  const handleWeightDeleted = () => {
     setWeightModalOpen(false)
-    await loadMonthData()
+    loadMonthData()
   }
 
-  const handleMealLogged = async () => {
+  const handleMealLogged = () => {
     setMealModalOpen(false)
-    await loadMonthData()
+    loadMonthData()
   }
 
   return (

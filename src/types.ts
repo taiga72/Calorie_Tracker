@@ -11,7 +11,6 @@ export interface FoodItem {
 
 export interface Meal {
   id: string
-  profile_id: string
   meal_type: MealType
   logged_at: string
   calories: number
@@ -26,7 +25,6 @@ export interface Meal {
 
 export interface WeightLog {
   id: string
-  profile_id: string
   weight_kg: number
   logged_at: string
   created_at: string
@@ -36,11 +34,7 @@ export type ActivityLevel = 'sedentary' | 'lightly_active' | 'moderately_active'
 export type TargetGoal = 'lose' | 'maintain' | 'gain'
 
 export interface Profile {
-  id: string
-  email_encrypted: string | null
-  email_hash: string | null
   display_name: string | null
-  avatar_url: string | null
   biological_sex: 'male' | 'female' | null
   age: number | null
   height_cm: number | null

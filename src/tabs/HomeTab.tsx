@@ -4,8 +4,8 @@ import {
   ChevronLeft, ChevronRight, Scale, Plus, Utensils, Trash2, Flame,
   Beef, Wheat, Droplet,
 } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
-import { getMealsForDay, getWeightLogForDay, deleteMeal } from '../lib/api'
+import { useProfile } from '../context/ProfileContext'
+import { getMealsForDay, getWeightLogForDay, deleteMeal } from '../lib/storage'
 import type { Meal, WeightLog, MealType } from '../types'
 import WeightLogModal from '../components/WeightLogModal'
 import MealLogModal from '../components/MealLogModal'
@@ -18,7 +18,7 @@ const MEAL_ICONS: Record<MealType, string> = {
 }
 
 export default function HomeTab() {
-  const { user, profile } = useAuth()
+  const { profile } = useProfile()
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()))
   const [meals, setMeals] = useState<Meal[]>([])
   const [weightLog, setWeightLog] = useState<WeightLog | null>(null)
@@ -28,22 +28,12 @@ export default function HomeTab() {
   const [mealType, setMealType] = useState<MealType>('Breakfast')
   const [addMenuOpen, setAddMenuOpen] = useState(false)
 
-  const loadData = useCallback(async () => {
-    if (!user) return
+  const loadData = useCallback(() => {
     setLoading(true)
-    try {
-      const [dayMeals, wLog] = await Promise.all([
-        getMealsForDay(user.id, selectedDate),
-        getWeightLogForDay(user.id, selectedDate),
-      ])
-      setMeals(dayMeals)
-      setWeightLog(wLog)
-    } catch (e) {
-      console.error('Failed to load data', e)
-    } finally {
-      setLoading(false)
-    }
-  }, [user, selectedDate])
+    setMeals(getMealsForDay(selectedDate))
+    setWeightLog(getWeightLogForDay(selectedDate))
+    setLoading(false)
+  }, [selectedDate])
 
   useEffect(() => {
     loadData()
@@ -80,13 +70,9 @@ export default function HomeTab() {
     setAddMenuOpen(false)
   }
 
-  const handleDeleteMeal = async (id: string) => {
-    try {
-      await deleteMeal(id)
-      setMeals((prev) => prev.filter((m) => m.id !== id))
-    } catch (e) {
-      console.error('Failed to delete meal', e)
-    }
+  const handleDeleteMeal = (id: string) => {
+    deleteMeal(id)
+    setMeals((prev) => prev.filter((m) => m.id !== id))
   }
 
   const dateLabel = isToday(selectedDate) ? 'Today' : isSameDay(selectedDate, subDays(new Date(), 1)) ? 'Yesterday' : format(selectedDate, 'EEE, MMM d')
@@ -262,13 +248,13 @@ export default function HomeTab() {
         currentWeight={weightLog?.weight_kg ?? null}
         existingId={weightLog?.id}
         onClose={() => setWeightModalOpen(false)}
-        onSaved={async () => {
+        onSaved={() => {
           setWeightModalOpen(false)
-          await loadData()
+          loadData()
         }}
-        onDeleted={async () => {
+        onDeleted={() => {
           setWeightModalOpen(false)
-          await loadData()
+          loadData()
         }}
       />
 
@@ -277,9 +263,9 @@ export default function HomeTab() {
         date={selectedDate}
         mealType={mealType}
         onClose={() => setMealModalOpen(false)}
-        onLogged={async () => {
+        onLogged={() => {
           setMealModalOpen(false)
-          await loadData()
+          loadData()
         }}
       />
     </div>

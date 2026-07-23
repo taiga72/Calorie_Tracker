@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { useAuth } from '../context/AuthContext'
-import { upsertProfile } from '../lib/api'
+import { useProfile } from '../context/ProfileContext'
 import type { ActivityLevel, TargetGoal } from '../types'
 import { Loader2, ChevronRight } from 'lucide-react'
 
@@ -44,7 +43,7 @@ function calcCalories(
 }
 
 export default function Onboarding() {
-  const { user, refreshProfile } = useAuth()
+  const { setProfile } = useProfile()
   const [step, setStep] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -57,40 +56,39 @@ export default function Onboarding() {
   const [goal, setGoal] = useState<TargetGoal>('maintain')
   const [name, setName] = useState('')
 
-  const handleFinish = async () => {
+  const handleFinish = () => {
     setError('')
     setLoading(true)
-    try {
-      const ageNum = parseInt(age, 10)
-      const heightNum = parseFloat(heightCm)
-      const weightNum = parseFloat(weightKg)
-      if (!ageNum || !heightNum || !weightNum) throw new Error('Please enter valid numbers.')
-
-      const calories = calcCalories(sex, ageNum, heightNum, weightNum, activity, goal)
-      const protein = Math.round((calories * 0.3) / 4)
-      const fat = Math.round((calories * 0.25) / 9)
-      const carbs = Math.round((calories * 0.45) / 4)
-
-      await upsertProfile(user!.id, {
-        display_name: name || null,
-        biological_sex: sex,
-        age: ageNum,
-        height_cm: heightNum,
-        current_weight_kg: weightNum,
-        activity_level: activity,
-        target_goal: goal,
-        target_daily_calories: calories,
-        target_protein_g: protein,
-        target_carbs_g: carbs,
-        target_fat_g: fat,
-        setup_complete: true,
-      })
-      await refreshProfile()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
-    } finally {
+    const ageNum = parseInt(age, 10)
+    const heightNum = parseFloat(heightCm)
+    const weightNum = parseFloat(weightKg)
+    if (!ageNum || !heightNum || !weightNum) {
+      setError('Please enter valid numbers.')
       setLoading(false)
+      return
     }
+
+    const calories = calcCalories(sex, ageNum, heightNum, weightNum, activity, goal)
+    const protein = Math.round((calories * 0.3) / 4)
+    const fat = Math.round((calories * 0.25) / 9)
+    const carbs = Math.round((calories * 0.45) / 4)
+
+    setProfile({
+      display_name: name || null,
+      biological_sex: sex,
+      age: ageNum,
+      height_cm: heightNum,
+      current_weight_kg: weightNum,
+      activity_level: activity,
+      target_goal: goal,
+      target_daily_calories: calories,
+      target_protein_g: protein,
+      target_carbs_g: carbs,
+      target_fat_g: fat,
+      setup_complete: true,
+      created_at: new Date().toISOString(),
+    })
+    setLoading(false)
   }
 
   const next = () => setStep((s) => s + 1)

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { Loader2, X, Camera, Utensils, Sparkles } from 'lucide-react'
-import { useAuth } from '../context/AuthContext'
 import { estimateMealFromText, estimateMealFromPhoto } from '../lib/gemini'
-import { insertMeal } from '../lib/api'
+import { insertMeal } from '../lib/storage'
 import type { GeminiEstimate, MealType } from '../types'
 
 interface MealLogModalProps {
@@ -17,7 +16,6 @@ interface MealLogModalProps {
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
 
 export default function MealLogModal({ open, date, mealType, onClose, onLogged }: MealLogModalProps) {
-  const { user } = useAuth()
   const [selectedMealType, setSelectedMealType] = useState<MealType>(mealType)
   const [input, setInput] = useState('')
   const [imagePreview, setImagePreview] = useState<string | null>(null)
@@ -83,15 +81,14 @@ export default function MealLogModal({ open, date, mealType, onClose, onLogged }
     }
   }
 
-  const handleSave = async () => {
-    if (!estimate || !user) return
+  const handleSave = () => {
+    if (!estimate) return
     setLoading(true)
+    const loggedAt = new Date(date)
+    const now = new Date()
+    loggedAt.setHours(now.getHours(), now.getMinutes(), 0, 0)
     try {
-      const loggedAt = new Date(date)
-      const now = new Date()
-      loggedAt.setHours(now.getHours(), now.getMinutes(), 0, 0)
-      await insertMeal({
-        profile_id: user.id,
+      insertMeal({
         meal_type: selectedMealType,
         logged_at: loggedAt.toISOString(),
         calories: estimate.calories,

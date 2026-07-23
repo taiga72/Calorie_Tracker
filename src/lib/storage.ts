@@ -1,72 +1,169 @@
-import type { MealEntry, WeightEntry, Settings } from '@/types';
+import { format } from 'date-fns'
+import type { Meal, Profile, WeightLog } from '../types'
 
-const KEYS = {
-  meals: 'cc_meals',
-  weights: 'cc_weights',
-  settings: 'cc_settings',
-};
+const MEALS_KEY = 'nutritrack.meals'
+const WEIGHTS_KEY = 'nutritrack.weight_logs'
+const PROFILE_KEY = 'nutritrack.profile'
 
-const DEFAULT_SETTINGS: Settings = {
-  calorieGoal: 2200,
-  goalWeight: 75,
-  weeklyWeightTarget: -0.3,
-  weightUnit: 'kg',
-  geminiApiKey: '',
-};
-
-export interface BackupPayload {
-  version: 1;
-  exportedAt: string;
-  meals: MealEntry[];
-  weights: WeightEntry[];
-  settings: Settings;
+function uid(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 10)
 }
 
 function read<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
+    const raw = localStorage.getItem(key)
+    if (!raw) return fallback
+    return JSON.parse(raw) as T
   } catch {
-    return fallback;
+    return fallback
   }
 }
 
 function write<T>(key: string, value: T): void {
   try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (err) {
-    console.error('localStorage write failed', err);
+    localStorage.setItem(key, JSON.stringify(value))
+  } catch (e) {
+    console.error('localStorage write failed', e)
   }
 }
 
-export const storage = {
-  getMeals: (): MealEntry[] => read<MealEntry[]>(KEYS.meals, []),
-  setMeals: (m: MealEntry[]) => write(KEYS.meals, m),
+/* ---------- Profile ---------- */
 
-  getWeights: (): WeightEntry[] => read<WeightEntry[]>(KEYS.weights, []),
-  setWeights: (w: WeightEntry[]) => write(KEYS.weights, w),
+export function getProfile(): Profile | null {
+  return read<Profile | null>(PROFILE_KEY, null)
+}
 
-  getSettings: (): Settings => ({ ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) }),
-  setSettings: (s: Settings) => write(KEYS.settings, s),
+export function saveProfile(profile: Profile): void {
+  write(PROFILE_KEY, profile)
+}
 
-  exportBackup: (): BackupPayload => ({
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    meals: read<MealEntry[]>(KEYS.meals, []),
-    weights: read<WeightEntry[]>(KEYS.weights, []),
-    settings: { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) },
-  }),
+export function updateProfile(fields: Partial<Profile>): Profile {
+  const existing = getProfile()
+  const updated: Profile = {
+    display_name: null,
+    biological_sex: null,
+    age: null,
+    height_cm: null,
+    current_weight_kg: null,
+    activity_level: null,
+    target_goal: null,
+    target_daily_calories: null,
+    target_protein_g: null,
+    target_carbs_g: null,
+    target_fat_g: null,
+    setup_complete: false,
+    created_at: new Date().toISOString(),
+    ...existing,
+    ...fields,
+  }
+  saveProfile(updated)
+  return updated
+}
 
-  importBackup: (payload: BackupPayload) => {
-    write(KEYS.meals, payload.meals ?? []);
-    write(KEYS.weights, payload.weights ?? []);
-    write(KEYS.settings, { ...DEFAULT_SETTINGS, ...payload.settings });
-  },
+/* ---------- Meals ---------- */
 
-  clearAll: () => {
-    localStorage.removeItem(KEYS.meals);
-    localStorage.removeItem(KEYS.weights);
-    localStorage.removeItem(KEYS.settings);
-  },
-};
+function getAllMeals(): Meal[] {
+  return read<Meal[]>(MEALS_KEY, [])
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
+}
+
+export function getMealsForDay(day: Date): Meal[] {
+  return getAllMeals()
+    .filter((m) => isSameDay(new Date(m.logged_at), day))
+    .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime())
+}
+
+export function getMealsForRange(start: Date, end: Date): Meal[] {
+  const s = start.getTime()
+  const e = end.getTime()
+  return getAllMeals()
+    .filter((m) => {
+      const t = new Date(m.logged_at).getTime()
+      return t >= s && t <= e
+    })
+    .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime())
+}
+
+export function insertMeal(meal: Omit<Meal, 'id' | 'created_at'>): Meal {
+  const all = getAllMeals()
+  const newMeal: Meal = {
+    ...meal,
+    id: uid(),
+    created_at: new Date().toISOString(),
+  }
+  all.push(newMeal)
+  write(MEALS_KEY, all)
+  return newMeal
+}
+
+export function deleteMeal(id: string): void {
+  write(MEALS_KEY, getAllMeals().filter((m) => m.id !== id))
+}
+
+/* ---------- Weight logs ---------- */
+
+function getAllWeights(): WeightLog[] {
+  return read<WeightLog[]>(WEIGHTS_KEY, [])
+}
+
+export function getWeightLogForDay(day: Date): WeightLog | null {
+  const dateStr = format(day, 'yyyy-MM-dd')
+  return getAllWeights().find((w) => format(new Date(w.logged_at), 'yyyy-MM-dd') === dateStr) || null
+}
+
+export function getWeightLogsForRange(start: Date, end: Date): WeightLog[] {
+  const s = start.getTime()
+  const e = end.getTime()
+  return getAllWeights()
+    .filter((w) => {
+      const t = new Date(w.logged_at).getTime()
+      return t >= s && t <= e
+    })
+    .sort((a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime())
+}
+
+export function getAllWeightLogs(): WeightLog[] {
+  return getAllWeights().sort(
+    (a, b) => new Date(a.logged_at).getTime() - new Date(b.logged_at).getTime()
+  )
+}
+
+export function upsertWeightLog(
+  day: Date,
+  weightKg: number,
+  existingId?: string
+): WeightLog {
+  const all = getAllWeights()
+  const loggedAt = new Date(day)
+  loggedAt.setHours(8, 0, 0, 0)
+
+  if (existingId) {
+    const idx = all.findIndex((w) => w.id === existingId)
+    if (idx >= 0) {
+      all[idx] = { ...all[idx], weight_kg: weightKg, logged_at: loggedAt.toISOString() }
+      write(WEIGHTS_KEY, all)
+      return all[idx]
+    }
+  }
+
+  const newLog: WeightLog = {
+    id: uid(),
+    weight_kg: weightKg,
+    logged_at: loggedAt.toISOString(),
+    created_at: new Date().toISOString(),
+  }
+  all.push(newLog)
+  write(WEIGHTS_KEY, all)
+  return newLog
+}
+
+export function deleteWeightLog(id: string): void {
+  write(WEIGHTS_KEY, getAllWeights().filter((w) => w.id !== id))
+}

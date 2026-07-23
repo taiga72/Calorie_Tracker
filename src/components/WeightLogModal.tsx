@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
 import { Loader2, Scale, X, Check } from 'lucide-react'
-import { supabase } from '../lib/supabase'
-import { upsertWeightLog, deleteWeightLog } from '../lib/api'
+import { upsertWeightLog, deleteWeightLog } from '../lib/storage'
 
 interface WeightLogModalProps {
   open: boolean
@@ -25,7 +24,6 @@ export default function WeightLogModal({
 }: WeightLogModalProps) {
   const [value, setValue] = useState('')
   const [loading, setLoading] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -48,7 +46,7 @@ export default function WeightLogModal({
 
   if (!open) return null
 
-  const handleSave = async () => {
+  const handleSave = () => {
     setError('')
     const parsed = parseFloat(value)
     if (!parsed || parsed <= 0 || parsed > 1000) {
@@ -57,10 +55,7 @@ export default function WeightLogModal({
     }
     setLoading(true)
     try {
-      const { data } = await supabase.auth.getSession()
-      const userId = data.session?.user?.id
-      if (!userId) throw new Error('Not authenticated.')
-      await upsertWeightLog(userId, date, parsed, existingId)
+      upsertWeightLog(date, parsed, existingId)
       onSaved(parsed)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save weight.')
@@ -69,16 +64,16 @@ export default function WeightLogModal({
     }
   }
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!existingId) return
-    setDeleting(true)
+    setLoading(true)
     try {
-      await deleteWeightLog(existingId)
+      deleteWeightLog(existingId)
       onDeleted?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete.')
     } finally {
-      setDeleting(false)
+      setLoading(false)
     }
   }
 
@@ -130,10 +125,10 @@ export default function WeightLogModal({
             {existingId && currentWeight != null && (
               <button
                 onClick={handleDelete}
-                disabled={deleting}
+                disabled={loading}
                 className="btn-secondary text-red-600 hover:bg-red-50"
               >
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete'}
               </button>
             )}
             <button onClick={handleSave} disabled={loading} className="btn-primary flex-1">
