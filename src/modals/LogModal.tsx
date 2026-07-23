@@ -2,16 +2,16 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
 import { estimateMeal, fileToBase64, RateLimitError, type ParsedMeal } from '@/lib/gemini';
-import { toKey } from '@/lib/dateUtils';
+import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import type { MealType } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock } from 'lucide-react';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
 
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
-export function LogModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function LogModal({ open, onClose, targetDate }: { open: boolean; onClose: () => void; targetDate?: string }) {
   const { settings, addMeal, logWeight } = useStore();
   const [mode, setMode] = useState<Mode>('food');
   const [foodInput, setFoodInput] = useState<FoodInput>('text');
@@ -75,7 +75,7 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
   const onSave = () => {
     if (!result) return;
     addMeal({
-      date: toKey(new Date()),
+      date: targetDate || toKey(new Date()),
       mealType: result.mealType,
       items: result.items,
       calories: result.calories,
@@ -97,7 +97,7 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
   };
 
   return (
-    <Modal open={open} onClose={close} title="Quick log">
+    <Modal open={open} onClose={close} title={targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log'}>
       {/* Mode toggle */}
       <div className="flex gap-2 mb-4">
         <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
@@ -117,6 +117,13 @@ export function LogModal({ open, onClose }: { open: boolean; onClose: () => void
           <span>
             Rate limit reached. Please wait <strong className="tabular-nums">{rateLimitSecs}s</strong> before trying again.
           </span>
+        </div>
+      )}
+
+      {mode === 'food' && targetDate && !isToday(targetDate) && (
+        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-xs rounded-xl p-2.5 mb-4">
+          <Calendar size={14} className="flex-shrink-0" />
+          <span>Logging for <strong>{formatHeaderDate(fromKey(targetDate))}</strong></span>
         </div>
       )}
 
