@@ -1,9 +1,22 @@
 import type { MealType, FoodItem } from '@/types';
 
+const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
+
+const MODEL = 'gemini-3.5-flash';
+const VERSION = 'v1beta';
+
+function endpoint(apiKey: string): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+}
+
+export function resolveApiKey(userKey?: string): string {
+  return (userKey && userKey.trim()) || DEFAULT_API_KEY;
+}
+
 export class RateLimitError extends Error {
   retryAfterSec: number;
-  constructor(retryAfterSec: number) {
-    super('Rate limited');
+  constructor(retryAfterSec: number, detail: string) {
+    super(`Rate limit reached. ${detail}`);
     this.name = 'RateLimitError';
     this.retryAfterSec = retryAfterSec;
   }
@@ -20,10 +33,161 @@ export interface ParsedMeal {
   reasoning: string;
 }
 
+const SYSTEM_PROMPT = `You are a precise nutrition estimator. The user will describe or show a meal via text and/or an image.
+Estimate the nutritional content and respond with ONLY a JSON object (no markdown, no backticks) with this exact shape:
+{
+  "mealType": "Breakfast" | "Lunch" | "Dinner" | "Snack",
+  "items": [{ "name": string, "calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number }],
+  "calories": number,
+  "protein": number,
+  "carbs": number,
+  "fat": number,
+  "fiber": number,
+  "reasoning": string
+}
+Rules:
+- mealType must be inferred from the foods and time of day if known; default to the meal that best fits the description.
+- All macro values are in grams. calories in kcal. fiber in grams.
+- items should list each distinct food/drink component with its own macros.
+- The top-level totals must equal the sum across items.
+- reasoning should be one or two short sentences explaining how you estimated portions/macros.
+- Output ONLY the JSON object.`;
+
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+}
+
+interface GeminiErrorBody {
+  error?: { message?: string; details?: { retryDelay?: string }[] };
+}
+
+function parseRetrySecs(res: Response, body: GeminiErrorBody | null): number {
+  const retryAfter = res.headers.get('Retry-After');
+  if (retryAfter) {
+    const secs = parseInt(retryAfter, 10);
+    if (!Number.isNaN(secs)) return Math.min(Math.max(secs, 1), 120);
+  }
+  const retryInfo = res.headers.get('Retry-Info');
+  if (retryInfo) {
+    const m = retryInfo.match(/(\d+)\s*s/i);
+    if (m) return Math.min(Math.max(parseInt(m[1], 10), 1), 120);
+  }
+  if (body?.error?.details && Array.isArray(body.error.details)) {
+    for (const d of body.error.details) {
+      if (d?.retryDelay) {
+        const m = d.retryDelay.match(/(\d+)\s*s/i);
+        if (m) return Math.min(Math.max(parseInt(m[1], 10), 1), 120);
+      }
+    }
+  }
+  return 30;
+}
+
+export async function estimateMeal(
+  apiKey: string,
+  text: string,
+  imageBase64?: { data: string; mimeType: string }
+): Promise<ParsedMeal> {
+  const key = resolveApiKey(apiKey);
+
+  const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
+  const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
+  parts.push({ text: userText });
+  if (imageBase64) {
+    parts.push({ inlineData: { mimeType: imageBase64.mimeType, data: imageBase64.data } });
+  }
+
+  const body = {
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseMimeType: 'application/json' },
+  };
+
+  const res = await fetch(endpoint(key), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    let detail = '';
+    let parsedBody: GeminiErrorBody | null = null;
+    try {
+      parsedBody = (await res.json()) as GeminiErrorBody;
+      detail = parsedBody?.error?.message || JSON.stringify(parsedBody);
+    } catch {
+      detail = await res.text().catch(() => '');
+    }
+
+    if (res.status === 429) {
+      const secs = parseRetrySecs(res, parsedBody);
+      throw new RateLimitError(secs, detail || 'Too many requests. Please slow down.');
+    }
+
+    throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
+  }
+
+  const data: { candidates?: { content?: { parts?: GeminiPart[] } }[] } = await res.json();
+  const textOut: string | undefined =
+    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
+    data?.candidates?.[0]?.content?.parts?.map((p: GeminiPart) => p.text).join('');
+
+  if (!textOut) throw new Error('Gemini returned an empty response.');
+
+let parsed: ParsedMeal;
+  // Always extract only the inner JSON object between curly braces
+  const match = textOut.match(/\{[\s\S]*\}/);
+  if (!match) {
+    throw new Error('Could not parse Gemini response as JSON.');
+  }
+
+  try {
+    parsed = JSON.parse(match[0]);
+  } catch (err) {
+    throw new Error('Failed to parse clean JSON object from Gemini response.');
+  }
+
+  if (!parsed.items || !Array.isArray(parsed.items)) {
+    throw new Error('Gemini response missing items array.');
+  }
+  const validTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+  if (!validTypes.includes(parsed.mealType)) {
+    parsed.mealType = 'Snack';
+  }
+  parsed.items = parsed.items.map((it) => ({
+    name: String(it.name || 'Item'),
+    calories: Number(it.calories) || 0,
+    protein: Number(it.protein) || 0,
+    carbs: Number(it.carbs) || 0,
+    fat: Number(it.fat) || 0,
+    fiber: Number(it.fiber) || 0,
+  }));
+  const sum = (sel: (i: FoodItem) => number) => parsed.items.reduce((a, b) => a + sel(b), 0);
+  parsed.calories = Number(parsed.calories) || sum((i) => i.calories);
+  parsed.protein = Number(parsed.protein) || sum((i) => i.protein);
+  parsed.carbs = Number(parsed.carbs) || sum((i) => i.carbs);
+  parsed.fat = Number(parsed.fat) || sum((i) => i.fat);
+  parsed.fiber = Number(parsed.fiber) || sum((i) => i.fiber);
+  parsed.reasoning = String(parsed.reasoning || '');
+  return parsed;
+}
+
+export function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(',');
+      resolve({ data: result.slice(comma + 1), mimeType: file.type || 'image/jpeg' });
+    };
+    reader.onerror = () => reject(new Error('Failed to read image file.'));
+    reader.readAsDataURL(file);
+  });
+}
+
 const COMPRESS_MAX = 400;
 const COMPRESS_QUALITY = 0.7;
 
-/** Compress an image file via canvas to a small JPEG data URL. */
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -45,7 +209,10 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
         const comma = dataUrl.indexOf(',');
-        resolve({ dataUrl, base64: { data: dataUrl.slice(comma + 1), mimeType: 'image/jpeg' } });
+        resolve({
+          dataUrl,
+          base64: { data: dataUrl.slice(comma + 1), mimeType: 'image/jpeg' },
+        });
       };
       img.onerror = () => reject(new Error('Failed to load image for compression.'));
       img.src = src;
@@ -53,37 +220,4 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
     reader.onerror = () => reject(new Error('Failed to read image file.'));
     reader.readAsDataURL(file);
   });
-}
-
-const SYSTEM_PROMPT = `You are a nutrition assistant. Estimate calories and macros for meals.
-Return ONLY valid JSON, no markdown, no code fences.
-Schema: { "mealType": "Breakfast"|"Lunch"|"Dinner"|"Snack", "items": [{ "name": string, "calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number }], "calories": number, "protein": number, "carbs": number, "fat": number, "fiber": number, "reasoning": string }`;
-
-export async function estimateMeal(
-  apiKey: string,
-  text: string,
-  image?: { data: string; mimeType: string },
-): Promise<ParsedMeal> {
-  if (!apiKey) throw new Error('Add your Gemini API key in Settings to use AI estimation.');
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-  const parts: unknown[] = [{ text: text || 'Estimate this meal from the photo.' }];
-  if (image) {
-    parts.push({ inline_data: { mime_type: image.mimeType, data: image.data } });
-  }
-  const body = { contents: [{ parts }], systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] } };
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (res.status === 429) {
-    const ra = Number(res.headers.get('Retry-After') || 15);
-    throw new RateLimitError(ra);
-  }
-  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
-  const json = await res.json();
-  const raw = json?.candidates?.[0]?.content?.parts?.[0]?.text as string | undefined;
-  if (!raw) throw new Error('No response from Gemini.');
-  const cleaned = raw.replace(/```json|```/g, '').trim();
-  return JSON.parse(cleaned) as ParsedMeal;
 }
