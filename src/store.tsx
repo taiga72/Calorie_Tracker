@@ -12,6 +12,8 @@ interface StoreValue {
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
   logWeight: (value: number) => void; // value in display unit
+  logWeightForDate: (value: number, dateKey: string) => void; // value in display unit
+  deleteWeight: (dateKey: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
@@ -71,6 +73,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
     };
 
+    const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => {
+      const kg = unitToKg(displayValue, settings.weightUnit);
+      const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
+      setWeights((prev) => {
+        const filtered = prev.filter((w) => w.date !== dateKey);
+        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+      });
+    };
+
+    const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
+      setWeights((prev) => prev.filter((w) => w.date !== dateKey));
+    };
+
     const updateSettings: StoreValue['updateSettings'] = (patch) => {
       setSettings((prev) => ({ ...prev, ...patch }));
     };
@@ -91,7 +106,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, addMeal, updateMeal, deleteMeal, logWeight, updateSettings, clearAll, importBackup, getDay };
+    return { meals, weights, settings, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, clearAll, importBackup, getDay };
   }, [meals, weights, settings]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

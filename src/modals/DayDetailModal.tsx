@@ -5,7 +5,7 @@ import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { MealCard } from '@/components/MealCard';
 import { LogModal } from '@/modals/LogModal';
-import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus } from 'lucide-react';
+import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil } from 'lucide-react';
 import type { MealEntry } from '@/types';
 
 interface DayDetailModalProps {
@@ -17,6 +17,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
   const { getDay, settings, deleteMeal } = useStore();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
+  const [weightOpen, setWeightOpen] = useState(false);
   const open = dateKey !== null;
   const day = dateKey ? getDay(dateKey) : null;
 
@@ -27,7 +28,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
           <div>
             <p className="text-xs text-gray-400 mb-3">{isToday(dateKey!) ? 'Today' : ''}</p>
 
-            {/* Weight stat */}
+            {/* Weight stat - interactive */}
             {day.weight ? (
               <div className="flex items-center gap-3 bg-blue-50 rounded-2xl p-3 mb-4">
                 <Scale size={18} className="text-blue-600" />
@@ -35,12 +36,25 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                 <span className="ml-auto text-lg font-bold text-blue-700">
                   {fmtWeight(day.weight.weight, settings.weightUnit, 1)}
                 </span>
+                <button
+                  onClick={() => setWeightOpen(true)}
+                  className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
+                  aria-label="Edit weight"
+                >
+                  <Pencil size={15} />
+                </button>
               </div>
             ) : (
-              <div className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-4">
-                <Scale size={18} className="text-gray-300" />
+              <button
+                onClick={() => setWeightOpen(true)}
+                className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-4 active:scale-[.99] transition-transform"
+              >
+                <Scale size={18} className="text-gray-400" />
                 <span className="text-sm text-gray-400">No weight logged this day</span>
-              </div>
+                <span className="ml-auto flex items-center gap-1 text-xs font-semibold text-blue-600">
+                  <Plus size={14} /> Add weight
+                </span>
+              </button>
             )}
 
             {/* Stat pills */}
@@ -87,6 +101,9 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
         <LogModal open={logOpen} onClose={() => setLogOpen(false)} targetDate={dateKey} />
       )}
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
+      {dateKey && (
+        <LogModal open={weightOpen} onClose={() => setWeightOpen(false)} weightDate={dateKey} initialMode="weight" />
+      )}
     </>
   );
 }

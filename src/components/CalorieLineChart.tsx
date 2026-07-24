@@ -31,6 +31,14 @@ export function CalorieLineChart({ data, goal, height = 160 }: CalorieLineChartP
   const avg = values.reduce((a, b) => a + b, 0) / values.length;
   const avgY = yFor(avg);
 
+  // Y-axis grid lines & labels
+  const ticks = 5;
+  const tickValues: number[] = [];
+  for (let i = 0; i <= ticks; i++) {
+    const v = minV + ((maxV - minV) * i) / ticks;
+    tickValues.push(Math.round(v));
+  }
+
   return (
     <div className="w-full">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full" preserveAspectRatio="none" style={{ height }}>
@@ -40,6 +48,18 @@ export function CalorieLineChart({ data, goal, height = 160 }: CalorieLineChartP
             <stop offset="100%" stopColor="#F97316" stopOpacity="0" />
           </linearGradient>
         </defs>
+        {/* Y-axis grid lines */}
+        {tickValues.map((tv, i) => {
+          const y = yFor(tv);
+          return (
+            <g key={`tick-${i}`}>
+              <line x1={padX} x2={width - padX} y1={y} y2={y} stroke="#F3F4F6" strokeWidth={1} />
+              <text x={padX - 2} y={y + 3} textAnchor="start" fontSize={9} fill="#9CA3AF" fontWeight={600}>
+                {tv}
+              </text>
+            </g>
+          );
+        })}
         {goal && goal > 0 && (
           <line
             x1={padX} x2={width - padX}
@@ -51,7 +71,12 @@ export function CalorieLineChart({ data, goal, height = 160 }: CalorieLineChartP
         <path d={linePath} fill="none" stroke="#F97316" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
         <line x1={padX} x2={width - padX} y1={avgY} y2={avgY} stroke="#FB923C" strokeDasharray="6 4" strokeWidth={1.2} strokeOpacity={0.7} />
         {points.map((p, i) => (
-          <circle key={i} cx={p[0]} cy={p[1]} r={2.5} fill="#F97316" />
+          <g key={`pt-${i}`}>
+            <circle cx={p[0]} cy={p[1]} r={2.5} fill="#F97316" />
+            <text x={p[0]} y={p[1] - 6} textAnchor="middle" fontSize={9} fill="#F97316" fontWeight={700}>
+              {Math.round(data[i].value)}
+            </text>
+          </g>
         ))}
       </svg>
       <div className="flex justify-between mt-1 text-[9px] text-gray-400 font-medium px-1">

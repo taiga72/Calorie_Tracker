@@ -31,11 +31,15 @@ interface LogModalProps {
   onClose: () => void;
   targetDate?: string;
   editMeal?: MealEntry | null;
+  weightDate?: string | null;
+  initialMode?: Mode;
 }
 
-export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps) {
-  const { settings, addMeal, updateMeal, logWeight } = useStore();
+export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
+  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
   const isEdit = !!editMeal;
+  const isWeightEdit = !!weightDate;
+  const existingWeight = isWeightEdit ? weights.find((w) => w.date === weightDate) : undefined;
 
   const [mode, setMode] = useState<Mode>('food');
   const [foodInput, setFoodInput] = useState<FoodInput>('text');
@@ -60,7 +64,7 @@ export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps)
     return () => clearTimeout(t);
   }, [rateLimitSecs]);
 
-  // When opening, seed edit fields from editMeal
+  // When opening, seed edit fields from editMeal or weight edit
   useEffect(() => {
     if (!open) return;
     if (editMeal) {
@@ -70,11 +74,19 @@ export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps)
       setImagePreview(editMeal.imageData ?? null);
       setResult(null);
       setError(null);
+    } else if (isWeightEdit) {
+      setMode('weight');
+      setError(null);
+      setResult(null);
+      setRateLimitSecs(null);
+      setEditItems([]);
+      setWeightVal(existingWeight ? String((settings.weightUnit === 'lb' ? existingWeight.weight * 2.2046 : existingWeight.weight).toFixed(1)) : '');
     } else {
       reset();
+      if (initialMode) setMode(initialMode);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editMeal]);
+  }, [open, editMeal, weightDate, initialMode]);
 
   const reset = () => {
     setText(''); setImagePreview(null); setImageB64(null);
@@ -175,20 +187,27 @@ export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps)
   const onSaveWeight = () => {
     const v = parseFloat(weightVal);
     if (!v || v <= 0) { setError('Enter a valid weight.'); return; }
-    logWeight(v);
+    if (weightDate) logWeightForDate(v, weightDate);
+    else logWeight(v);
+    close();
+  };
+
+  const onDeleteWeight = () => {
+    if (weightDate) deleteWeight(weightDate);
     close();
   };
 
   const title = isEdit
     ? 'Edit meal'
+    : isWeightEdit ? (existingWeight ? 'Edit weight' : 'Add weight')
     : targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log';
 
   const editTotals = sumItems(editItems);
 
   return (
     <Modal open={open} onClose={close} title={title}>
-      {/* Mode toggle (hidden in edit mode) */}
-      {!isEdit && (
+      {/* Mode toggle (hidden in edit / weight-edit mode) */}
+      {!isEdit && !isWeightEdit && (
         <div className="flex gap-2 mb-4">
           <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
           <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
@@ -433,7 +452,14 @@ export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps)
       ) : (
         /* ---- Weight mode ---- */
         <div>
-          <p className="text-xs text-gray-400 mb-3">Log your weight for today. Overwrites any existing entry for today.</p>
+          {isWeightEdit && weightDate ? (
+            <p className="text-xs text-gray-400 mb-3">
+              {existingWeight ? 'Update or delete the weight for ' : 'Add a weight for '}
+              <strong>{formatHeaderDate(fromKey(weightDate))}</strong>.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400 mb-3">Log your weight for today. Overwrites any existing entry for today.</p>
+          )}
           <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-4">
             <input
               type="number"
@@ -449,8 +475,16 @@ export function LogModal({ open, onClose, targetDate, editMeal }: LogModalProps)
             onClick={onSaveWeight}
             className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-2xl text-sm mt-4 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
           >
-            <Check size={18} /> Save weight
+            <Check size={18} /> {existingWeight ? 'Update weight' : 'Save weight'}
           </button>
+          {isWeightEdit && existingWeight && (
+            <button
+              onClick={onDeleteWeight}
+              className="w-full bg-red-50 text-red-600 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+            >
+              <Trash2 size={16} /> Delete weight
+            </button>
+          )}
         </div>
       )}
     </Modal>
