@@ -84,7 +84,7 @@ export function calculateTargets(input: CalcInput): CalcResult {
     targetCalories = tdee + 300;
   }
 
-  targetCalories = Math.max(targetCalories, 1200);
+  targetCalories = Math.max(targetCalories, input.sex === 'male' ? 1200 : 1000);
 
   // Macro split: protein 1.6g/kg, fat 25% of calories, remainder carbs.
   const protein = Math.round(weightKg * 1.6);

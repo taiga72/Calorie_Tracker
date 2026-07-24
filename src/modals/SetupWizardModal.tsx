@@ -296,6 +296,12 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
             </div>
           </div>
 
+          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3.5 mb-4">
+            <p className="text-xs text-amber-800 leading-relaxed">
+              💡 <strong>Note:</strong> This is an initial estimate calculated via the Mifflin-St Jeor equation. TDEE varies per individual. Weigh yourself weekly and adjust your calorie target if your progress or weight stalls.
+            </p>
+          </div>
+
           <button
             onClick={onApply}
             className="w-full bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"

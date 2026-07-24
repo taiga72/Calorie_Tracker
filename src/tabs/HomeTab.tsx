@@ -5,8 +5,9 @@ import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { MealCard } from '@/components/MealCard';
 import { LogModal } from '@/modals/LogModal';
-import { Scale, Coffee, Sun, Moon, Cookie } from 'lucide-react';
+import { Scale, Coffee, Sun, Moon, Cookie, Sparkles } from 'lucide-react';
 import type { MealEntry } from '@/types';
+import { getDailyQuote } from '@/data/quotes';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_ICON: Record<string, typeof Coffee> = {
@@ -25,6 +26,7 @@ export function HomeTab() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const displayName = profile.name.trim() || 'Friend';
+  const dailyQuote = getDailyQuote();
 
   const mealsByType = MEAL_ORDER.map((type) => ({
     type, meals: day.meals.filter((m) => m.mealType === type),
@@ -39,6 +41,19 @@ export function HomeTab() {
         <div className="min-w-0">
           <p className="text-sm text-gray-400 font-medium truncate">{formatHeaderDate(new Date())}</p>
           <h1 className="text-2xl font-bold text-gray-900 mt-0.5 truncate">{greeting}, {displayName}</h1>
+        </div>
+      </div>
+
+      {/* Daily motivational quote */}
+      <div className="mt-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-4 border border-emerald-100/60">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/70 flex items-center justify-center">
+            <Sparkles size={16} className="text-emerald-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-800 leading-snug">{dailyQuote.text}</p>
+            <p className="text-[11px] text-emerald-600 font-semibold mt-1.5">— {dailyQuote.author}</p>
+          </div>
         </div>
       </div>
 
