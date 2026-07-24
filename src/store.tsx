@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { MealEntry, WeightEntry, Settings, DaySummary } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, DaySummary } from '@/types';
 import { storage, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
@@ -15,6 +15,7 @@ interface StoreValue {
   logWeightForDate: (value: number, dateKey: string) => void; // value in display unit
   deleteWeight: (dateKey: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
+  updateProfile: (patch: Partial<Profile>) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
   getDay: (dateKey: string) => DaySummary;
@@ -30,10 +31,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<MealEntry[]>(() => storage.getMeals());
   const [weights, setWeights] = useState<WeightEntry[]>(() => storage.getWeights());
   const [settings, setSettings] = useState<Settings>(() => storage.getSettings());
+  const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
 
   useEffect(() => { storage.setMeals(meals); }, [meals]);
   useEffect(() => { storage.setWeights(weights); }, [weights]);
   useEffect(() => { storage.setSettings(settings); }, [settings]);
+  useEffect(() => { storage.setProfile(profile); }, [profile]);
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
@@ -54,6 +57,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setMeals([]);
       setWeights([]);
       setSettings(storage.getSettings());
+      setProfile(storage.getProfile());
     };
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
@@ -61,6 +65,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setMeals(storage.getMeals());
       setWeights(storage.getWeights());
       setSettings(storage.getSettings());
+      setProfile(storage.getProfile());
     };
 
     const logWeight: StoreValue['logWeight'] = (displayValue) => {
@@ -90,6 +95,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings((prev) => ({ ...prev, ...patch }));
     };
 
+    const updateProfile: StoreValue['updateProfile'] = (patch) => {
+      setProfile((prev) => ({ ...prev, ...patch }));
+    };
+
     const getDay: StoreValue['getDay'] = (dateKey) => {
       const dayMeals = meals.filter((m) => m.date === dateKey);
       const weight = weights.find((w) => w.date === dateKey);
@@ -106,8 +115,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, clearAll, importBackup, getDay };
-  }, [meals, weights, settings]);
+    return { meals, weights, settings, profile, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, clearAll, importBackup, getDay };
+  }, [meals, weights, settings, profile]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

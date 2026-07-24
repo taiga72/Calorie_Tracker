@@ -4,19 +4,25 @@ import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
 import { storage, type BackupPayload } from '@/lib/storage';
+import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
-  Trash2, AlertTriangle,
+  Trash2, AlertTriangle, User, Camera,
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, meals, clearAll, importBackup } = useStore();
+  const { settings, updateSettings, updateProfile, profile, meals, clearAll, importBackup } = useStore();
 
   const displayCalorieGoal = settings.calorieGoal;
   const displayGoalWeight = kgToUnit(settings.goalWeight, settings.weightUnit);
   const displayWeekly = Math.abs(kgToUnit(settings.weeklyWeightTarget, settings.weightUnit));
+
+  const [name, setName] = useState(profile.name);
+  const [avatar, setAvatar] = useState<string | undefined>(profile.avatar);
+  const [profileSaved, setProfileSaved] = useState(false);
+  const avatarRef = useRef<HTMLInputElement>(null);
 
   const [calorieGoal, setCalorieGoal] = useState(String(displayCalorieGoal));
   const [goalWeight, setGoalWeight] = useState(displayGoalWeight.toFixed(1));
@@ -27,6 +33,21 @@ export function SettingsTab() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const onPickAvatar = async (file: File) => {
+    try {
+      const { dataUrl } = await compressImage(file);
+      setAvatar(dataUrl);
+    } catch {
+      // ignore — keep previous avatar
+    }
+  };
+
+  const onSaveProfile = () => {
+    updateProfile({ name: name.trim(), avatar });
+    setProfileSaved(true);
+    setTimeout(() => setProfileSaved(false), 1800);
+  };
 
   const onSaveGoals = () => {
     const gWeight = unitToKg(parseFloat(goalWeight) || 0, unit);
@@ -87,6 +108,65 @@ export function SettingsTab() {
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Personalize your plan</p>
       <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Settings</h1>
+
+      {/* Profile card */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-5">
+        <div className="flex items-center gap-2 mb-4">
+          <User size={18} className="text-emerald-600" />
+          <h2 className="text-sm font-bold text-gray-900">Profile</h2>
+        </div>
+        <div className="flex flex-col items-center mb-4">
+          <button
+            onClick={() => avatarRef.current?.click()}
+            className="relative w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
+          >
+            {avatar ? (
+              <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <Camera size={24} className="text-gray-400" />
+            )}
+          </button>
+          <input
+            ref={avatarRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickAvatar(f); e.target.value = ''; }}
+          />
+          <button
+            onClick={() => avatarRef.current?.click()}
+            className="text-xs font-semibold text-emerald-600 mt-2"
+          >
+            {avatar ? 'Change photo' : 'Upload photo'}
+          </button>
+          {avatar && (
+            <button
+              onClick={() => setAvatar(undefined)}
+              className="text-xs text-gray-400 mt-1"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <Field label="Display name">
+          <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              maxLength={40}
+              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+            />
+          </div>
+        </Field>
+        <button
+          onClick={onSaveProfile}
+          className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
+        >
+          {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
+        </button>
+      </div>
 
       {/* Wizard banner */}
       <button

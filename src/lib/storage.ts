@@ -1,9 +1,10 @@
-import type { MealEntry, WeightEntry, Settings } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
 
 const KEYS = {
   meals: 'cc_meals',
   weights: 'cc_weights',
   settings: 'cc_settings',
+  profile: 'cc_profile',
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -20,7 +21,12 @@ export interface BackupPayload {
   meals: MealEntry[];
   weights: WeightEntry[];
   settings: Settings;
+  profile?: Profile;
 }
+
+const DEFAULT_PROFILE: Profile = {
+  name: '',
+};
 
 function read<T>(key: string, fallback: T): T {
   try {
@@ -50,23 +56,29 @@ export const storage = {
   getSettings: (): Settings => ({ ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) }),
   setSettings: (s: Settings) => write(KEYS.settings, s),
 
+  getProfile: (): Profile => ({ ...DEFAULT_PROFILE, ...read<Partial<Profile>>(KEYS.profile, {}) }),
+  setProfile: (p: Profile) => write(KEYS.profile, p),
+
   exportBackup: (): BackupPayload => ({
     version: 1,
     exportedAt: new Date().toISOString(),
     meals: read<MealEntry[]>(KEYS.meals, []),
     weights: read<WeightEntry[]>(KEYS.weights, []),
     settings: { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) },
+    profile: { ...DEFAULT_PROFILE, ...read<Partial<Profile>>(KEYS.profile, {}) },
   }),
 
   importBackup: (payload: BackupPayload) => {
     write(KEYS.meals, payload.meals ?? []);
     write(KEYS.weights, payload.weights ?? []);
     write(KEYS.settings, { ...DEFAULT_SETTINGS, ...payload.settings });
+    write(KEYS.profile, { ...DEFAULT_PROFILE, ...payload.profile });
   },
 
   clearAll: () => {
     localStorage.removeItem(KEYS.meals);
     localStorage.removeItem(KEYS.weights);
     localStorage.removeItem(KEYS.settings);
+    localStorage.removeItem(KEYS.profile);
   },
 };

@@ -14,7 +14,7 @@ const MEAL_ICON: Record<string, typeof Coffee> = {
 };
 
 export function HomeTab() {
-  const { getDay, settings, deleteMeal } = useStore();
+  const { getDay, settings, deleteMeal, profile } = useStore();
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const todayKey = toKey(new Date());
   const day = getDay(todayKey);
@@ -22,14 +22,25 @@ export function HomeTab() {
   const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
   const latestWeight = [...day.weight ? [day.weight] : []][0];
 
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const displayName = profile.name.trim() || 'Friend';
+
   const mealsByType = MEAL_ORDER.map((type) => ({
     type, meals: day.meals.filter((m) => m.mealType === type),
   })).filter((g) => g.meals.length > 0);
 
   return (
     <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">{formatHeaderDate(new Date())}</p>
-      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Today</h1>
+      <div className="flex items-center gap-3">
+        {profile.avatar && (
+          <img src={profile.avatar} alt="avatar" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="text-sm text-gray-400 font-medium truncate">{formatHeaderDate(new Date())}</p>
+          <h1 className="text-2xl font-bold text-gray-900 mt-0.5 truncate">{greeting}, {displayName}</h1>
+        </div>
+      </div>
 
       {/* Top metric cards */}
       <div className="grid grid-cols-2 gap-3 mt-5">

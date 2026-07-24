@@ -51,4 +51,9 @@ export interface DaySummary {
   totalFiber: number;
 }
 
+export interface Profile {
+  name: string;
+  avatar?: string; // base64 data URL
+}
+
 export type TabKey = 'home' | 'stats' | 'calendar' | 'settings';
