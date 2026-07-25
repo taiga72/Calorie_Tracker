@@ -329,6 +329,7 @@ export function SettingsTab() {
                   <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" compact />
                 </div>
               </div>
+            </>
           )}
 
           <button
@@ -461,40 +462,22 @@ function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; la
   );
 }
 
-function MacroField({
-  label,
-  value,
-  onChange,
-  color,
-  sub,
-  compact,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  color: string;
-  sub?: string;
-  compact?: boolean;
-}) {
+function MacroField({ label, value, onChange, color, sub, compact }: { label: string; value: string; onChange: (v: string) => void; color: string; sub: string; compact?: boolean }) {
   return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center justify-between mb-1 min-w-0">
-        <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
-        {!compact && sub && <span className="text-[10px] text-gray-400 truncate ml-1">{sub}</span>}
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-xs font-semibold ${color}`}>{label}</span>
+        <span className="text-[10px] text-gray-400">{sub}</span>
       </div>
-      <div className="flex items-center bg-white rounded-xl px-2.5 py-2 border border-gray-100 min-w-0">
+      <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-gray-100">
         <input
           type="number"
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full min-w-0 bg-transparent font-bold text-gray-900 outline-none ${
-            compact ? 'text-xs' : 'text-sm'
-          }`}
+          className={`flex-1 bg-transparent font-bold text-gray-900 outline-none ${compact ? 'text-sm' : 'text-base'}`}
         />
-        <span className="text-[10px] font-semibold text-gray-400 shrink-0 ml-1">
-          {compact ? 'kcal' : 'g'}
-        </span>
+        <span className="text-[10px] font-semibold text-gray-400">{compact ? 'kcal' : 'g'}</span>
       </div>
     </div>
   );
