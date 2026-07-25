@@ -67,6 +67,14 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       goalWeight: r.goalWeightKg,
       weeklyWeightTarget: r.weeklyWeightKg,
       weightUnit: weightUnit === 'lb' ? 'lb' : 'kg',
+      calc: {
+        bmr: r.bmr,
+        tdee: r.tdee,
+        dailyDeficit: r.deficit > 0 ? -r.deficit : r.deficit,
+        estimatedGoalDate: r.goalDate ? r.goalDate.toISOString() : null,
+        recommendedMacros: { protein: r.protein, carbs: r.carbs, fat: r.fat },
+        suggestedMealSplit: { ...r.mealSplit },
+      },
     });
     close();
   };

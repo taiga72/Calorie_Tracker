@@ -32,12 +32,35 @@ export interface WeightEntry {
 
 export type WeightUnit = 'kg' | 'lb';
 
+export interface MacroTargets {
+  protein: number; // grams
+  carbs: number; // grams
+  fat: number; // grams
+}
+
+export interface MealCalorieSplit {
+  breakfast: number;
+  lunch: number;
+  dinner: number;
+  snack: number;
+}
+
+export interface CalcBreakdown {
+  bmr: number;
+  tdee: number;
+  dailyDeficit: number; // kcal reduction (negative = deficit, positive = surplus)
+  estimatedGoalDate: string | null; // ISO date string
+  recommendedMacros: MacroTargets;
+  suggestedMealSplit: MealCalorieSplit;
+}
+
 export interface Settings {
   calorieGoal: number;
   goalWeight: number; // stored in kg
   weeklyWeightTarget: number; // stored in kg
   weightUnit: WeightUnit;
   geminiApiKey: string;
+  calc?: CalcBreakdown | null;
 }
 
 export interface DaySummary {

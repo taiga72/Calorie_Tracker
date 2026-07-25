@@ -9,7 +9,7 @@ import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
-  Trash2, AlertTriangle, User, Camera,
+  Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
 } from 'lucide-react';
 
 export function SettingsTab() {
@@ -30,6 +30,15 @@ export function SettingsTab() {
   const [lose, setLose] = useState(settings.weeklyWeightTarget <= 0);
   const [unit, setUnit] = useState<WeightUnit>(settings.weightUnit);
   const [saved, setSaved] = useState(false);
+
+  const calc = settings.calc;
+  const [protein, setProtein] = useState(String(calc?.recommendedMacros.protein ?? 0));
+  const [carbs, setCarbs] = useState(String(calc?.recommendedMacros.carbs ?? 0));
+  const [fat, setFat] = useState(String(calc?.recommendedMacros.fat ?? 0));
+  const [breakfast, setBreakfast] = useState(String(calc?.suggestedMealSplit.breakfast ?? 0));
+  const [lunch, setLunch] = useState(String(calc?.suggestedMealSplit.lunch ?? 0));
+  const [dinner, setDinner] = useState(String(calc?.suggestedMealSplit.dinner ?? 0));
+  const [snack, setSnack] = useState(String(calc?.suggestedMealSplit.snack ?? 0));
   const [wizardOpen, setWizardOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -52,11 +61,28 @@ export function SettingsTab() {
   const onSaveGoals = () => {
     const gWeight = unitToKg(parseFloat(goalWeight) || 0, unit);
     const weeklyAbs = unitToKg(parseFloat(weeklyTarget) || 0, unit);
+    const newCalorieGoal = Math.max(0, parseInt(calorieGoal) || 0);
+    const deficit = calc ? newCalorieGoal - calc.tdee : 0;
     updateSettings({
-      calorieGoal: Math.max(0, parseInt(calorieGoal) || 0),
+      calorieGoal: newCalorieGoal,
       goalWeight: gWeight,
       weeklyWeightTarget: lose ? -Math.abs(weeklyAbs) : Math.abs(weeklyAbs),
       weightUnit: unit,
+      calc: calc ? {
+        ...calc,
+        dailyDeficit: deficit,
+        recommendedMacros: {
+          protein: Math.max(0, parseInt(protein) || 0),
+          carbs: Math.max(0, parseInt(carbs) || 0),
+          fat: Math.max(0, parseInt(fat) || 0),
+        },
+        suggestedMealSplit: {
+          breakfast: Math.max(0, parseInt(breakfast) || 0),
+          lunch: Math.max(0, parseInt(lunch) || 0),
+          dinner: Math.max(0, parseInt(dinner) || 0),
+          snack: Math.max(0, parseInt(snack) || 0),
+        },
+      } : null,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
@@ -258,6 +284,54 @@ export function SettingsTab() {
             </div>
           </Field>
 
+          {calc && (
+            <>
+              {/* Summary stats row */}
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="BMR" value={calc.bmr} />
+                <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="TDEE" value={calc.tdee} />
+                <SummaryStat
+                  icon={<TrendingDown size={12} className={calc.dailyDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
+                  label="Deficit"
+                  value={calc.dailyDeficit > 0 ? `+${calc.dailyDeficit}` : calc.dailyDeficit}
+                />
+                <SummaryStat
+                  icon={<Target size={12} className="text-emerald-600" />}
+                  label="Goal"
+                  value={calc.estimatedGoalDate ? new Date(calc.estimatedGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                  isText
+                />
+              </div>
+
+              {/* Macro breakdown */}
+              <div className="bg-gray-50 rounded-2xl p-4 mt-1">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity size={14} className="text-gray-400" />
+                  <p className="text-xs font-semibold text-gray-400">MACRO BREAKDOWN</p>
+                </div>
+                <div className="space-y-3">
+                  <MacroField label="Protein" value={protein} onChange={setProtein} color="text-emerald-600" sub="Preserves muscle" />
+                  <MacroField label="Carbs" value={carbs} onChange={setCarbs} color="text-orange-500" sub="Fuels activity" />
+                  <MacroField label="Fat" value={fat} onChange={setFat} color="text-amber-500" sub="Hormones & satiety" />
+                </div>
+              </div>
+
+              {/* Meal calorie split */}
+              <div className="bg-gray-50 rounded-2xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Utensils size={14} className="text-gray-400" />
+                  <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" sub="kcal" compact />
+                  <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" sub="kcal" compact />
+                  <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" sub="kcal" compact />
+                  <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" sub="kcal" compact />
+                </div>
+              </div>
+            </>
+          )}
+
           <button
             onClick={onSaveGoals}
             className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform flex items-center justify-center gap-2"
@@ -373,5 +447,38 @@ function ActionBtn({
         <p className="text-xs text-gray-400">{sub}</p>
       </div>
     </button>
+  );
+}
+
+function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; label: string; value: number | string; isText?: boolean }) {
+  return (
+    <div className="bg-white rounded-xl p-2.5 border border-gray-50 text-center">
+      <div className="flex items-center justify-center gap-1 mb-0.5">
+        {icon}
+        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
+      </div>
+      <p className={`font-bold text-gray-900 ${isText ? 'text-[11px]' : 'text-sm'}`}>{value}</p>
+    </div>
+  );
+}
+
+function MacroField({ label, value, onChange, color, sub, compact }: { label: string; value: string; onChange: (v: string) => void; color: string; sub: string; compact?: boolean }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-xs font-semibold ${color}`}>{label}</span>
+        <span className="text-[10px] text-gray-400">{sub}</span>
+      </div>
+      <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-gray-100">
+        <input
+          type="number"
+          inputMode="numeric"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`flex-1 bg-transparent font-bold text-gray-900 outline-none ${compact ? 'text-sm' : 'text-base'}`}
+        />
+        <span className="text-[10px] font-semibold text-gray-400">{compact ? 'kcal' : 'g'}</span>
+      </div>
+    </div>
   );
 }
