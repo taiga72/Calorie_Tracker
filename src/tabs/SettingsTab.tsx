@@ -467,7 +467,8 @@ function MacroField({ label, value, onChange, color, sub, compact }: { label: st
     <div>
       <div className="flex items-center justify-between mb-1">
         <span className={`text-xs font-semibold ${color}`}>{label}</span>
-        <span className="text-[10px] text-gray-400">{sub}</span>
+        {/* Only show top subtitle if not in compact meal-split mode */}
+        {!compact && <span className="text-[10px] text-gray-400">{sub}</span>}
       </div>
       <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-gray-100">
         <input
