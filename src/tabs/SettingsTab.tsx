@@ -317,19 +317,18 @@ export function SettingsTab() {
               </div>
 
               {/* Meal calorie split */}
-              <div className="bg-gray-50 rounded-2xl p-4">
+              <div className="bg-gray-50 rounded-2xl p-4 overflow-hidden">
                 <div className="flex items-center gap-2 mb-3">
                   <Utensils size={14} className="text-gray-400" />
                   <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" sub="kcal" compact />
-                  <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" sub="kcal" compact />
-                  <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" sub="kcal" compact />
-                  <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" sub="kcal" compact />
+                <div className="grid grid-cols-2 gap-2.5">
+                  <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" compact />
+                  <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" compact />
+                  <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" compact />
+                  <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" compact />
                 </div>
               </div>
-            </>
           )}
 
           <button
@@ -462,22 +461,40 @@ function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; la
   );
 }
 
-function MacroField({ label, value, onChange, color, sub, compact }: { label: string; value: string; onChange: (v: string) => void; color: string; sub: string; compact?: boolean }) {
+function MacroField({
+  label,
+  value,
+  onChange,
+  color,
+  sub,
+  compact,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  color: string;
+  sub?: string;
+  compact?: boolean;
+}) {
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className={`text-xs font-semibold ${color}`}>{label}</span>
-        <span className="text-[10px] text-gray-400">{sub}</span>
+    <div className="min-w-0 flex-1">
+      <div className="flex items-center justify-between mb-1 min-w-0">
+        <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
+        {!compact && sub && <span className="text-[10px] text-gray-400 truncate ml-1">{sub}</span>}
       </div>
-      <div className="flex items-center bg-white rounded-xl px-3 py-2 border border-gray-100">
+      <div className="flex items-center bg-white rounded-xl px-2.5 py-2 border border-gray-100 min-w-0">
         <input
           type="number"
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`flex-1 bg-transparent font-bold text-gray-900 outline-none ${compact ? 'text-sm' : 'text-base'}`}
+          className={`w-full min-w-0 bg-transparent font-bold text-gray-900 outline-none ${
+            compact ? 'text-xs' : 'text-sm'
+          }`}
         />
-        <span className="text-[10px] font-semibold text-gray-400">{compact ? 'kcal' : 'g'}</span>
+        <span className="text-[10px] font-semibold text-gray-400 shrink-0 ml-1">
+          {compact ? 'kcal' : 'g'}
+        </span>
       </div>
     </div>
   );
