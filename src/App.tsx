@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { StoreProvider } from '@/store';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
@@ -27,6 +28,7 @@ function App() {
         <BottomNav active={tab} onChange={setTab} />
         <LogModal open={logOpen} onClose={() => setLogOpen(false)} />
       </div>
+      <Analytics />
     </StoreProvider>
   );
 }
