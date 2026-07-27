@@ -3,8 +3,8 @@ import { resolveApiKey, RateLimitError } from '@/lib/gemini';
 import { kgToUnit } from '@/lib/units';
 import { rangeKeys, toKey, formatShortDate } from '@/lib/dateUtils';
 
-const PRIMARY_MODEL = 'gemini-2.0-flash';
-const FALLBACK_MODEL = 'gemini-1.5-flash';
+const PRIMARY_MODEL = 'gemini-3.5-flash';
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
 const RETRY_DELAY_MS = 1000;
 
