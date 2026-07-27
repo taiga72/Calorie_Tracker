@@ -2,12 +2,16 @@ import type { MealType, FoodItem } from '@/types';
 
 const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
 
-const MODEL = 'gemini-3.5-flash';
+const PRIMARY_MODEL = 'gemini-3.5-flash';
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
+const RETRY_DELAY_MS = 1000;
 
-function endpoint(apiKey: string): string {
-  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+function endpoint(apiKey: string, model: string): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${model}:generateContent?key=${apiKey}`;
 }
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function resolveApiKey(userKey?: string): string {
   return (userKey && userKey.trim()) || DEFAULT_API_KEY;
@@ -103,7 +107,40 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json' },
   };
 
-  const res = await fetch(endpoint(key), {
+  return callWithFallback(key, body);
+}
+
+async function callWithFallback(key: string, body: unknown): Promise<ParsedMeal> {
+  const models = [PRIMARY_MODEL, FALLBACK_MODEL];
+  let lastErr: Error | null = null;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(key, model, body);
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (err instanceof RateLimitError) throw lastErr;
+        const status = (err as ApiError).status;
+        const transient = status === 503 || status === 429;
+        if (!transient) throw lastErr;
+        if (attempt === 0) {
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+      }
+    }
+  }
+
+  throw lastErr ?? new Error('All Gemini model attempts failed.');
+}
+
+interface ApiError extends Error {
+  status?: number;
+}
+
+async function callModel(key: string, model: string, body: unknown): Promise<ParsedMeal> {
+  const res = await fetch(endpoint(key, model), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -124,6 +161,12 @@ export async function estimateMeal(
       throw new RateLimitError(secs, detail || 'Too many requests. Please slow down.');
     }
 
+    if (res.status === 503) {
+      const err = new Error(`Gemini API error (503): ${detail || res.statusText}`) as ApiError;
+      err.status = 503;
+      throw err;
+    }
+
     throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
   }
 
@@ -134,7 +177,7 @@ export async function estimateMeal(
 
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
-let parsed: ParsedMeal;
+  let parsed: ParsedMeal;
   // Always extract only the inner JSON object between curly braces
   const match = textOut.match(/\{[\s\S]*\}/);
   if (!match) {
