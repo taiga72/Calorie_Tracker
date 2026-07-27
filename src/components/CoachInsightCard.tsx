@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
-import { getInsight, type CoachInsight } from '@/lib/geminiCoach';
+import { getOrFetchInsight, type CoachInsight } from '@/lib/geminiCoach';
 import { RateLimitError } from '@/lib/gemini';
 import { Sparkles, Lightbulb, AlertCircle, RefreshCw, MessageCircle } from 'lucide-react';
 
@@ -14,12 +14,12 @@ export function CoachInsightCard({ onOpenCoach }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generate = async () => {
+  const loadInsight = async (force = false) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getInsight(settings.geminiApiKey, { settings, meals, weights });
-      setInsight(result);
+      const res = await getOrFetchInsight(settings.geminiApiKey, { settings, meals, weights }, force);
+      setInsight(res);
     } catch (err) {
       const msg = err instanceof RateLimitError
         ? 'Too many requests right now. Try again in a moment.'
@@ -31,9 +31,11 @@ export function CoachInsightCard({ onOpenCoach }: Props) {
   };
 
   useEffect(() => {
-    generate();
+    loadInsight(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleRefresh = () => loadInsight(true);
 
   return (
     <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-3xl p-4 shadow-sm text-white">
@@ -45,7 +47,7 @@ export function CoachInsightCard({ onOpenCoach }: Props) {
           <span className="text-xs font-bold tracking-wider">SMART COACH INSIGHT</span>
         </div>
         <button
-          onClick={generate}
+          onClick={handleRefresh}
           disabled={loading}
           className="p-1.5 rounded-full hover:bg-white/20 disabled:opacity-50 active:scale-90 transition-transform"
           aria-label="Refresh insight"

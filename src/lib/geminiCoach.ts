@@ -123,10 +123,51 @@ Rules:
 - If there is not enough logged data, acknowledge it briefly and give a sensible starter tip.
 - Output ONLY the JSON object.`;
 
+const INSIGHT_CACHE_KEY = 'cc_coach_insight';
+
+interface CachedInsight {
+  date: string; // YYYY-MM-DD
+  insight: CoachInsight;
+}
+
+function readCache(): CachedInsight | null {
+  try {
+    const raw = localStorage.getItem(INSIGHT_CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as CachedInsight;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(insight: CoachInsight): void {
+  try {
+    const entry: CachedInsight = { date: toKey(new Date()), insight };
+    localStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify(entry));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export async function getOrFetchInsight(
+  apiKey: string,
+  ctx: CoachContext,
+  force = false,
+): Promise<CoachInsight> {
+  if (!force) {
+    const cached = readCache();
+    if (cached && cached.date === toKey(new Date())) {
+      return cached.insight;
+    }
+  }
+  const insight = await getInsight(apiKey, ctx);
+  writeCache(insight);
+  return insight;
+}
+
 export async function getInsight(apiKey: string, ctx: CoachContext): Promise<CoachInsight> {
   const key = resolveApiKey(apiKey);
   const contextJson = buildContextJson(ctx);
-
   const body = {
     contents: [{ role: 'user', parts: [{ text: `${INSIGHT_SYSTEM_PROMPT}\n\nUser context (JSON):\n${contextJson}` }] }],
     generationConfig: { responseMimeType: 'application/json', temperature: 0.5 },
@@ -135,13 +176,14 @@ export async function getInsight(apiKey: string, ctx: CoachContext): Promise<Coa
   const text = await callWithFallback(key, body);
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error('Could not parse coach insight response.');
+  let parsed: CoachInsight;
   try {
-    const parsed = JSON.parse(match[0]) as CoachInsight;
-    if (!parsed.summary || !parsed.tip) throw new Error('Insight response missing fields.');
-    return { summary: String(parsed.summary), tip: String(parsed.tip) };
+    parsed = JSON.parse(match[0]) as CoachInsight;
   } catch {
     throw new Error('Failed to parse coach insight JSON.');
   }
+  if (!parsed.summary || !parsed.tip) throw new Error('Insight response missing fields.');
+  return { summary: String(parsed.summary), tip: String(parsed.tip) };
 }
 
 async function callWithFallback(key: string, body: unknown): Promise<string> {
