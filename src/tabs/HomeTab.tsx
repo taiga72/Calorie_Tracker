@@ -45,18 +45,7 @@ export function HomeTab({ onOpenCoach }: { onOpenCoach: () => void }) {
         </div>
       </div>
 
-      {/* Daily motivational quote */}
-      <div className="mt-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-4 border border-emerald-100/60">
-        <div className="flex items-start gap-3">
-          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/70 flex items-center justify-center">
-            <Sparkles size={16} className="text-emerald-600" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-800 leading-snug">{dailyQuote.text}</p>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-1.5">— {dailyQuote.author}</p>
-          </div>
-        </div>
-      </div>
+
 
       {/* Smart Coach Insight */}
       <div className="mt-4">
