@@ -1,0 +1,23 @@
+{
+  "name": "Calorie Tracker",
+  "short_name": "Calorie Tracker",
+  "description": "Track calories, macros, and weight with AI-powered meal estimation.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F4F5F6",
+  "theme_color": "#059669",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
