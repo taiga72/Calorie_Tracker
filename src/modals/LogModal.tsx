@@ -44,8 +44,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const [mode, setMode] = useState<Mode>('food');
   const [foodInput, setFoodInput] = useState<FoodInput>('text');
   const [text, setText] = useState('');
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [imageB64, setImageB64] = useState<{ data: string; mimeType: string } | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [imageB64s, setImageB64s] = useState<Array<{ data: string; mimeType: string }>>([]);
   const [mealType, setMealType] = useState<MealType | 'auto'>('auto');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +73,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       setMealType(editMeal.mealType);
       setEditItems(editMeal.items.length ? editMeal.items.map((i) => ({ ...i })) : [emptyItem()]);
       setTotalCalInput(String(editMeal.calories));
-      setImagePreview(editMeal.imageData ?? null);
+      setImagePreviews(editMeal.imageDatas ?? (editMeal.imageData ? [editMeal.imageData] : []));
       setResult(null);
       setError(null);
     } else if (isWeightEdit) {
@@ -91,7 +91,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   }, [open, editMeal, weightDate, initialMode]);
 
   const reset = () => {
-    setText(''); setImagePreview(null); setImageB64(null);
+    setText(''); setImagePreviews([]); setImageB64s([]);
     setMealType('auto'); setError(null); setResult(null);
     setFoodInput('text'); setWeightVal(''); setRateLimitSecs(null);
     setEditItems([]);
@@ -99,15 +99,24 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const close = () => { reset(); onClose(); };
 
-  const onFile = async (file: File) => {
+  const onFiles = async (files: File[]) => {
     try {
-      const { dataUrl, base64 } = await compressImage(file);
-      setImageB64(base64);
-      setImagePreview(dataUrl);
-      setFoodInput((prev) => (text.trim() ? 'both' : 'image'));
+      const processed = await Promise.all(files.map((f) => compressImage(f)));
+      setImagePreviews((prev) => [...prev, ...processed.map((p) => p.dataUrl)]);
+      setImageB64s((prev) => [...prev, ...processed.map((p) => p.base64)]);
+      setFoodInput(text.trim() ? 'both' : 'image');
     } catch {
-      setError('Could not process the image. Try another photo.');
+      setError('Could not process one or more images. Try again.');
     }
+  };
+
+  const removePhoto = (idx: number) => {
+    setImagePreviews((prev) => {
+      const next = prev.filter((_, i) => i !== idx);
+      if (next.length === 0) setFoodInput('text');
+      return next;
+    });
+    setImageB64s((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const onEstimate = async () => {
@@ -118,7 +127,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     }
     setLoading(true);
     try {
-      const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64 ?? undefined);
+      const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64s.length > 0 ? imageB64s : undefined);
       if (mealType !== 'auto') parsed.mealType = mealType;
       setResult(parsed);
     } catch (e) {
@@ -146,7 +155,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       fat: result.fat,
       fiber: result.fiber,
       reasoning: result.reasoning,
-      imageData: imagePreview ?? undefined,
+      imageData: imagePreviews[0] ?? undefined,
+      imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
     close();
   };
@@ -197,7 +207,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       carbs: totals.carbs,
       fat: totals.fat,
       fiber: totals.fiber,
-      imageData: imagePreview ?? undefined,
+      imageData: imagePreviews[0] ?? undefined,
+      imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
     close();
   };
@@ -265,32 +276,45 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             ))}
           </div>
 
-          {/* Photo banner */}
+          {/* Photo gallery */}
           <input
             ref={fileRef}
             type="file"
             accept="image/*"
+            multiple
             className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+            onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) onFiles(files); e.target.value = ''; }}
           />
-          {imagePreview ? (
-            <div className="relative mb-2">
-              <img src={imagePreview} alt="meal" className="w-full h-32 object-cover rounded-2xl" />
+          {imagePreviews.length > 0 ? (
+            <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+              {imagePreviews.map((src, i) => (
+                <div key={i} className="relative flex-shrink-0">
+                  <img src={src} alt="dish" className="w-24 h-24 rounded-2xl object-cover" />
+                  <button
+                    onClick={() => removePhoto(i)}
+                    className="absolute top-1 right-1 bg-black/40 backdrop-blur-sm text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                    aria-label="Remove photo"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
               <button
-                onClick={() => { setImagePreview(null); setImageB64(null); }}
-                className="absolute top-2 right-2 bg-black/40 backdrop-blur-sm text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
-                aria-label="Remove photo"
+                onClick={() => fileRef.current?.click()}
+                className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
               >
-                ✕
+                <Camera size={20} />
+                <span className="text-[10px] font-semibold">Add photo</span>
               </button>
             </div>
-          ) : null}
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mb-3"
-          >
-            <Camera size={16} /> {imagePreview ? 'Change photo' : 'Add photo'}
-          </button>
+          ) : (
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mb-3"
+            >
+              <Camera size={16} /> Add photo
+            </button>
+          )}
 
           {/* AI Estimation callout */}
           {editMeal?.reasoning && (
@@ -400,8 +424,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <span className="text-sm font-bold text-orange-500">{Math.round(result.calories)} kcal</span>
             </div>
 
-            {imagePreview && (
-              <img src={imagePreview} alt="meal" className="w-full h-36 object-cover rounded-2xl mb-3" />
+            {imagePreviews[0] && (
+              <img src={imagePreviews[0]} alt="meal" className="w-full h-36 object-cover rounded-2xl mb-3" />
             )}
 
             <div className="space-y-2 mb-3">
@@ -447,32 +471,45 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           <div>
             {/* Input type toggle */}
             <div className="flex gap-2 mb-3">
-              <InputToggle active={foodInput !== 'image'} onClick={() => setFoodInput(text.trim() || imageB64 ? 'both' : 'text')} Icon={Type} label="Text" />
+              <InputToggle active={foodInput !== 'image'} onClick={() => setFoodInput(text.trim() || imageB64s.length > 0 ? 'both' : 'text')} Icon={Type} label="Text" />
               <InputToggle active={foodInput !== 'text'} onClick={() => fileRef.current?.click()} Icon={Camera} label="Photo" />
             </div>
             <input
               ref={fileRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
+              onChange={(e) => { const files = Array.from(e.target.files ?? []); if (files.length) onFiles(files); e.target.value = ''; }}
             />
 
-            {imagePreview && (
-              <div className="relative mb-3">
-                <img src={imagePreview} alt="preview" className="w-full h-40 object-cover rounded-2xl" />
+            {imagePreviews.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+                {imagePreviews.map((src, i) => (
+                  <div key={i} className="relative flex-shrink-0">
+                    <img src={src} alt="preview" className="w-24 h-24 rounded-2xl object-cover" />
+                    <button
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-1 right-1 bg-black/40 backdrop-blur-sm text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
+                      aria-label="Remove photo"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
                 <button
-                  onClick={() => { setImagePreview(null); setImageB64(null); setFoodInput(text.trim() ? 'text' : 'text'); }}
-                  className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm"
+                  onClick={() => fileRef.current?.click()}
+                  className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
                 >
-                  ×
+                  <Camera size={20} />
+                  <span className="text-[10px] font-semibold">Add photo</span>
                 </button>
               </div>
             )}
 
             <textarea
               value={text}
-              onChange={(e) => { setText(e.target.value); if (imageB64) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
+              onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
               placeholder="e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli"
               rows={3}
               className="w-full bg-gray-50 rounded-2xl p-3 text-sm text-gray-900 outline-none resize-none focus:ring-2 ring-emerald-500/30"

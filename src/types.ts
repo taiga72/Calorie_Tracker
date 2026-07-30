@@ -20,7 +20,8 @@ export interface MealEntry {
   fat: number;
   fiber: number;
   reasoning: string;
-  imageData?: string; // base64 data URL
+  imageData?: string; // base64 data URL (legacy, first photo)
+  imageDatas?: string[]; // base64 data URLs (multi-photo support)
   createdAt: number;
 }
 

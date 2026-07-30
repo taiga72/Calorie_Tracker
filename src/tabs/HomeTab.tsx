@@ -155,12 +155,18 @@ export function HomeTab() {
                 <div className="px-4 divide-y divide-gray-50">
                   {meals.map((m) => {
                     const itemNames = m.items.map((i) => i.name).join(', ');
+                    const thumb = m.imageDatas?.[0] || m.imageData;
                     return (
                       <div key={m.id} className="flex items-center gap-3 py-2.5">
-                        {m.imageData ? (
-                          <img src={m.imageData} alt="meal" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        {thumb ? (
+                          <div className="relative flex-shrink-0">
+                            <img src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
+                            {m.imageDatas && m.imageDatas.length > 1 && (
+                              <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
+                            )}
+                          </div>
                         ) : (
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                             <Utensils size={16} className="text-gray-300" />
                           </div>
                         )}
