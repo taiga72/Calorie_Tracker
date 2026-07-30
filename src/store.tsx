@@ -52,6 +52,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => { storage.setSettings(settings); }, [settings]);
   useEffect(() => { storage.setProfile(profile); }, [profile]);
 
+  // One-time local deduplication pass on init: removes any duplicate meal IDs
+  // (last one wins) so duplicates instantly disappear from the UI.
+  const didDedupeRef = useRef(false);
+  useEffect(() => {
+    if (didDedupeRef.current) return;
+    didDedupeRef.current = true;
+    const cleanMeals = Array.from(new Map(meals.map((m) => [m.id, m])).values());
+    if (cleanMeals.length !== meals.length) {
+      setMeals(cleanMeals);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };

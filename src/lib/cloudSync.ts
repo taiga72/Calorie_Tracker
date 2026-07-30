@@ -53,8 +53,28 @@ function rowToMeal(r: any): MealEntry {
     reasoning: r.reasoning ?? '',
     imageData: r.image_data ?? undefined,
     imageDatas: r.image_datas ?? undefined,
-    createdAt: r.client_created_at ?? Date.parse(r.created_at),
+    // Prefer the client timestamp; fall back to the server's created_at.
+    createdAt: r.client_created_at ?? (r.created_at ? Date.parse(r.created_at) : 0),
   };
+}
+
+// Deduplicate by id, keeping the newest version by timestamp (createdAt).
+export function dedupeMeals(meals: MealEntry[]): MealEntry[] {
+  return Array.from(new Map(meals.map((m) => [m.id, m])).values());
+}
+
+// Smart merge: combine local + remote meals keyed by id, keeping whichever
+// version has the newest createdAt timestamp. Returns a deduplicated array.
+export function mergeMeals(local: MealEntry[], remote: MealEntry[]): MealEntry[] {
+  const merged = new Map<string, MealEntry>();
+  for (const m of local) merged.set(m.id, m);
+  for (const r of remote) {
+    const existing = merged.get(r.id);
+    if (!existing || (r.createdAt ?? 0) >= (existing.createdAt ?? 0)) {
+      merged.set(r.id, r);
+    }
+  }
+  return Array.from(merged.values());
 }
 
 function weightRow(w: WeightEntry, userId: string) {
@@ -256,8 +276,12 @@ export async function pullCloudToLocal(userId: string): Promise<{ meals: MealEnt
       ? { name: profRow.name, avatar: profRow.avatarUrl }
       : fallbackProfile;
 
+    const remoteMeals = (meals ?? []).map(rowToMeal);
+    // Smart merge: deduplicate local + remote by id, keeping the newest by timestamp.
+    const mergedMeals = mergeMeals(storage.getMeals(), remoteMeals);
+
     return {
-      meals: (meals ?? []).map(rowToMeal),
+      meals: mergedMeals,
       weights: (weights ?? []).map(rowToWeight),
       settings,
       profile,
