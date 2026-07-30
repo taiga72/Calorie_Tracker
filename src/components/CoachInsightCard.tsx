@@ -2,13 +2,20 @@ import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
 import { getOrFetchInsight, type CoachInsight } from '@/lib/geminiCoach';
 import { RateLimitError } from '@/lib/gemini';
-import { Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
+import { toKey } from '@/lib/dateUtils';
+import { Sparkles, AlertCircle, RefreshCw, Flame } from 'lucide-react';
+
+const OVER_TARGET_TIP = "You're over target today, but weight loss is about your weekly average — not one meal. Take a walk, hydrate, and get back on track tomorrow!";
 
 export function CoachInsightCard() {
-  const { meals, weights, settings } = useStore();
+  const { meals, weights, settings, getDay } = useStore();
   const [insight, setInsight] = useState<CoachInsight | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const todayKey = toKey(new Date());
+  const day = getDay(todayKey);
+  const overTarget = day.totalCalories > settings.calorieGoal;
 
   const loadInsight = async (force = false) => {
     setLoading(true);
@@ -34,10 +41,10 @@ export function CoachInsightCard() {
   const handleRefresh = () => loadInsight(true);
 
   return (
-    <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl p-3.5 shadow-sm text-white">
+    <div className={`rounded-2xl p-3.5 shadow-sm text-white transition-colors duration-300 ${overTarget ? 'bg-gradient-to-br from-rose-500 to-amber-500' : 'bg-gradient-to-br from-emerald-600 to-teal-600'}`}>
       <div className="flex items-center gap-2">
         <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-          <Sparkles size={13} />
+          {overTarget ? <Flame size={13} /> : <Sparkles size={13} />}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -48,6 +55,8 @@ export function CoachInsightCard() {
               <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
               <span>{error}</span>
             </div>
+          ) : overTarget ? (
+            <p className="text-xs leading-relaxed text-white/95">{OVER_TARGET_TIP}</p>
           ) : insight ? (
             <p className="text-xs leading-relaxed text-white/95">{insight.tip}</p>
           ) : (

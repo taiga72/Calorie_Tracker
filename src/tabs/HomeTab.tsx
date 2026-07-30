@@ -21,6 +21,8 @@ export function HomeTab() {
   const day = getDay(todayKey);
   const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
   const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
+  const overTarget = day.totalCalories > settings.calorieGoal;
+  const overAmount = Math.round(day.totalCalories - settings.calorieGoal);
   const latestWeight = [...(day.weight ? [day.weight] : [])][0];
 
   const hour = new Date().getHours();
@@ -53,25 +55,38 @@ export function HomeTab() {
       <div className="grid grid-cols-2 gap-3 mt-5">
         
         {/* Left Column: Today's Calories */}
-        <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 flex flex-col justify-between">
-          <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
+        <div className={`bg-white rounded-3xl p-4 shadow-sm border flex flex-col justify-between transition-colors duration-300 ${overTarget ? 'border-rose-100' : 'border-gray-50'}`}>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
+            {overTarget && (
+              <span className="text-[9px] font-bold tracking-wider text-white bg-rose-500 px-1.5 py-0.5 rounded-full animate-pulse">OVER DEFICIT</span>
+            )}
+          </div>
           <div className="my-auto py-2 flex justify-center">
             <CalorieRing
               value={day.totalCalories}
               goal={settings.calorieGoal}
               size={108}
+              color={overTarget ? '#F43F5E' : '#F97316'}
               label={`${Math.round(day.totalCalories)}`}
               sublabel={`of ${settings.calorieGoal}`}
             />
           </div>
           <div className="w-full space-y-1 pt-2 border-t border-gray-50 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-gray-400">Remaining</span>
-              <span className="font-semibold text-gray-700">{Math.round(remaining)} kcal</span>
-            </div>
+            {overTarget ? (
+              <div className="flex justify-between">
+                <span className="text-rose-400">Over target</span>
+                <span className="font-bold text-rose-600">+{overAmount} kcal</span>
+              </div>
+            ) : (
+              <div className="flex justify-between">
+                <span className="text-gray-400">Remaining</span>
+                <span className="font-semibold text-gray-700">{Math.round(remaining)} kcal</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-400">Progress</span>
-              <span className="font-semibold text-orange-500">{pct}%</span>
+              <span className={`font-semibold ${overTarget ? 'text-rose-600' : 'text-orange-500'}`}>{pct}%</span>
             </div>
           </div>
         </div>

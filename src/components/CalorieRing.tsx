@@ -5,9 +5,10 @@ interface CalorieRingProps {
   stroke?: number;
   label?: string;
   sublabel?: string;
+  color?: string;
 }
 
-export function CalorieRing({ value, goal, size = 120, stroke = 10, label, sublabel }: CalorieRingProps) {
+export function CalorieRing({ value, goal, size = 120, stroke = 10, label, sublabel, color = '#F97316' }: CalorieRingProps) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const pct = goal > 0 ? Math.min(value / goal, 1) : 0;
@@ -29,12 +30,12 @@ export function CalorieRing({ value, goal, size = 120, stroke = 10, label, subla
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="#F97316"
+          stroke={color}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={offset}
-          style={{ transition: 'stroke-dashoffset 0.6s ease' }}
+          style={{ transition: 'stroke-dashoffset 0.6s ease, stroke 0.4s ease' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
