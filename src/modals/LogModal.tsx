@@ -4,7 +4,7 @@ import { Modal } from '@/components/Modal';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import type { MealType, MealEntry, FoodItem } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2 } from 'lucide-react';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
@@ -56,6 +56,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   // Edit-mode fields
   const [editItems, setEditItems] = useState<FoodItem[]>([]);
+  const [totalCalInput, setTotalCalInput] = useState('');
 
   useEffect(() => {
     if (rateLimitSecs === null) return;
@@ -71,6 +72,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       setMode('food');
       setMealType(editMeal.mealType);
       setEditItems(editMeal.items.length ? editMeal.items.map((i) => ({ ...i })) : [emptyItem()]);
+      setTotalCalInput(String(editMeal.calories));
       setImagePreview(editMeal.imageData ?? null);
       setResult(null);
       setError(null);
@@ -160,6 +162,22 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     setEditItems((prev) => [...prev, emptyItem()]);
   };
 
+  const applyTotalCal = () => {
+    const newCal = Math.max(0, parseFloat(totalCalInput) || 0);
+    setTotalCalInput(String(newCal));
+    const oldCal = editTotals.calories;
+    if (oldCal <= 0 || newCal === oldCal) return;
+    const ratio = newCal / oldCal;
+    setEditItems((prev) => prev.map((it) => ({
+      ...it,
+      calories: Math.round(it.calories * ratio),
+      protein: +(it.protein * ratio).toFixed(1),
+      carbs: +(it.carbs * ratio).toFixed(1),
+      fat: +(it.fat * ratio).toFixed(1),
+      fiber: +(it.fiber * ratio).toFixed(1),
+    })));
+  };
+
   const onSaveEdit = () => {
     if (!editMeal) return;
     const items = editItems.map((it) => ({
@@ -247,18 +265,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             ))}
           </div>
 
-          {/* Photo thumbnail */}
-          {imagePreview && (
-            <div className="relative mb-3">
-              <img src={imagePreview} alt="meal" className="w-full h-36 object-cover rounded-2xl" />
-              <button
-                onClick={() => { setImagePreview(null); setImageB64(null); }}
-                className="absolute top-2 right-2 bg-black/50 text-white rounded-full w-7 h-7 flex items-center justify-center text-sm"
-              >
-                ×
-              </button>
-            </div>
-          )}
+          {/* Photo banner */}
           <input
             ref={fileRef}
             type="file"
@@ -266,53 +273,48 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }}
           />
-          {!imagePreview && (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-3 rounded-xl text-sm mb-3"
-            >
-              <Camera size={16} /> Change photo
-            </button>
+          {imagePreview ? (
+            <div className="relative mb-2">
+              <img src={imagePreview} alt="meal" className="w-full h-32 object-cover rounded-2xl" />
+              <button
+                onClick={() => { setImagePreview(null); setImageB64(null); }}
+                className="absolute top-2 right-2 bg-black/40 backdrop-blur-sm text-white rounded-full w-7 h-7 flex items-center justify-center text-xs"
+                aria-label="Remove photo"
+              >
+                ✕
+              </button>
+            </div>
+          ) : null}
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mb-3"
+          >
+            <Camera size={16} /> {imagePreview ? 'Change photo' : 'Add photo'}
+          </button>
+
+          {/* AI Estimation callout */}
+          {editMeal?.reasoning && (
+            <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3.5 mb-3">
+              <p className="text-[10px] font-bold text-emerald-700 tracking-wider mb-1">✨ AI ESTIMATION NOTE</p>
+              <p className="text-xs text-gray-600 italic leading-relaxed">{editMeal.reasoning}</p>
+            </div>
           )}
 
-          {/* Itemized food list */}
-          <div className="space-y-2">
-            {editItems.map((it, i) => (
-              <div key={i} className="bg-white rounded-xl p-3 border border-gray-100">
-                <div className="flex items-center gap-2 mb-2">
-                  <input
-                    type="text"
-                    value={it.name}
-                    onChange={(e) => updateItem(i, { name: e.target.value })}
-                    placeholder="Food item (e.g. 100g cooked white rice)"
-                    className="flex-1 bg-gray-50 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 ring-emerald-500/30"
-                  />
-                  <button
-                    onClick={() => removeItem(i)}
-                    disabled={editItems.length <= 1}
-                    className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
-                    aria-label="Remove item"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-5 gap-1.5">
-                  <ItemNumInput label="kcal" value={it.calories} onChange={(v) => updateItem(i, { calories: v })} />
-                  <ItemNumInput label="P" value={it.protein} onChange={(v) => updateItem(i, { protein: v })} />
-                  <ItemNumInput label="C" value={it.carbs} onChange={(v) => updateItem(i, { carbs: v })} />
-                  <ItemNumInput label="F" value={it.fat} onChange={(v) => updateItem(i, { fat: v })} />
-                  <ItemNumInput label="Fb" value={it.fiber} onChange={(v) => updateItem(i, { fiber: v })} />
-                </div>
-              </div>
-            ))}
+          {/* Quick calorie override */}
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Total calories</label>
+            <div className="flex items-center bg-gray-50 rounded-xl px-3 py-3">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={totalCalInput}
+                onChange={(e) => setTotalCalInput(e.target.value)}
+                onBlur={applyTotalCal}
+                className="flex-1 bg-transparent text-xl font-bold text-gray-900 outline-none"
+              />
+              <span className="text-xs text-gray-400">kcal</span>
+            </div>
           </div>
-
-          <button
-            onClick={addItem}
-            className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mt-2 mb-3 active:scale-[.99] transition-transform"
-          >
-            <Plus size={16} /> Add item
-          </button>
 
           {/* Live aggregated macro summary */}
           <div className="grid grid-cols-5 gap-2 mb-3">
@@ -337,6 +339,50 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <p className="text-[10px] text-gray-400">Fiber</p>
             </div>
           </div>
+
+          {/* Collapsible advanced item breakdown */}
+          <details className="group mb-3">
+            <summary className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors list-none [&::-webkit-details-marker]:hidden">
+              <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
+              Advanced item breakdown ({editItems.length} items)
+            </summary>
+            <div className="space-y-2 mt-2">
+              {editItems.map((it, i) => (
+                <div key={i} className="bg-white rounded-xl p-3 border border-gray-100">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      value={it.name}
+                      onChange={(e) => updateItem(i, { name: e.target.value })}
+                      placeholder="Food item (e.g. 100g cooked white rice)"
+                      className="flex-1 bg-gray-50 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 ring-emerald-500/30"
+                    />
+                    <button
+                      onClick={() => removeItem(i)}
+                      disabled={editItems.length <= 1}
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
+                      aria-label="Remove item"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1.5">
+                    <ItemNumInput label="kcal" value={it.calories} onChange={(v) => updateItem(i, { calories: v })} />
+                    <ItemNumInput label="P" value={it.protein} onChange={(v) => updateItem(i, { protein: v })} />
+                    <ItemNumInput label="C" value={it.carbs} onChange={(v) => updateItem(i, { carbs: v })} />
+                    <ItemNumInput label="F" value={it.fat} onChange={(v) => updateItem(i, { fat: v })} />
+                    <ItemNumInput label="Fb" value={it.fiber} onChange={(v) => updateItem(i, { fiber: v })} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={addItem}
+              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mt-2 active:scale-[.99] transition-transform"
+            >
+              <Plus size={16} /> Add item
+            </button>
+          </details>
 
           <button
             onClick={onSaveEdit}

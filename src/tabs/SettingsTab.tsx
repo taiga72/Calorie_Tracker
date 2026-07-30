@@ -10,7 +10,7 @@ import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Save,
 } from 'lucide-react';
 
 export function SettingsTab() {
@@ -408,12 +408,20 @@ export function SettingsTab() {
                   </div>
                 </div>
 
-                <button
-                  onClick={onSaveGoals}
-                  className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform flex items-center justify-center gap-2"
-                >
-                  {saved ? <><Check size={16} /> Saved</> : 'Save goals'}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setWizardOpen(true)}
+                    className="flex-1 bg-emerald-50 text-emerald-800 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                  >
+                    <Sparkles size={15} /> Re-calculate
+                  </button>
+                  <button
+                    onClick={onSaveGoals}
+                    className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                  >
+                    {saved ? <><Check size={15} /> Saved</> : <><Save size={15} /> Save goals</>}
+                  </button>
+                </div>
               </div>
             )}
           </>

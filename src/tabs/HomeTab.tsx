@@ -3,10 +3,9 @@ import { useStore } from '@/store';
 import { toKey, formatHeaderDate } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
-import { MealCard } from '@/components/MealCard';
 import { LogModal } from '@/modals/LogModal';
 import { CoachInsightCard } from '@/components/CoachInsightCard';
-import { Scale, Coffee, Sun, Moon, Cookie } from 'lucide-react';
+import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Trash2, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
 import { getDailyQuote } from '@/data/quotes';
 
@@ -136,26 +135,54 @@ export function HomeTab() {
         <span className="text-sm font-semibold text-emerald-600">{day.meals.length}</span>
       </div>
 
-      {/* Daily overview */}
-      <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-4 mb-2">Daily overview</h3>
       {mealsByType.length === 0 ? (
-        <div className="bg-white rounded-2xl p-6 text-center border border-gray-50">
+        <div className="bg-white rounded-2xl p-6 text-center border border-gray-50 mt-3">
           <p className="text-sm text-gray-400">No meals logged yet.</p>
           <p className="text-xs text-gray-300 mt-1">Tap the + button to log your first meal.</p>
         </div>
       ) : (
-        <div className="space-y-2.5">
+        <div className="space-y-3 mt-3">
           {mealsByType.map(({ type, meals }) => {
             const Icon = MEAL_ICON[type];
             const typeCals = meals.reduce((a, b) => a + b.calories, 0);
             return (
-              <div key={type}>
-                <div className="flex items-center gap-2 mb-1.5 px-1">
-                  <Icon size={14} className="text-gray-400" />
-                  <span className="text-xs font-semibold text-gray-500">{type}</span>
-                  <span className="text-[11px] text-gray-300 ml-auto">{Math.round(typeCals)} kcal</span>
+              <div key={type} className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
+                  <Icon size={15} className="text-gray-400" />
+                  <span className="text-sm font-bold text-gray-900">{type}</span>
+                  <span className="text-xs text-gray-400 ml-auto">• {Math.round(typeCals)} kcal</span>
                 </div>
-                {meals.map((m) => <MealCard key={m.id} meal={m} onDelete={deleteMeal} onEdit={(meal) => setEditing(meal)} />)}
+                <div className="px-4 divide-y divide-gray-50">
+                  {meals.map((m) => {
+                    const itemNames = m.items.map((i) => i.name).join(', ');
+                    return (
+                      <div key={m.id} className="flex items-center gap-3 py-2.5">
+                        {m.imageData ? (
+                          <img src={m.imageData} alt="meal" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <Utensils size={16} className="text-gray-300" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{itemNames || m.mealType}</p>
+                          <p className="text-[11px] text-gray-400 mt-0.5">
+                            <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
+                            {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          <button onClick={() => setEditing(m)} className="text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
+                            <Pencil size={14} />
+                          </button>
+                          <button onClick={() => deleteMeal(m.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1" aria-label="Delete meal">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
