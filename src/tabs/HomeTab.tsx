@@ -21,7 +21,7 @@ export function HomeTab() {
   const day = getDay(todayKey);
   const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
   const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
-  const latestWeight = [...day.weight ? [day.weight] : []][0];
+  const latestWeight = [...(day.weight ? [day.weight] : [])][0];
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -100,11 +100,11 @@ export function HomeTab() {
             </span>
           </div>
 
-          {/* Bottom Half: Today's Macros */}
+          {/* Bottom Half: Today's Macros (Compact Font Layout) */}
           <div className="bg-white rounded-3xl p-3 shadow-sm border border-gray-50 flex-1 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
-              <span className="text-[9px] font-semibold text-gray-300">g</span>
+              <span className="text-[9px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
+              <span className="text-[8px] font-semibold text-gray-300">g</span>
             </div>
             <MacroProgress
               label="Protein"
@@ -219,10 +219,13 @@ function MacroProgress({ label, value, target, color, track, text }: {
   const safeTarget = Math.max(target, 1);
   const pct = Math.min(Math.round((value / safeTarget) * 100), 100);
   return (
-    <div className="mb-1.5 last:mb-0">
+    <div className="mb-1 last:mb-0">
       <div className="flex items-center justify-between mb-0.5">
-        <span className="text-[11px] font-semibold text-gray-600">{label}</span>
-        <span className={`text-[11px] font-bold ${text}`}>{Math.round(value)}<span className="text-gray-300 font-medium">/{Math.round(target)}</span></span>
+        <span className="text-[10px] font-medium text-gray-500">{label}</span>
+        <span className={`text-[10px] font-bold ${text}`}>
+          {Math.round(value)}
+          <span className="text-gray-300 font-normal">/{Math.round(target)}</span>
+        </span>
       </div>
       <div className={`h-1.5 w-full rounded-full overflow-hidden ${track}`}>
         <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
