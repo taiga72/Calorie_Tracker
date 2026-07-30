@@ -52,6 +52,40 @@ export function HomeTab() {
         <CoachInsightCard />
       </div>
 
+      {/* Today's Macros */}
+      {settings.calc?.recommendedMacros && (
+        <div className="mt-4 bg-white rounded-3xl p-4 shadow-sm border border-gray-50">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
+            <span className="text-[10px] font-semibold text-gray-300">g</span>
+          </div>
+          <MacroProgress
+            label="Protein"
+            value={day.totalProtein}
+            target={settings.calc.recommendedMacros.protein}
+            color="bg-emerald-500"
+            track="bg-emerald-50"
+            text="text-emerald-600"
+          />
+          <MacroProgress
+            label="Carbs"
+            value={day.totalCarbs}
+            target={settings.calc.recommendedMacros.carbs}
+            color="bg-orange-400"
+            track="bg-orange-50"
+            text="text-orange-500"
+          />
+          <MacroProgress
+            label="Fat"
+            value={day.totalFat}
+            target={settings.calc.recommendedMacros.fat}
+            color="bg-amber-300"
+            track="bg-amber-50"
+            text="text-amber-500"
+          />
+        </div>
+      )}
+
       {/* Top metric cards */}
       <div className="grid grid-cols-2 gap-3 mt-5">
         {/* Calorie card */}
@@ -135,6 +169,24 @@ export function HomeTab() {
       </div>
 
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
+    </div>
+  );
+}
+
+function MacroProgress({ label, value, target, color, track, text }: {
+  label: string; value: number; target: number; color: string; track: string; text: string;
+}) {
+  const safeTarget = Math.max(target, 1);
+  const pct = Math.min(Math.round((value / safeTarget) * 100), 100);
+  return (
+    <div className="mb-3 last:mb-0">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-xs font-semibold text-gray-600">{label}</span>
+        <span className={`text-xs font-bold ${text}`}>{Math.round(value)}<span className="text-gray-300 font-medium"> / {Math.round(target)}</span></span>
+      </div>
+      <div className={`h-2 w-full rounded-full overflow-hidden ${track}`}>
+        <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
