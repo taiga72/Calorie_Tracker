@@ -19,10 +19,11 @@ export function HomeTab() {
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const todayKey = toKey(new Date());
   const day = getDay(todayKey);
+  
+  const isOver = day.totalCalories > settings.calorieGoal;
   const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
-  const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
-  const overTarget = day.totalCalories > settings.calorieGoal;
   const overAmount = Math.round(day.totalCalories - settings.calorieGoal);
+  const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
   const latestWeight = [...(day.weight ? [day.weight] : [])][0];
 
   const hour = new Date().getHours();
@@ -54,41 +55,42 @@ export function HomeTab() {
       {/* Balanced Dashboard Grid (Calories Left, Weight + Macros Right) */}
       <div className="grid grid-cols-2 gap-3 mt-5">
         
-        {/* Left Column: Today's Calories */}
-        <div className={`bg-white rounded-3xl p-4 shadow-sm border flex flex-col justify-between transition-colors duration-300 ${overTarget ? 'border-rose-100' : 'border-gray-50'}`}>
+        {/* Left Column: Today's Calories (Supports Dynamic Over-Target State) */}
+        <div className={`rounded-3xl p-4 shadow-sm border transition-all flex flex-col justify-between ${
+          isOver ? 'bg-rose-50/30 border-rose-100' : 'bg-white border-gray-50'
+        }`}>
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
             {isOver && (
-              <span className="text-[9px] font-extrabold text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="text-[9px] font-extrabold text-rose-600 bg-rose-100/80 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
                 OVER TARGET
               </span>
             )}
           </div>
+
           <div className="my-auto py-2 flex justify-center">
             <CalorieRing
               value={day.totalCalories}
               goal={settings.calorieGoal}
               size={108}
-              color={overTarget ? '#F43F5E' : '#F97316'}
+              strokeColor={isOver ? '#F43F5E' : '#10B981'} // Red/Rose when over, Emerald green when under
               label={`${Math.round(day.totalCalories)}`}
               sublabel={`of ${settings.calorieGoal}`}
             />
           </div>
-          <div className="w-full space-y-1 pt-2 border-t border-gray-50 text-[11px]">
-            {overTarget ? (
-              <div className="flex justify-between">
-                <span className="text-rose-400">Over target</span>
-                <span className="font-bold text-rose-600">+{overAmount} kcal</span>
-              </div>
-            ) : (
-              <div className="flex justify-between">
-                <span className="text-gray-400">Remaining</span>
-                <span className="font-semibold text-gray-700">{Math.round(remaining)} kcal</span>
-              </div>
-            )}
+
+          <div className="w-full space-y-1 pt-2 border-t border-gray-100 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-gray-400">{isOver ? 'Over target' : 'Remaining'}</span>
+              <span className={`font-semibold ${isOver ? 'text-rose-600' : 'text-gray-700'}`}>
+                {isOver ? `+${overAmount} kcal` : `${Math.round(remaining)} kcal`}
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="text-gray-400">Progress</span>
-              <span className={`font-semibold ${overTarget ? 'text-rose-600' : 'text-orange-500'}`}>{pct}%</span>
+              <span className={`font-semibold ${isOver ? 'text-rose-600' : 'text-orange-500'}`}>
+                {pct}%
+              </span>
             </div>
           </div>
         </div>
@@ -117,7 +119,7 @@ export function HomeTab() {
             </span>
           </div>
 
-          {/* Bottom Half: Today's Macros (Compact Font Layout) */}
+          {/* Bottom Half: Today's Macros (Compact Typography) */}
           <div className="bg-white rounded-3xl p-3 shadow-sm border border-gray-50 flex-1 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
@@ -220,9 +222,15 @@ export function HomeTab() {
       )}
 
       {/* Total banner */}
-      <div className="mt-4 bg-gray-900 rounded-2xl p-4 flex items-center justify-between text-white">
-        <span className="text-sm font-medium text-gray-300">Total today</span>
-        <span className="text-lg font-bold">{Math.round(day.totalCalories)} kcal</span>
+      <div className={`mt-4 rounded-2xl p-4 flex items-center justify-between text-white transition-colors ${
+        isOver ? 'bg-rose-950' : 'bg-gray-900'
+      }`}>
+        <span className="text-sm font-medium text-gray-300">
+          {isOver ? 'Total today (Surplus)' : 'Total today'}
+        </span>
+        <span className={`text-lg font-bold ${isOver ? 'text-rose-400' : 'text-white'}`}>
+          {Math.round(day.totalCalories)} kcal
+        </span>
       </div>
 
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
