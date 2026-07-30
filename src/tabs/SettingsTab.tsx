@@ -17,7 +17,15 @@ import {
 
 export function SettingsTab() {
   const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, authUser } = useStore();
-  const { migrating, migrationError, signOut } = useAuth();
+  const { migrating, migrationError, signOut, resync } = useAuth();
+
+  // Auto re-sync when the Settings tab opens and the user is signed in.
+  useEffect(() => {
+    if (authUser) {
+      void resync();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [authOpen, setAuthOpen] = useState(false);
 
   const setupComplete = !!settings.calc;
@@ -232,9 +240,12 @@ export function SettingsTab() {
           </div>
         )}
         {migrationError && !migrating && (
-          <div className="mt-3 text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2">
-            Sync issue: {migrationError}. Your data is still saved locally.
-          </div>
+          <button
+            onClick={() => void resync()}
+            className="mt-3 w-full text-left text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 active:scale-[.99] transition-transform"
+          >
+            Sync issue: {migrationError}. Your data is still saved locally. Tap to retry.
+          </button>
         )}
       </div>
 

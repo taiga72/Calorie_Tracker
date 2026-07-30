@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getSupabase } from '@/lib/supabase';
-import { migrateLocalToCloud, pullCloudToLocal, toCloudUser } from '@/lib/cloudSync';
+import { migrateLocalToCloud, pullCloudToLocal, resync as resyncCloud, toCloudUser } from '@/lib/cloudSync';
 import { storage } from '@/lib/storage';
 import { useStore } from '@/store';
 
@@ -9,6 +9,7 @@ interface AuthValue {
   migrating: boolean;
   migrationError: string | null;
   signOut: () => Promise<void>;
+  resync: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -81,8 +82,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuthUser(null);
   };
 
+  const resync = useCallback(async () => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+    const { data } = await supabase.auth.getSession();
+    const u = toCloudUser(data.session?.user ?? null);
+    if (!u) return;
+    setMigrating(true);
+    setMigrationError(null);
+    const result = await resyncCloud(u.id, { email: u.email, avatarUrl: u.avatarUrl });
+    setMeals(result.meals);
+    setWeights(result.weights);
+    setSettings(result.settings);
+    storage.setMeals(result.meals);
+    storage.setWeights(result.weights);
+    storage.setSettings(result.settings);
+    if (result.profileReady) {
+      setMigrationError(result.error ?? null);
+    } else {
+      setMigrationError(result.error ?? 'Migration failed.');
+    }
+    setMigrating(false);
+  }, [setMeals, setWeights, setSettings]);
+
   return (
-    <AuthContext.Provider value={{ loading, migrating, migrationError, signOut }}>
+    <AuthContext.Provider value={{ loading, migrating, migrationError, signOut, resync }}>
       {children}
     </AuthContext.Provider>
   );

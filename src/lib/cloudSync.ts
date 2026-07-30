@@ -13,18 +13,25 @@ export function toCloudUser(u: { id: string; email?: string; user_metadata?: { a
   return { id: u.id, email: u.email, avatarUrl: u.user_metadata?.avatar_url };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function toUuid(id: string | undefined): string {
+  if (id && UUID_RE.test(id)) return id;
+  return crypto.randomUUID();
+}
+
 function mealRow(m: MealEntry, userId: string) {
   return {
-    id: m.id,
+    id: toUuid(m.id),
     user_id: userId,
     date: m.date,
     meal_type: m.mealType,
-    items: m.items,
-    calories: m.calories,
-    protein: m.protein,
-    carbs: m.carbs,
-    fat: m.fat,
-    fiber: m.fiber,
+    items: m.items ?? [],
+    calories: m.calories || 0,
+    protein: m.protein || 0,
+    carbs: m.carbs || 0,
+    fat: m.fat || 0,
+    fiber: m.fiber || 0,
     reasoning: m.reasoning ?? '',
     image_data: m.imageData ?? null,
     image_datas: m.imageDatas ?? null,
@@ -110,11 +117,14 @@ export async function migrateLocalToCloud(
   for (const m of localMeals) {
     try {
       const { error } = await supabase.from('meals').upsert(mealRow(m, userId), { onConflict: 'id' });
-      if (error) throw error;
+      if (error) {
+        console.error('Sync error:', error.message);
+        throw error;
+      }
       mealsOk += 1;
     } catch (err) {
       mealsFailed += 1;
-      console.error(err);
+      console.error('Sync error: meal failed to migrate', err);
     }
   }
 
@@ -192,13 +202,15 @@ export async function upsertMeal(m: MealEntry, userId: string): Promise<boolean>
   const supabase = getSupabase();
   if (!supabase) return false;
   const { error } = await supabase.from('meals').upsert(mealRow(m, userId), { onConflict: 'id' });
+  if (error) console.error('Sync error:', error.message);
   return !error;
 }
 
 export async function deleteMealCloud(id: string, userId: string): Promise<boolean> {
   const supabase = getSupabase();
   if (!supabase) return false;
-  const { error } = await supabase.from('meals').delete().eq('id', id).eq('user_id', userId);
+  const { error } = await supabase.from('meals').delete().eq('id', toUuid(id)).eq('user_id', userId);
+  if (error) console.error('Sync error:', error.message);
   return !error;
 }
 
@@ -206,6 +218,7 @@ export async function upsertWeight(w: WeightEntry, userId: string): Promise<bool
   const supabase = getSupabase();
   if (!supabase) return false;
   const { error } = await supabase.from('weights').upsert(weightRow(w, userId), { onConflict: 'user_id,date' });
+  if (error) console.error('Sync error:', error.message);
   return !error;
 }
 
@@ -222,9 +235,33 @@ export async function upsertSettings(s: Settings, userId: string): Promise<boole
   const { error } = await supabase
     .from('user_settings')
     .upsert({ user_id: userId, payload: s, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+  if (error) console.error('Sync error:', error.message);
   return !error;
 }
 
 export async function upsertProfile(p: Profile, userId: string): Promise<boolean> {
   return ensureProfile(userId, p);
+}
+
+export interface ResyncResult {
+  ok: boolean;
+  meals: MealEntry[];
+  weights: WeightEntry[];
+  settings: Settings;
+  error?: string;
+  profileReady: boolean;
+}
+
+// On-demand re-sync: re-ensure profile, re-push local data, then pull cloud state back.
+export async function resync(userId: string, profile?: { email?: string; avatarUrl?: string }): Promise<ResyncResult> {
+  const mig = await migrateLocalToCloud(userId, profile);
+  const pulled = await pullCloudToLocal(userId);
+  return {
+    ok: mig.migrated && !pulled.error,
+    meals: pulled.meals,
+    weights: pulled.weights,
+    settings: pulled.settings,
+    error: mig.error ?? pulled.error,
+    profileReady: mig.profileReady,
+  };
 }
