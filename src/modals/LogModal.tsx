@@ -13,6 +13,11 @@ const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 const emptyItem = (): FoodItem => ({ name: '', calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
 
+function dataUrlToB64(dataUrl: string): { data: string; mimeType: string } | null {
+  const m = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  return m ? { mimeType: m[1], data: m[2] } : null;
+}
+
 function sumItems(items: FoodItem[]) {
   return items.reduce(
     (acc, it) => ({
@@ -57,6 +62,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   // Edit-mode fields
   const [editItems, setEditItems] = useState<FoodItem[]>([]);
   const [totalCalInput, setTotalCalInput] = useState('');
+  const [editNote, setEditNote] = useState('');
+  const [editReasoning, setEditReasoning] = useState<string | null>(null);
 
   useEffect(() => {
     if (rateLimitSecs === null) return;
@@ -73,7 +80,11 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       setMealType(editMeal.mealType);
       setEditItems(editMeal.items.length ? editMeal.items.map((i) => ({ ...i })) : [emptyItem()]);
       setTotalCalInput(String(editMeal.calories));
-      setImagePreviews(editMeal.imageDatas ?? (editMeal.imageData ? [editMeal.imageData] : []));
+      const prevPhotos = editMeal.imageDatas ?? (editMeal.imageData ? [editMeal.imageData] : []);
+      setImagePreviews(prevPhotos);
+      setImageB64s(prevPhotos.map(dataUrlToB64).filter((x): x is { data: string; mimeType: string } => x !== null));
+      setEditReasoning(editMeal.reasoning ?? null);
+      setEditNote('');
       setResult(null);
       setError(null);
     } else if (isWeightEdit) {
@@ -188,6 +199,31 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     })));
   };
 
+  const onReestimate = async () => {
+    setError(null);
+    if (!editNote.trim() && imageB64s.length === 0) {
+      setError('Add a note or photo to re-estimate.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const parsed = await estimateMeal(settings.geminiApiKey, editNote, imageB64s.length > 0 ? imageB64s : undefined);
+      setEditItems(parsed.items.length ? parsed.items : [emptyItem()]);
+      setTotalCalInput(String(Math.round(parsed.calories)));
+      setEditReasoning(parsed.reasoning ?? null);
+    } catch (e) {
+      if (e instanceof RateLimitError) {
+        setError(null);
+        setRateLimitSecs(e.retryAfterSec);
+      } else {
+        setRateLimitSecs(null);
+        setError(e instanceof Error ? e.message : 'Something went wrong.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const onSaveEdit = () => {
     if (!editMeal) return;
     const items = editItems.map((it) => ({
@@ -207,6 +243,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       carbs: totals.carbs,
       fat: totals.fat,
       fiber: totals.fiber,
+      reasoning: editReasoning ?? undefined,
       imageData: imagePreviews[0] ?? undefined,
       imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
@@ -316,11 +353,33 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </button>
           )}
 
+          {/* Re-estimate with AI */}
+          <div className="mb-3">
+            <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Modifications / notes</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={editNote}
+                onChange={(e) => setEditNote(e.target.value)}
+                placeholder="e.g. Added a side salad and extra sauce"
+                className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ring-emerald-500/30"
+              />
+              <button
+                onClick={onReestimate}
+                disabled={loading || (rateLimitSecs !== null && rateLimitSecs > 0)}
+                className="flex-shrink-0 bg-emerald-50 text-emerald-700 font-semibold px-3 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 active:scale-95 transition-transform"
+              >
+                {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                Re-estimate
+              </button>
+            </div>
+          </div>
+
           {/* AI Estimation callout */}
-          {editMeal?.reasoning && (
+          {editReasoning && (
             <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3.5 mb-3">
               <p className="text-[10px] font-bold text-emerald-700 tracking-wider mb-1">✨ AI ESTIMATION NOTE</p>
-              <p className="text-xs text-gray-600 italic leading-relaxed">{editMeal.reasoning}</p>
+              <p className="text-xs text-gray-600 italic leading-relaxed">{editReasoning}</p>
             </div>
           )}
 
