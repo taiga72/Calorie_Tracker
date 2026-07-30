@@ -15,6 +15,7 @@ interface StoreValue {
   setMeals: (m: MealEntry[]) => void;
   setWeights: (w: WeightEntry[]) => void;
   setSettings: (s: Settings) => void;
+  setProfile: (p: Profile) => void;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
@@ -23,6 +24,7 @@ interface StoreValue {
   deleteWeight: (dateKey: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   updateProfile: (patch: Partial<Profile>) => void;
+  pushProfileToCloud: () => Promise<boolean>;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
   getDay: (dateKey: string) => DaySummary;
@@ -132,9 +134,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setProfile((prev) => {
         const next = { ...prev, ...patch };
         const u = authRef.current;
-        if (u) void upsertProfile(next, u.id);
+        if (u) void upsertProfile(next, settings, u.id);
         return next;
       });
+    };
+
+    // Explicit, immediate cloud upsert of profile + goals. Call from save handlers.
+    const pushProfileToCloud: StoreValue['pushProfileToCloud'] = async () => {
+      const u = authRef.current;
+      if (!u) return false;
+      return upsertProfile(profile, settings, u.id, u.email, u.avatarUrl);
     };
 
     const getDay: StoreValue['getDay'] = (dateKey) => {
@@ -153,7 +162,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, profile, authUser, setAuthUser, setMeals, setWeights, setSettings, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, clearAll, importBackup, getDay };
+    return { meals, weights, settings, profile, authUser, setAuthUser, setMeals, setWeights, setSettings, setProfile, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, pushProfileToCloud, clearAll, importBackup, getDay };
   }, [meals, weights, settings, profile, authUser]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

@@ -18,7 +18,7 @@ const ACTIVITY_KEYS: ActivityLevel[] = ['sedentary', 'light', 'moderate', 'activ
 const STEP_TITLES = ['Age', 'Sex', 'Height', 'Current Weight', 'Goal Weight', 'Activity', 'Deficit', 'Results'];
 
 export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { settings, updateSettings } = useStore();
+  const { settings, updateSettings, pushProfileToCloud, authUser } = useStore();
 
   const [step, setStep] = useState(0);
   const [age, setAge] = useState('');
@@ -77,6 +77,8 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       },
     });
     close();
+    // Explicitly push the freshly calculated goals (BMR, TDEE, calorie goal) to the cloud.
+    if (authUser) setTimeout(() => void pushProfileToCloud(), 0);
   };
 
   const canNext = (): boolean => {

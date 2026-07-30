@@ -74,17 +74,72 @@ function rowToWeight(r: any): WeightEntry {
   };
 }
 
-export async function ensureProfile(userId: string, profile: Profile, email?: string, avatarUrl?: string): Promise<boolean> {
+export interface ProfileRow {
+  name: string;
+  avatarUrl?: string;
+  calorieGoal?: number;
+  goalWeight?: number;
+  weeklyWeightTarget?: number;
+  weightUnit?: string;
+  bmr?: number;
+  tdee?: number;
+  calcPayload?: any;
+  hasData: boolean; // true when the cloud row has a meaningful name or calorie goal
+}
+
+function profileUpsertPayload(userId: string, profile: Profile, settings: Settings, email?: string, avatarUrl?: string) {
+  return {
+    user_id: userId,
+    name: profile.name ?? '',
+    avatar_url: avatarUrl ?? profile.avatar ?? null,
+    email: email ?? null,
+    calorie_goal: settings.calorieGoal ?? null,
+    goal_weight: settings.goalWeight ?? null,
+    weekly_weight_target: settings.weeklyWeightTarget ?? null,
+    weight_unit: settings.weightUnit ?? null,
+    bmr: settings.calc?.bmr ?? null,
+    tdee: settings.calc?.tdee ?? null,
+    calc_payload: settings.calc ?? null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+export async function ensureProfile(userId: string, profile: Profile, settings: Settings, email?: string, avatarUrl?: string): Promise<boolean> {
   const supabase = getSupabase();
   if (!supabase) return false;
   const { error } = await supabase
     .from('profiles')
-    .upsert(
-      { user_id: userId, name: profile.name ?? '', email: email ?? null, avatar_url: avatarUrl ?? null, updated_at: new Date().toISOString() },
-      { onConflict: 'user_id' },
-    );
+    .upsert(profileUpsertPayload(userId, profile, settings, email, avatarUrl), { onConflict: 'user_id' });
   if (error) console.error('profiles upsert failed:', error.message);
   return !error;
+}
+
+export async function pullProfile(userId: string): Promise<ProfileRow | null> {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('name, avatar_url, calorie_goal, goal_weight, weekly_weight_target, weight_unit, bmr, tdee, calc_payload')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    console.error('Sync error:', error.message);
+    return null;
+  }
+  if (!data) return null;
+  const hasData = !!(data.name || data.calorie_goal);
+  return {
+    name: data.name ?? '',
+    avatarUrl: data.avatar_url ?? undefined,
+    calorieGoal: data.calorie_goal ?? undefined,
+    goalWeight: data.goal_weight ?? undefined,
+    weeklyWeightTarget: data.weekly_weight_target ?? undefined,
+    weightUnit: data.weight_unit ?? undefined,
+    bmr: data.bmr ?? undefined,
+    tdee: data.tdee ?? undefined,
+    calcPayload: data.calc_payload ?? undefined,
+    hasData,
+  };
 }
 
 export async function migrateLocalToCloud(
@@ -102,7 +157,7 @@ export async function migrateLocalToCloud(
   // Step 1: ensure a profile row exists before touching dependent tables.
   let profileReady = false;
   try {
-    profileReady = await ensureProfile(userId, localProfile, profile?.email, profile?.avatarUrl);
+    profileReady = await ensureProfile(userId, localProfile, localSettings, profile?.email, profile?.avatarUrl);
   } catch (err) {
     console.error('profiles migration failed:', err);
   }
@@ -170,16 +225,18 @@ export async function migrateLocalToCloud(
   return { migrated: true, profileReady };
 }
 
-export async function pullCloudToLocal(userId: string): Promise<{ meals: MealEntry[]; weights: WeightEntry[]; settings: Settings; error?: string }> {
+export async function pullCloudToLocal(userId: string): Promise<{ meals: MealEntry[]; weights: WeightEntry[]; settings: Settings; profile: Profile; error?: string }> {
   const supabase = getSupabase();
   const fallbackSettings = storage.getSettings();
-  if (!supabase) return { meals: [], weights: [], settings: fallbackSettings, error: 'Cloud not configured.' };
+  const fallbackProfile = storage.getProfile();
+  if (!supabase) return { meals: [], weights: [], settings: fallbackSettings, profile: fallbackProfile, error: 'Cloud not configured.' };
 
   try {
-    const [{ data: meals, error: mErr }, { data: weights, error: wErr }, { data: settingsRow, error: sErr }] = await Promise.all([
+    const [{ data: meals, error: mErr }, { data: weights, error: wErr }, { data: settingsRow, error: sErr }, profRow] = await Promise.all([
       supabase.from('meals').select('*').eq('user_id', userId).order('client_created_at', { ascending: false }),
       supabase.from('weights').select('*').eq('user_id', userId).order('date', { ascending: true }),
       supabase.from('user_settings').select('payload').eq('user_id', userId).maybeSingle(),
+      pullProfile(userId),
     ]);
 
     if (mErr) throw mErr;
@@ -187,14 +244,26 @@ export async function pullCloudToLocal(userId: string): Promise<{ meals: MealEnt
     if (sErr) throw sErr;
 
     const settings: Settings = settingsRow?.payload ? { ...fallbackSettings, ...settingsRow.payload } : fallbackSettings;
+    // Merge goal fields from the profile row into settings (profile is the source of truth for goals).
+    if (profRow?.hasData) {
+      if (profRow.calorieGoal != null) settings.calorieGoal = profRow.calorieGoal;
+      if (profRow.goalWeight != null) settings.goalWeight = profRow.goalWeight;
+      if (profRow.weeklyWeightTarget != null) settings.weeklyWeightTarget = profRow.weeklyWeightTarget;
+      if (profRow.weightUnit) settings.weightUnit = profRow.weightUnit as Settings['weightUnit'];
+      if (profRow.calcPayload) settings.calc = profRow.calcPayload;
+    }
+    const profile: Profile = profRow?.hasData
+      ? { name: profRow.name, avatar: profRow.avatarUrl }
+      : fallbackProfile;
 
     return {
       meals: (meals ?? []).map(rowToMeal),
       weights: (weights ?? []).map(rowToWeight),
       settings,
+      profile,
     };
   } catch (e) {
-    return { meals: [], weights: [], settings: fallbackSettings, error: e instanceof Error ? e.message : 'Pull failed.' };
+    return { meals: [], weights: [], settings: fallbackSettings, profile: fallbackProfile, error: e instanceof Error ? e.message : 'Pull failed.' };
   }
 }
 
@@ -239,8 +308,8 @@ export async function upsertSettings(s: Settings, userId: string): Promise<boole
   return !error;
 }
 
-export async function upsertProfile(p: Profile, userId: string): Promise<boolean> {
-  return ensureProfile(userId, p);
+export async function upsertProfile(p: Profile, settings: Settings, userId: string, email?: string, avatarUrl?: string): Promise<boolean> {
+  return ensureProfile(userId, p, settings, email, avatarUrl);
 }
 
 export interface ResyncResult {
@@ -248,6 +317,7 @@ export interface ResyncResult {
   meals: MealEntry[];
   weights: WeightEntry[];
   settings: Settings;
+  profile: Profile;
   error?: string;
   profileReady: boolean;
 }
@@ -261,6 +331,7 @@ export async function resync(userId: string, profile?: { email?: string; avatarU
     meals: pulled.meals,
     weights: pulled.weights,
     settings: pulled.settings,
+    profile: pulled.profile,
     error: mig.error ?? pulled.error,
     profileReady: mig.profileReady,
   };

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, authUser } = useStore();
+  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, authUser, pushProfileToCloud } = useStore();
   const { migrating, migrationError, signOut, resync } = useAuth();
 
   // Auto re-sync when the Settings tab opens and the user is signed in.
@@ -112,6 +112,8 @@ export function SettingsTab() {
     updateProfile({ name: name.trim(), avatar });
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 1800);
+    // Explicitly push profile + goals to the cloud in real-time.
+    if (authUser) void pushProfileToCloud();
   };
 
   const onSaveGoals = () => {
@@ -143,6 +145,8 @@ export function SettingsTab() {
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
+    // Explicitly push goals (calorie goal, BMR, TDEE, calc) to the cloud in real-time.
+    if (authUser) setTimeout(() => void pushProfileToCloud(), 0);
   };
 
   const onExportJson = () => {
