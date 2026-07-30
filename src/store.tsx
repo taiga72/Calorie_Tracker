@@ -1,14 +1,20 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, Profile, DaySummary } from '@/types';
 import { storage, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
+import { upsertMeal, deleteMealCloud, upsertWeight, deleteWeightCloud, upsertSettings, upsertProfile, type CloudUser } from '@/lib/cloudSync';
 
 interface StoreValue {
   meals: MealEntry[];
   weights: WeightEntry[];
   settings: Settings;
   profile: Profile;
+  authUser: CloudUser | null;
+  setAuthUser: (u: CloudUser | null) => void;
+  setMeals: (m: MealEntry[]) => void;
+  setWeights: (w: WeightEntry[]) => void;
+  setSettings: (s: Settings) => void;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
@@ -33,6 +39,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [weights, setWeights] = useState<WeightEntry[]>(() => storage.getWeights());
   const [settings, setSettings] = useState<Settings>(() => storage.getSettings());
   const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
+  const [authUser, setAuthUser] = useState<CloudUser | null>(null);
+
+  // Keep a ref to the latest auth user so sync callbacks read current value.
+  const authRef = useRef<CloudUser | null>(null);
+  useEffect(() => { authRef.current = authUser; }, [authUser]);
 
   useEffect(() => { storage.setMeals(meals); }, [meals]);
   useEffect(() => { storage.setWeights(weights); }, [weights]);
@@ -43,14 +54,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const addMeal: StoreValue['addMeal'] = (m) => {
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
       setMeals((prev) => [entry, ...prev]);
+      const u = authRef.current;
+      if (u) void upsertMeal(entry, u.id);
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       setMeals((prev) => prev.filter((m) => m.id !== id));
+      const u = authRef.current;
+      if (u) void deleteMealCloud(id, u.id);
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
-      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+      let updated: MealEntry | null = null;
+      setMeals((prev) => prev.map((m) => {
+        if (m.id === id) { updated = { ...m, ...patch }; return updated; }
+        return m;
+      }));
+      const u = authRef.current;
+      if (u && updated) void upsertMeal(updated, u.id);
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
@@ -77,6 +98,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const filtered = prev.filter((w) => w.date !== dateKey);
         return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
+      const u = authRef.current;
+      if (u) void upsertWeight(entry, u.id);
     };
 
     const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => {
@@ -86,18 +109,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const filtered = prev.filter((w) => w.date !== dateKey);
         return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
+      const u = authRef.current;
+      if (u) void upsertWeight(entry, u.id);
     };
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
       setWeights((prev) => prev.filter((w) => w.date !== dateKey));
+      const u = authRef.current;
+      if (u) void deleteWeightCloud(dateKey, u.id);
     };
 
     const updateSettings: StoreValue['updateSettings'] = (patch) => {
-      setSettings((prev) => ({ ...prev, ...patch }));
+      setSettings((prev) => {
+        const next = { ...prev, ...patch };
+        const u = authRef.current;
+        if (u) void upsertSettings(next, u.id);
+        return next;
+      });
     };
 
     const updateProfile: StoreValue['updateProfile'] = (patch) => {
-      setProfile((prev) => ({ ...prev, ...patch }));
+      setProfile((prev) => {
+        const next = { ...prev, ...patch };
+        const u = authRef.current;
+        if (u) void upsertProfile(next, u.id);
+        return next;
+      });
     };
 
     const getDay: StoreValue['getDay'] = (dateKey) => {
@@ -116,8 +153,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, profile, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, clearAll, importBackup, getDay };
-  }, [meals, weights, settings, profile]);
+    return { meals, weights, settings, profile, authUser, setAuthUser, setMeals, setWeights, setSettings, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, clearAll, importBackup, getDay };
+  }, [meals, weights, settings, profile, authUser]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

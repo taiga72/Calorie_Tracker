@@ -62,9 +62,9 @@ export function HomeTab() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
             {isOver && (
-              <span className="inline-flex items-center justify-center whitespace-nowrap text-[8px] font-extrabold text-rose-600 bg-rose-100/90 px-2 py-1 rounded-full uppercase tracking-wider leading-none">
-      Stop na
-    </span>
+              <span className="inline-flex items-center justify-center whitespace-nowrap text-[8px] font-extrabold text-rose-600 bg-rose-100/90 px-2 py-1 rounded-full uppercase tracking-wider leading-none animate-pulse">
+              Over Deficit
+            </span>
             )}
           </div>
 
@@ -73,7 +73,7 @@ export function HomeTab() {
               value={day.totalCalories}
               goal={settings.calorieGoal}
               size={108}
-              strokeColor={isOver ? '#F43F5E' : '#10B981'} // Red/Rose when over, Emerald green when under
+              color={isOver ? '#F43F5E' : '#F97316'}
               label={`${Math.round(day.totalCalories)}`}
               sublabel={`of ${settings.calorieGoal}`}
             />
