@@ -40,9 +40,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (event === 'SIGNED_IN' && u) {
           setMigrating(true);
           setMigrationError(null);
-          // First-time sign-in: push local data to cloud, then pull cloud state back.
-          const mig = await migrateLocalToCloud(u.id);
-          if (mig.error) setMigrationError(mig.error);
+          // First-time sign-in: ensure profile, then push local data to cloud, then pull back.
+          const mig = await migrateLocalToCloud(u.id, { email: u.email, avatarUrl: u.avatarUrl });
+          // Clear the warning banner once the profile or initial data syncs successfully;
+          // otherwise surface the specific failure.
+          if (mig.profileReady) {
+            setMigrationError(null);
+          } else {
+            setMigrationError(mig.error ?? 'Migration failed.');
+          }
+          if (mig.error && mig.profileReady) {
+            // Profile synced but some items failed — keep a soft notice.
+            setMigrationError(mig.error);
+          }
 
           const pulled = await pullCloudToLocal(u.id);
           setMeals(pulled.meals);

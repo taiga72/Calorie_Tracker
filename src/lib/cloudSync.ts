@@ -67,40 +67,97 @@ function rowToWeight(r: any): WeightEntry {
   };
 }
 
-export async function migrateLocalToCloud(userId: string): Promise<{ migrated: boolean; error?: string }> {
+export async function ensureProfile(userId: string, profile: Profile, email?: string, avatarUrl?: string): Promise<boolean> {
   const supabase = getSupabase();
-  if (!supabase) return { migrated: false, error: 'Cloud not configured.' };
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from('profiles')
+    .upsert(
+      { user_id: userId, name: profile.name ?? '', email: email ?? null, avatar_url: avatarUrl ?? null, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id' },
+    );
+  if (error) console.error('profiles upsert failed:', error.message);
+  return !error;
+}
+
+export async function migrateLocalToCloud(
+  userId: string,
+  profile?: { email?: string; avatarUrl?: string },
+): Promise<{ migrated: boolean; error?: string; profileReady: boolean }> {
+  const supabase = getSupabase();
+  if (!supabase) return { migrated: false, error: 'Cloud not configured.', profileReady: false };
 
   const localMeals = storage.getMeals();
   const localWeights = storage.getWeights();
   const localSettings = storage.getSettings();
   const localProfile = storage.getProfile();
 
+  // Step 1: ensure a profile row exists before touching dependent tables.
+  let profileReady = false;
   try {
-    if (localMeals.length > 0) {
-      const { error } = await supabase
-        .from('meals')
-        .upsert(localMeals.map((m) => mealRow(m, userId)), { onConflict: 'id' });
-      if (error) throw error;
-    }
+    profileReady = await ensureProfile(userId, localProfile, profile?.email, profile?.avatarUrl);
+  } catch (err) {
+    console.error('profiles migration failed:', err);
+  }
+  if (!profileReady) {
+    // Without a parent profile we still attempt the rest best-effort, but surface the error.
+    return { migrated: false, error: 'Could not create account profile.', profileReady: false };
+  }
 
-    if (localWeights.length > 0) {
-      const { error } = await supabase
-        .from('weights')
-        .upsert(localWeights.map((w) => weightRow(w, userId)), { onConflict: 'user_id,date' });
+  // Step 2: meals — migrate each individually so one failure never halts the rest.
+  let mealsOk = 0;
+  let mealsFailed = 0;
+  for (const m of localMeals) {
+    try {
+      const { error } = await supabase.from('meals').upsert(mealRow(m, userId), { onConflict: 'id' });
       if (error) throw error;
+      mealsOk += 1;
+    } catch (err) {
+      mealsFailed += 1;
+      console.error(err);
     }
+  }
 
+  // Step 3: weights — same per-row resilience.
+  let weightsOk = 0;
+  let weightsFailed = 0;
+  for (const w of localWeights) {
+    try {
+      const { error } = await supabase.from('weights').upsert(weightRow(w, userId), { onConflict: 'user_id,date' });
+      if (error) throw error;
+      weightsOk += 1;
+    } catch (err) {
+      weightsFailed += 1;
+      console.error(err);
+    }
+  }
+
+  // Step 4: settings.
+  let settingsOk = false;
+  try {
     const { error: sErr } = await supabase
       .from('user_settings')
       .upsert({ user_id: userId, payload: localSettings, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     if (sErr) throw sErr;
-
-    void localProfile;
-    return { migrated: true };
-  } catch (e) {
-    return { migrated: false, error: e instanceof Error ? e.message : 'Migration failed.' };
+    settingsOk = true;
+  } catch (err) {
+    console.error('settings migration failed:', err);
   }
+
+  const totalFailed = mealsFailed + weightsFailed;
+  const anyDataSynced = profileReady && (localMeals.length === 0 || mealsOk > 0) && (localWeights.length === 0 || weightsOk > 0);
+
+  if (totalFailed > 0) {
+    return {
+      migrated: anyDataSynced,
+      error: `${totalFailed} item(s) could not be synced.`,
+      profileReady,
+    };
+  }
+  if (!settingsOk) {
+    return { migrated: true, error: 'Settings could not be synced.', profileReady };
+  }
+  return { migrated: true, profileReady };
 }
 
 export async function pullCloudToLocal(userId: string): Promise<{ meals: MealEntry[]; weights: WeightEntry[]; settings: Settings; error?: string }> {
@@ -168,8 +225,6 @@ export async function upsertSettings(s: Settings, userId: string): Promise<boole
   return !error;
 }
 
-export async function upsertProfile(p: Profile, _userId: string): Promise<boolean> {
-  // Profile (name, avatar) is kept locally; optionally extend to a profile table later.
-  void p;
-  return true;
+export async function upsertProfile(p: Profile, userId: string): Promise<boolean> {
+  return ensureProfile(userId, p);
 }
