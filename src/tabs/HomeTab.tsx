@@ -6,7 +6,7 @@ import { CalorieRing } from '@/components/CalorieRing';
 import { MealCard } from '@/components/MealCard';
 import { LogModal } from '@/modals/LogModal';
 import { CoachInsightCard } from '@/components/CoachInsightCard';
-import { Scale, Coffee, Sun, Moon, Cookie, Sparkles } from 'lucide-react';
+import { Scale, Coffee, Sun, Moon, Cookie } from 'lucide-react';
 import type { MealEntry } from '@/types';
 import { getDailyQuote } from '@/data/quotes';
 
@@ -15,7 +15,7 @@ const MEAL_ICON: Record<string, typeof Coffee> = {
   Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
 };
 
-export function HomeTab({ onOpenCoach }: { onOpenCoach: () => void }) {
+export function HomeTab() {
   const { getDay, settings, deleteMeal, profile } = useStore();
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const todayKey = toKey(new Date());
@@ -49,7 +49,7 @@ export function HomeTab({ onOpenCoach }: { onOpenCoach: () => void }) {
 
       {/* Smart Coach Insight */}
       <div className="mt-4">
-        <CoachInsightCard onOpenCoach={onOpenCoach} />
+        <CoachInsightCard />
       </div>
 
       {/* Top metric cards */}

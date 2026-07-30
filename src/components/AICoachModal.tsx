@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { useStore } from '@/store';
-import { askCoach, type CoachMessage } from '@/lib/geminiCoach';
+import { askCoach, getOrFetchInsight, type CoachMessage, type CoachInsight } from '@/lib/geminiCoach';
 import { RateLimitError } from '@/lib/gemini';
 import { Sparkles, Send, AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -23,6 +23,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [insight, setInsight] = useState<CoachInsight | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,6 +31,10 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
       setMessages([GREETING]);
       setError(null);
       setInput('');
+      setInsight(null);
+      getOrFetchInsight(settings.geminiApiKey, { settings, meals, weights }, false)
+        .then(setInsight)
+        .catch(() => {});
     }
   }, [open]);
 
@@ -60,6 +65,13 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
 
   return (
     <Modal open={open} onClose={onClose} title={<span className="flex items-center gap-2"><Sparkles size={18} className="text-emerald-600" /> AI Coach</span>}>
+      {insight && (
+        <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-2xl px-3.5 py-3 mb-3">
+          <Sparkles size={15} className="mt-0.5 flex-shrink-0 text-emerald-600" />
+          <p className="text-xs leading-relaxed text-emerald-900">{insight.summary}</p>
+        </div>
+      )}
+
       {/* Messages */}
       <div ref={scrollRef} className="space-y-3 max-h-[52vh] overflow-y-auto -mx-1 px-1 pb-2">
         {messages.map((m, i) => (

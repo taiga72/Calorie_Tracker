@@ -19,13 +19,13 @@ function App() {
     <StoreProvider>
       <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
         <main className="pb-24">
-          {tab === 'home' && <HomeTab onOpenCoach={() => setCoachOpen(true)} />}
+          {tab === 'home' && <HomeTab />}
           {tab === 'stats' && <StatsTab />}
           {tab === 'calendar' && <CalendarTab />}
           {tab === 'settings' && <SettingsTab />}
         </main>
 
-        <FAB onClick={() => setLogOpen(true)} />
+        <FAB onClick={() => setLogOpen(true)} onCoachClick={() => setCoachOpen(true)} />
         <BottomNav active={tab} onChange={setTab} />
         <LogModal open={logOpen} onClose={() => setLogOpen(false)} />
         <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />

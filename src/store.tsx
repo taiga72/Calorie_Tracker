@@ -8,6 +8,7 @@ interface StoreValue {
   meals: MealEntry[];
   weights: WeightEntry[];
   settings: Settings;
+  profile: Profile;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;

@@ -2,13 +2,9 @@ import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
 import { getOrFetchInsight, type CoachInsight } from '@/lib/geminiCoach';
 import { RateLimitError } from '@/lib/gemini';
-import { Sparkles, Lightbulb, AlertCircle, RefreshCw, MessageCircle } from 'lucide-react';
+import { Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 
-interface Props {
-  onOpenCoach: () => void;
-}
-
-export function CoachInsightCard({ onOpenCoach }: Props) {
+export function CoachInsightCard() {
   const { meals, weights, settings } = useStore();
   const [insight, setInsight] = useState<CoachInsight | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,61 +34,36 @@ export function CoachInsightCard({ onOpenCoach }: Props) {
   const handleRefresh = () => loadInsight(true);
 
   return (
-    <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-3xl p-4 shadow-sm text-white">
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-            <Sparkles size={15} />
-          </div>
-          <span className="text-xs font-bold tracking-wider">SMART COACH INSIGHT</span>
+    <div className="bg-gradient-to-br from-emerald-600 to-teal-600 rounded-2xl p-3.5 shadow-sm text-white">
+      <div className="flex items-center gap-2">
+        <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+          <Sparkles size={13} />
         </div>
+
+        <div className="flex-1 min-w-0">
+          {loading ? (
+            <div className="h-2.5 w-full bg-white/20 rounded-full animate-pulse" />
+          ) : error ? (
+            <div className="flex items-start gap-1.5 text-xs text-white/90">
+              <AlertCircle size={13} className="mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          ) : insight ? (
+            <p className="text-xs leading-relaxed text-white/95">{insight.tip}</p>
+          ) : (
+            <p className="text-xs text-white/80">Tap refresh for your daily tip.</p>
+          )}
+        </div>
+
         <button
           onClick={handleRefresh}
           disabled={loading}
-          className="p-1.5 rounded-full hover:bg-white/20 disabled:opacity-50 active:scale-90 transition-transform"
+          className="p-1.5 rounded-full hover:bg-white/20 disabled:opacity-50 active:scale-90 transition-transform flex-shrink-0"
           aria-label="Refresh insight"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
-
-      {loading && (
-        <div className="space-y-2 py-1">
-          <div className="h-3 w-full bg-white/20 rounded-full animate-pulse" />
-          <div className="h-3 w-4/5 bg-white/20 rounded-full animate-pulse" />
-        </div>
-      )}
-
-      {!loading && error && (
-        <div className="flex items-start gap-2 text-xs text-white/90">
-          <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {!loading && !error && insight && (
-        <>
-          <p className="text-sm leading-relaxed text-white/95">{insight.summary}</p>
-          <div className="mt-3 bg-white/15 rounded-2xl p-3 flex items-start gap-2">
-            <Lightbulb size={15} className="mt-0.5 flex-shrink-0 text-amber-200" />
-            <div>
-              <p className="text-[10px] font-bold tracking-wider text-amber-200 mb-0.5">TIP</p>
-              <p className="text-xs leading-relaxed text-white/90">{insight.tip}</p>
-            </div>
-          </div>
-        </>
-      )}
-
-      {!loading && !error && !insight && (
-        <p className="text-sm text-white/80">Tap refresh to generate your weekly insight.</p>
-      )}
-
-      <button
-        onClick={onOpenCoach}
-        className="w-full mt-3 bg-white/15 hover:bg-white/25 rounded-xl py-2.5 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
-      >
-        <MessageCircle size={14} /> Ask the coach
-      </button>
     </div>
   );
 }
