@@ -1,32 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
-import { useAuth } from '@/lib/auth';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
 import { storage, type BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
-import { AuthModal } from '@/modals/AuthModal';
 import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, Cloud, CloudOff, LogOut, Loader2,
+  ChevronDown, ChevronUp, Save,
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, authUser, pushProfileToCloud } = useStore();
-  const { migrating, migrationError, signOut, resync } = useAuth();
-
-  // Auto re-sync when the Settings tab opens and the user is signed in.
-  useEffect(() => {
-    if (authUser) {
-      void resync();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const [authOpen, setAuthOpen] = useState(false);
+  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup } = useStore();
 
   const setupComplete = !!settings.calc;
 
@@ -112,8 +100,6 @@ export function SettingsTab() {
     updateProfile({ name: name.trim(), avatar });
     setProfileSaved(true);
     setTimeout(() => setProfileSaved(false), 1800);
-    // Explicitly push profile + goals to the cloud in real-time.
-    if (authUser) void pushProfileToCloud();
   };
 
   const onSaveGoals = () => {
@@ -145,8 +131,6 @@ export function SettingsTab() {
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
-    // Explicitly push goals (calorie goal, BMR, TDEE, calc) to the cloud in real-time.
-    if (authUser) setTimeout(() => void pushProfileToCloud(), 0);
   };
 
   const onExportJson = () => {
@@ -195,65 +179,6 @@ export function SettingsTab() {
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Personalize your plan</p>
       <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Settings</h1>
-
-      {/* Account / storage status banner */}
-      <div className={`rounded-3xl p-4 mt-5 shadow-sm border ${authUser ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-gray-50'}`}>
-        {authUser ? (
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-emerald-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
-              {authUser.avatarUrl ? (
-                <img src={authUser.avatarUrl} alt={authUser.email ?? 'avatar'} className="w-full h-full object-cover" />
-              ) : (
-                <Cloud size={20} className="text-white" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-emerald-800 flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> Cloud Sync Enabled
-              </p>
-              <p className="text-xs text-emerald-700/70 truncate">{authUser.email ?? 'Signed in'}</p>
-            </div>
-            <button
-              onClick={() => void signOut()}
-              className="flex-shrink-0 bg-white text-gray-600 font-semibold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <LogOut size={14} /> Sign Out
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
-              <CloudOff size={20} className="text-gray-400" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-gray-900">Saving locally on this device</p>
-              <p className="text-xs text-gray-400">Back up your data to access it anywhere</p>
-            </div>
-            <button
-              onClick={() => setAuthOpen(true)}
-              className="flex-shrink-0 bg-emerald-600 text-white font-semibold px-3 py-2 rounded-xl text-xs flex items-center gap-1.5 active:scale-95 transition-transform"
-            >
-              <Cloud size={14} /> Sign In
-            </button>
-          </div>
-        )}
-
-        {migrating && (
-          <div className="mt-3 flex items-center gap-2 text-xs font-medium text-emerald-700">
-            <Loader2 size={13} className="animate-spin" /> Syncing your data to the cloud…
-          </div>
-        )}
-        {migrationError && !migrating && (
-          <button
-            onClick={() => void resync()}
-            className="mt-3 w-full text-left text-xs font-medium text-amber-700 bg-amber-50 rounded-lg px-3 py-2 active:scale-[.99] transition-transform"
-          >
-            Sync issue: {migrationError}. Your data is still saved locally. Tap to retry.
-          </button>
-        )}
-      </div>
-
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
 
       {/* Profile card */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-5">

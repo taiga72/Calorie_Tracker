@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { StoreProvider, useStore } from '@/store';
-import { AuthProvider } from '@/lib/auth';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
 import { LogModal } from '@/modals/LogModal';
@@ -16,9 +15,7 @@ import type { TabKey } from '@/types';
 function App() {
   return (
     <StoreProvider>
-      <AuthProvider>
-        <AppInner />
-      </AuthProvider>
+      <AppInner />
     </StoreProvider>
   );
 }
