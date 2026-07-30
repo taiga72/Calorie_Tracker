@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
@@ -10,10 +10,17 @@ import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
+  ChevronDown, ChevronUp,
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, updateProfile, profile, meals, clearAll, importBackup } = useStore();
+  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup } = useStore();
+
+  const setupComplete = !!settings.calc;
+
+  const latestWeightKg = weights.length > 0
+    ? [...weights].sort((a, b) => b.date.localeCompare(a.date))[0].weight
+    : undefined;
 
   const displayCalorieGoal = settings.calorieGoal;
   const displayGoalWeight = kgToUnit(settings.goalWeight, settings.weightUnit);
@@ -41,7 +48,44 @@ export function SettingsTab() {
   const [snack, setSnack] = useState(String(calc?.suggestedMealSplit.snack ?? 0));
   const [wizardOpen, setWizardOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [liveDeficit, setLiveDeficit] = useState(calc?.dailyDeficit ?? 0);
+  const [liveGoalDate, setLiveGoalDate] = useState<string | null>(calc?.estimatedGoalDate ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // Auto-calculate macros, deficit, and goal date when calorie goal or target weight changes
+  useEffect(() => {
+    if (!calc) return;
+    const newCal = Math.max(0, parseInt(calorieGoal) || 0);
+    const deficit = newCal - calc.tdee;
+    setLiveDeficit(deficit);
+
+    const weightKg = latestWeightKg ?? 70;
+    const proteinG = Math.round(weightKg * 1.6);
+    const fatG = Math.round((newCal * 0.25) / 9);
+    const carbsG = Math.max(0, Math.round((newCal - proteinG * 4 - fatG * 9) / 4));
+    setProtein(String(proteinG));
+    setFat(String(fatG));
+    setCarbs(String(carbsG));
+
+    setBreakfast(String(Math.round(newCal * 0.25)));
+    setLunch(String(Math.round(newCal * 0.3)));
+    setDinner(String(Math.round(newCal * 0.3)));
+    setSnack(String(Math.round(newCal * 0.15)));
+
+    const goalWeightKg = unitToKg(parseFloat(goalWeight) || 0, unit);
+    const totalDeltaKg = Math.abs(goalWeightKg - weightKg);
+    const weeklyRate = Math.abs(settings.weeklyWeightTarget);
+    if (weeklyRate > 0 && totalDeltaKg > 0.01) {
+      const weeks = Math.ceil(totalDeltaKg / weeklyRate);
+      const date = new Date();
+      date.setDate(date.getDate() + weeks * 7);
+      setLiveGoalDate(date.toISOString());
+    } else {
+      setLiveGoalDate(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calorieGoal, goalWeight, latestWeightKg]);
 
   const onPickAvatar = async (file: File) => {
     try {
@@ -71,6 +115,7 @@ export function SettingsTab() {
       calc: calc ? {
         ...calc,
         dailyDeficit: deficit,
+        estimatedGoalDate: liveGoalDate,
         recommendedMacros: {
           protein: Math.max(0, parseInt(protein) || 0),
           carbs: Math.max(0, parseInt(carbs) || 0),
@@ -194,19 +239,21 @@ export function SettingsTab() {
         </button>
       </div>
 
-      {/* Wizard banner */}
-      <button
-        onClick={() => setWizardOpen(true)}
-        className="w-full bg-emerald-600 rounded-3xl p-4 mt-5 flex items-center gap-3 text-white text-left active:scale-[.99] transition-transform"
-      >
-        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-          <Sparkles size={20} />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-bold">Setup Wizard</p>
-          <p className="text-xs text-emerald-50">Calculate your calorie & weight goals</p>
-        </div>
-      </button>
+      {/* Wizard banner — only for new users who haven't completed setup */}
+      {!setupComplete && (
+        <button
+          onClick={() => setWizardOpen(true)}
+          className="w-full bg-emerald-600 rounded-3xl p-4 mt-5 flex items-center gap-3 text-white text-left active:scale-[.99] transition-transform"
+        >
+          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+            <Sparkles size={20} />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold">Setup Wizard</p>
+            <p className="text-xs text-emerald-50">Calculate your calorie & weight goals</p>
+          </div>
+        </button>
+      )}
 
       {/* Goals card */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
@@ -215,130 +262,162 @@ export function SettingsTab() {
           <h2 className="text-sm font-bold text-gray-900">Your goals</h2>
         </div>
 
-        <div className="space-y-4">
-          <Field label="Daily calorie goal">
-            <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
-              <input
-                type="number"
-                inputMode="numeric"
-                value={calorieGoal}
-                onChange={(e) => setCalorieGoal(e.target.value)}
-                className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+        {!setupComplete ? (
+          /* Empty state for new users */
+          <div className="flex flex-col items-center text-center py-8">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+              <Sparkles size={24} className="text-emerald-600" />
+            </div>
+            <p className="text-sm font-semibold text-gray-700 mb-1">No goals set yet</p>
+            <p className="text-xs text-gray-400 mb-4 leading-relaxed px-4">
+              Run the Setup Wizard to calculate your personalized calorie target, macro breakdown, and estimated goal date.
+            </p>
+            <button
+              onClick={() => setWizardOpen(true)}
+              className="bg-emerald-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 active:scale-[.99] transition-transform"
+            >
+              <Sparkles size={16} /> Start Setup Wizard
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Summary pills — always visible */}
+            <div className="grid grid-cols-4 gap-2 mb-1">
+              <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="BMR" value={calc!.bmr} />
+              <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="TDEE" value={calc!.tdee} />
+              <SummaryStat
+                icon={<TrendingDown size={12} className={liveDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
+                label="Deficit"
+                value={liveDeficit > 0 ? `+${liveDeficit}` : liveDeficit}
               />
-              <span className="text-xs text-gray-400">kcal</span>
-            </div>
-          </Field>
-
-          <Field label="Goal weight">
-            <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
-              <input
-                type="number"
-                inputMode="decimal"
-                value={goalWeight}
-                onChange={(e) => setGoalWeight(e.target.value)}
-                className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+              <SummaryStat
+                icon={<Target size={12} className="text-emerald-600" />}
+                label="Goal"
+                value={liveGoalDate ? new Date(liveGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                isText
               />
-              <span className="text-xs text-gray-400">{unit}</span>
             </div>
-          </Field>
 
-          <Field label="Weekly weight target">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setLose(true)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
-              >
-                Lose
-              </button>
-              <button
-                onClick={() => setLose(false)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
-              >
-                Gain
-              </button>
-            </div>
-            <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5 mt-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                value={weeklyTarget}
-                onChange={(e) => setWeeklyTarget(e.target.value)}
-                className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
-              />
-              <span className="text-xs text-gray-400">{unit}/week</span>
-            </div>
-          </Field>
+            {/* Toggle button */}
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 py-2.5 mt-2 rounded-xl hover:bg-gray-50 transition-colors"
+            >
+              {expanded ? (
+                <><ChevronUp size={16} /> Minimize details</>
+              ) : (
+                <><ChevronDown size={16} /> Edit goals & details</>
+              )}
+            </button>
 
-          <Field label="Weight unit">
-            <div className="flex gap-2">
-              {(['kg', 'lb'] as WeightUnit[]).map((u) => (
+            {/* Collapsible section */}
+            {expanded && (
+              <div className="space-y-4 pt-3 border-t border-gray-100 mt-1">
+                <Field label="Daily calorie goal">
+                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={calorieGoal}
+                      onChange={(e) => setCalorieGoal(e.target.value)}
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                    />
+                    <span className="text-xs text-gray-400">kcal</span>
+                  </div>
+                </Field>
+
+                <Field label="Goal weight">
+                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={goalWeight}
+                      onChange={(e) => setGoalWeight(e.target.value)}
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                    />
+                    <span className="text-xs text-gray-400">{unit}</span>
+                  </div>
+                </Field>
+
+                <Field label="Weekly weight target">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setLose(true)}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
+                    >
+                      Lose
+                    </button>
+                    <button
+                      onClick={() => setLose(false)}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
+                    >
+                      Gain
+                    </button>
+                  </div>
+                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5 mt-2">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.1"
+                      value={weeklyTarget}
+                      onChange={(e) => setWeeklyTarget(e.target.value)}
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                    />
+                    <span className="text-xs text-gray-400">{unit}/week</span>
+                  </div>
+                </Field>
+
+                <Field label="Weight unit">
+                  <div className="flex gap-2">
+                    {(['kg', 'lb'] as WeightUnit[]).map((u) => (
+                      <button
+                        key={u}
+                        onClick={() => setUnit(u)}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'}`}
+                      >
+                        {u === 'kg' ? 'Kilograms' : 'Pounds'}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                {/* Macro breakdown */}
+                <div className="bg-gray-50 rounded-2xl p-4 mt-1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Activity size={14} className="text-gray-400" />
+                    <p className="text-xs font-semibold text-gray-400">MACRO BREAKDOWN</p>
+                  </div>
+                  <div className="space-y-3">
+                    <MacroField label="Protein" value={protein} onChange={setProtein} color="text-emerald-600" sub="Preserves muscle" />
+                    <MacroField label="Carbs" value={carbs} onChange={setCarbs} color="text-orange-500" sub="Fuels activity" />
+                    <MacroField label="Fat" value={fat} onChange={setFat} color="text-amber-500" sub="Hormones & satiety" />
+                  </div>
+                </div>
+
+                {/* Meal calorie split */}
+                <div className="bg-gray-50 rounded-2xl p-4 overflow-hidden">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Utensils size={14} className="text-gray-400" />
+                    <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" compact />
+                    <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" compact />
+                    <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" compact />
+                    <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" compact />
+                  </div>
+                </div>
+
                 <button
-                  key={u}
-                  onClick={() => setUnit(u)}
-                  className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'}`}
+                  onClick={onSaveGoals}
+                  className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform flex items-center justify-center gap-2"
                 >
-                  {u === 'kg' ? 'Kilograms' : 'Pounds'}
+                  {saved ? <><Check size={16} /> Saved</> : 'Save goals'}
                 </button>
-              ))}
-            </div>
-          </Field>
-
-          {calc && (
-            <>
-              {/* Summary stats row */}
-              <div className="grid grid-cols-4 gap-2 pt-1">
-                <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="BMR" value={calc.bmr} />
-                <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="TDEE" value={calc.tdee} />
-                <SummaryStat
-                  icon={<TrendingDown size={12} className={calc.dailyDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
-                  label="Deficit"
-                  value={calc.dailyDeficit > 0 ? `+${calc.dailyDeficit}` : calc.dailyDeficit}
-                />
-                <SummaryStat
-                  icon={<Target size={12} className="text-emerald-600" />}
-                  label="Goal"
-                  value={calc.estimatedGoalDate ? new Date(calc.estimatedGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
-                  isText
-                />
               </div>
-
-              {/* Macro breakdown */}
-              <div className="bg-gray-50 rounded-2xl p-4 mt-1">
-                <div className="flex items-center gap-2 mb-3">
-                  <Activity size={14} className="text-gray-400" />
-                  <p className="text-xs font-semibold text-gray-400">MACRO BREAKDOWN</p>
-                </div>
-                <div className="space-y-3">
-                  <MacroField label="Protein" value={protein} onChange={setProtein} color="text-emerald-600" sub="Preserves muscle" />
-                  <MacroField label="Carbs" value={carbs} onChange={setCarbs} color="text-orange-500" sub="Fuels activity" />
-                  <MacroField label="Fat" value={fat} onChange={setFat} color="text-amber-500" sub="Hormones & satiety" />
-                </div>
-              </div>
-
-              {/* Meal calorie split */}
-              <div className="bg-gray-50 rounded-2xl p-4 overflow-hidden">
-                <div className="flex items-center gap-2 mb-3">
-                  <Utensils size={14} className="text-gray-400" />
-                  <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" compact />
-                  <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" compact />
-                  <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" compact />
-                  <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" compact />
-                </div>
-              </div>
-            </>
-          )}
-
-          <button
-            onClick={onSaveGoals}
-            className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform flex items-center justify-center gap-2"
-          >
-            {saved ? <><Check size={16} /> Saved</> : 'Save goals'}
-          </button>
-        </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Backup & Export */}
