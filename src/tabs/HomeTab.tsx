@@ -63,7 +63,7 @@ export function HomeTab() {
             <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
             {isOver && (
               <span className="inline-flex items-center justify-center whitespace-nowrap text-[8px] font-extrabold text-rose-600 bg-rose-100/90 px-2 py-1 rounded-full uppercase tracking-wider leading-none">
-      Ayaw na kaon
+      Tama na
     </span>
             )}
           </div>
