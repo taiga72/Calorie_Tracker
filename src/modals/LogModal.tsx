@@ -26,19 +26,6 @@ function sumItems(items: FoodItem[]) {
   );
 }
 
-// Helper to retrieve recent unique meals for one-tap autofill
-function getFrequentMeals(meals: MealEntry[], limit = 6): MealEntry[] {
-  const map = new Map<string, MealEntry>();
-  for (let i = meals.length - 1; i >= 0; i--) {
-    const meal = meals[i];
-    const key = meal.items?.[0]?.name?.trim().toLowerCase() || meal.mealType.toLowerCase();
-    if (key && !map.has(key)) {
-      map.set(key, meal);
-    }
-  }
-  return Array.from(map.values()).slice(0, limit);
-}
-
 interface LogModalProps {
   open: boolean;
   onClose: () => void;
@@ -49,7 +36,7 @@ interface LogModalProps {
 }
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
-  const { settings, meals, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
+  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
   const existingWeight = isWeightEdit ? weights.find((w) => w.date === weightDate) : undefined;
@@ -69,8 +56,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   // Edit-mode fields
   const [editItems, setEditItems] = useState<FoodItem[]>([]);
-
-  const frequentMeals = getFrequentMeals(meals);
 
   useEffect(() => {
     if (rateLimitSecs === null) return;
@@ -121,22 +106,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     } catch {
       setError('Could not process the image. Try another photo.');
     }
-  };
-
-  const onSelectSuggestion = (suggested: MealEntry) => {
-    const mealTitle = suggested.items?.[0]?.name || suggested.mealType;
-    setText(mealTitle);
-    setMealType(suggested.mealType);
-    setResult({
-      mealType: suggested.mealType,
-      items: suggested.items,
-      calories: suggested.calories,
-      protein: suggested.protein,
-      carbs: suggested.carbs,
-      fat: suggested.fat,
-      fiber: suggested.fiber ?? 0,
-      reasoning: 'Autofilled from your recent meal logs.',
-    });
   };
 
   const onEstimate = async () => {
@@ -462,33 +431,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               rows={3}
               className="w-full bg-gray-50 rounded-2xl p-3 text-sm text-gray-900 outline-none resize-none focus:ring-2 ring-emerald-500/30"
             />
-
-            {/* Meal Prep / Frequent Suggestions */}
-            {frequentMeals.length > 0 && (
-              <div className="mt-3 mb-1">
-                <p className="text-[11px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wider">
-                  Recent / Meal Prep
-                </p>
-                <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto no-scrollbar">
-                  {frequentMeals.map((m) => {
-                    const labelName = m.items?.[0]?.name || m.mealType;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => onSelectSuggestion(m)}
-                        className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-medium px-2.5 py-1.5 rounded-xl border border-emerald-100/60 active:scale-95 transition-all flex items-center gap-1.5 shrink-0"
-                      >
-                        <span className="truncate max-w-[120px]">{labelName}</span>
-                        <span className="text-[10px] text-emerald-600 font-bold">
-                          {Math.round(m.calories)} kcal
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
 
             {/* Meal type selector */}
             <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar">
