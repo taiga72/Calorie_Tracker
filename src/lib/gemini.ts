@@ -11,6 +11,13 @@ function endpoint(apiKey: string): string {
   return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
 }
 
+const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function normalizeImageMime(mime: string | undefined): string {
+  const m = (mime || '').trim().toLowerCase();
+  return SUPPORTED_IMAGE_MIME_TYPES.has(m) ? m : 'image/jpeg';
+}
+
 export function resolveApiKey(userKey?: string): string {
   const key = (userKey && userKey.trim()) || ENV_API_KEY;
   if (!key) {
@@ -101,7 +108,7 @@ export async function estimateMeal(
   const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
   parts.push({ text: userText });
   if (imageBase64) {
-    parts.push({ inlineData: { mimeType: imageBase64.mimeType, data: imageBase64.data } });
+    parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data } });
   }
 
   const body = {
@@ -186,7 +193,7 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
     reader.onload = () => {
       const result = reader.result as string;
       const comma = result.indexOf(',');
-      resolve({ data: result.slice(comma + 1), mimeType: file.type || 'image/jpeg' });
+      resolve({ data: result.slice(comma + 1), mimeType: normalizeImageMime(file.type) });
     };
     reader.onerror = () => reject(new Error('Failed to read image file.'));
     reader.readAsDataURL(file);
