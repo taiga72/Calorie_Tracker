@@ -107,7 +107,7 @@ export async function estimateMeal(
   const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
   const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
   parts.push({ text: userText });
-  if (imageBase64) {
+  if (imageBase64 && typeof imageBase64.data === 'string' && imageBase64.data.length > 0) {
     parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data.trim() } });
   }
 
