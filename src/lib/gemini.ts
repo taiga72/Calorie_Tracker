@@ -108,7 +108,7 @@ export async function estimateMeal(
   const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
   parts.push({ text: userText });
   if (imageBase64) {
-    parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data } });
+    parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data.trim() } });
   }
 
   const body = {
@@ -200,8 +200,8 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
   });
 }
 
-const COMPRESS_MAX = 400;
-const COMPRESS_QUALITY = 0.7;
+const COMPRESS_MAX = 1024;
+const COMPRESS_QUALITY = 0.85;
 
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
@@ -221,6 +221,8 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas not supported.')); return; }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
         const comma = dataUrl.indexOf(',');
