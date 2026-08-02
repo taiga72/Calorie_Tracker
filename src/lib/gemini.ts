@@ -1,8 +1,10 @@
 import type { MealType, FoodItem } from '@/types';
 
-const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
+// Read API key from Vite environment variables first
+const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
-const MODEL = 'gemini-3.5-flash';
+// Use a valid current Gemini model name
+const MODEL = 'gemini-1.5-flash';
 const VERSION = 'v1beta';
 
 function endpoint(apiKey: string): string {
@@ -10,7 +12,11 @@ function endpoint(apiKey: string): string {
 }
 
 export function resolveApiKey(userKey?: string): string {
-  return (userKey && userKey.trim()) || DEFAULT_API_KEY;
+  const key = (userKey && userKey.trim()) || ENV_API_KEY;
+  if (!key) {
+    throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your environment settings.');
+  }
+  return key;
 }
 
 export class RateLimitError extends Error {
@@ -105,7 +111,10 @@ export async function estimateMeal(
 
   const res = await fetch(endpoint(key), {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'x-goog-api-key': key,
+    },
     body: JSON.stringify(body),
   });
 
@@ -134,8 +143,7 @@ export async function estimateMeal(
 
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
-let parsed: ParsedMeal;
-  // Always extract only the inner JSON object between curly braces
+  let parsed: ParsedMeal;
   const match = textOut.match(/\{[\s\S]*\}/);
   if (!match) {
     throw new Error('Could not parse Gemini response as JSON.');
