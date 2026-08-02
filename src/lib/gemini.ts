@@ -186,15 +186,19 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
     reader.onload = () => {
       const result = reader.result as string;
       const comma = result.indexOf(',');
-      resolve({ data: result.slice(comma + 1), mimeType: file.type || 'image/jpeg' });
+      
+      // Force 'image/jpeg' if file.type is empty or an unsupported format like HEIC
+      let mimeType = file.type || 'image/jpeg';
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType.toLowerCase())) {
+        mimeType = 'image/jpeg';
+      }
+
+      resolve({ data: result.slice(comma + 1), mimeType });
     };
     reader.onerror = () => reject(new Error('Failed to read image file.'));
     reader.readAsDataURL(file);
   });
 }
-
-const COMPRESS_MAX = 400;
-const COMPRESS_QUALITY = 0.7;
 
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
@@ -215,6 +219,8 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas not supported.')); return; }
         ctx.drawImage(img, 0, 0, width, height);
+        
+        // Canvas output is always a compressed JPEG
         const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
         const comma = dataUrl.indexOf(',');
         resolve({
