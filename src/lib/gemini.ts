@@ -1,6 +1,9 @@
 import type { MealType, FoodItem } from '@/types';
 
-const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
+const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+export const MISSING_KEY_MESSAGE =
+  'Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in environment settings.';
 
 const MODEL = 'gemini-3.5-flash';
 const VERSION = 'v1beta';
@@ -10,7 +13,11 @@ function endpoint(apiKey: string): string {
 }
 
 export function resolveApiKey(userKey?: string): string {
-  return (userKey && userKey.trim()) || DEFAULT_API_KEY;
+  const envKey = typeof ENV_API_KEY === 'string' ? ENV_API_KEY.trim() : '';
+  const user = userKey && userKey.trim();
+  const key = user || envKey;
+  if (!key) throw new Error(MISSING_KEY_MESSAGE);
+  return key;
 }
 
 export class RateLimitError extends Error {
