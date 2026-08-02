@@ -35,8 +35,15 @@ describe('meals', () => {
   });
 
   it('falls back to the default on corrupted JSON', () => {
-    localStorage.setItem('cc_meals', '{not valid json');
+    localStorage.setItem('calorie_tracker_meals', '{not valid json');
     expect(storage.getMeals()).toEqual([]);
+  });
+
+  it('migrates legacy cc_meals data into the new key and removes the old key', () => {
+    localStorage.setItem('cc_meals', JSON.stringify([meal('1'), meal('2')]));
+    expect(storage.getMeals()).toEqual([meal('1'), meal('2')]);
+    expect(localStorage.getItem('cc_meals')).toBeNull();
+    expect(JSON.parse(localStorage.getItem('calorie_tracker_meals')!)).toEqual([meal('1'), meal('2')]);
   });
 });
 
