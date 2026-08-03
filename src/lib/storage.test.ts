@@ -35,8 +35,26 @@ describe('meals', () => {
   });
 
   it('falls back to the default on corrupted JSON', () => {
-    localStorage.setItem('cc_meals', '{not valid json');
+    localStorage.setItem('calorie_tracker_meals', '{not valid json');
     expect(storage.getMeals()).toEqual([]);
+  });
+
+  it('writes under the dedicated calorie_tracker_meals key', () => {
+    storage.setMeals([meal('1')]);
+    expect(JSON.parse(localStorage.getItem('calorie_tracker_meals')!)).toEqual([meal('1')]);
+  });
+
+  it('migrates data from the legacy cc_meals key once, on first read', () => {
+    localStorage.setItem('cc_meals', JSON.stringify([meal('legacy')]));
+    expect(storage.getMeals()).toEqual([meal('legacy')]);
+    // Migration should have copied it to the new key too.
+    expect(JSON.parse(localStorage.getItem('calorie_tracker_meals')!)).toEqual([meal('legacy')]);
+  });
+
+  it('prefers the new key over the legacy key when both are present', () => {
+    localStorage.setItem('cc_meals', JSON.stringify([meal('legacy')]));
+    localStorage.setItem('calorie_tracker_meals', JSON.stringify([meal('current')]));
+    expect(storage.getMeals()).toEqual([meal('current')]);
   });
 });
 
@@ -48,6 +66,17 @@ describe('weights', () => {
   it('round-trips through set/get', () => {
     storage.setWeights([weight]);
     expect(storage.getWeights()).toEqual([weight]);
+  });
+
+  it('writes under the dedicated calorie_tracker_weights key', () => {
+    storage.setWeights([weight]);
+    expect(JSON.parse(localStorage.getItem('calorie_tracker_weights')!)).toEqual([weight]);
+  });
+
+  it('migrates data from the legacy cc_weights key once, on first read', () => {
+    localStorage.setItem('cc_weights', JSON.stringify([weight]));
+    expect(storage.getWeights()).toEqual([weight]);
+    expect(JSON.parse(localStorage.getItem('calorie_tracker_weights')!)).toEqual([weight]);
   });
 });
 
@@ -150,6 +179,18 @@ describe('clearAll', () => {
     expect(storage.getWeights()).toEqual([]);
     expect(storage.getSettings().calorieGoal).toBe(2200);
     expect(storage.getProfile()).toEqual({ name: '' });
+  });
+
+  it('also purges the legacy meals/weights keys so they cannot be re-migrated', () => {
+    localStorage.setItem('cc_meals', JSON.stringify([meal('legacy')]));
+    localStorage.setItem('cc_weights', JSON.stringify([weight]));
+
+    storage.clearAll();
+
+    expect(localStorage.getItem('cc_meals')).toBeNull();
+    expect(localStorage.getItem('cc_weights')).toBeNull();
+    expect(storage.getMeals()).toEqual([]);
+    expect(storage.getWeights()).toEqual([]);
   });
 });
 

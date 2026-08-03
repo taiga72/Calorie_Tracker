@@ -1,10 +1,17 @@
 import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
 
 const KEYS = {
-  meals: 'cc_meals',
-  weights: 'cc_weights',
+  meals: 'calorie_tracker_meals',
+  weights: 'calorie_tracker_weights',
   settings: 'cc_settings',
   profile: 'cc_profile',
+};
+
+// Older builds stored meals/weights under these keys; migrate on read so
+// switching to the new key names doesn't silently drop existing data.
+const LEGACY_KEYS = {
+  meals: 'cc_meals',
+  weights: 'cc_weights',
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -46,11 +53,30 @@ function write<T>(key: string, value: T): void {
   }
 }
 
+function readWithLegacyMigration<T>(key: string, legacyKey: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+  // Nothing under the new key yet — check the legacy key once and migrate.
+  try {
+    const legacyRaw = localStorage.getItem(legacyKey);
+    if (!legacyRaw) return fallback;
+    const migrated = JSON.parse(legacyRaw) as T;
+    localStorage.setItem(key, legacyRaw);
+    return migrated;
+  } catch {
+    return fallback;
+  }
+}
+
 export const storage = {
-  getMeals: (): MealEntry[] => read<MealEntry[]>(KEYS.meals, []),
+  getMeals: (): MealEntry[] => readWithLegacyMigration<MealEntry[]>(KEYS.meals, LEGACY_KEYS.meals, []),
   setMeals: (m: MealEntry[]) => write(KEYS.meals, m),
 
-  getWeights: (): WeightEntry[] => read<WeightEntry[]>(KEYS.weights, []),
+  getWeights: (): WeightEntry[] => readWithLegacyMigration<WeightEntry[]>(KEYS.weights, LEGACY_KEYS.weights, []),
   setWeights: (w: WeightEntry[]) => write(KEYS.weights, w),
 
   getSettings: (): Settings => ({ ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) }),
@@ -62,8 +88,8 @@ export const storage = {
   exportBackup: (): BackupPayload => ({
     version: 1,
     exportedAt: new Date().toISOString(),
-    meals: read<MealEntry[]>(KEYS.meals, []),
-    weights: read<WeightEntry[]>(KEYS.weights, []),
+    meals: readWithLegacyMigration<MealEntry[]>(KEYS.meals, LEGACY_KEYS.meals, []),
+    weights: readWithLegacyMigration<WeightEntry[]>(KEYS.weights, LEGACY_KEYS.weights, []),
     settings: { ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(KEYS.settings, {}) },
     profile: { ...DEFAULT_PROFILE, ...read<Partial<Profile>>(KEYS.profile, {}) },
   }),
@@ -80,5 +106,7 @@ export const storage = {
     localStorage.removeItem(KEYS.weights);
     localStorage.removeItem(KEYS.settings);
     localStorage.removeItem(KEYS.profile);
+    localStorage.removeItem(LEGACY_KEYS.meals);
+    localStorage.removeItem(LEGACY_KEYS.weights);
   },
 };

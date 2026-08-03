@@ -34,23 +34,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => storage.getSettings());
   const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
 
-  useEffect(() => { storage.setMeals(meals); }, [meals]);
-  useEffect(() => { storage.setWeights(weights); }, [weights]);
+  // Meals/weights persist synchronously inside each action below (see addMeal,
+  // deleteMeal, updateMeal, logWeight, logWeightForDate, deleteWeight) so every
+  // change is written to localStorage immediately rather than on a delayed effect.
   useEffect(() => { storage.setSettings(settings); }, [settings]);
   useEffect(() => { storage.setProfile(profile); }, [profile]);
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
-      setMeals((prev) => [entry, ...prev]);
+      setMeals((prev) => {
+        const next = [entry, ...prev];
+        storage.setMeals(next);
+        return next;
+      });
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
-      setMeals((prev) => prev.filter((m) => m.id !== id));
+      setMeals((prev) => {
+        const next = prev.filter((m) => m.id !== id);
+        storage.setMeals(next);
+        return next;
+      });
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
-      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+      setMeals((prev) => {
+        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
+        storage.setMeals(next);
+        return next;
+      });
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
@@ -75,7 +88,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        storage.setWeights(next);
+        return next;
       });
     };
 
@@ -84,12 +99,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        storage.setWeights(next);
+        return next;
       });
     };
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
-      setWeights((prev) => prev.filter((w) => w.date !== dateKey));
+      setWeights((prev) => {
+        const next = prev.filter((w) => w.date !== dateKey);
+        storage.setWeights(next);
+        return next;
+      });
     };
 
     const updateSettings: StoreValue['updateSettings'] = (patch) => {

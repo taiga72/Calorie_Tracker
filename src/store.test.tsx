@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { StoreProvider, useStore } from '@/store';
 import { toKey } from '@/lib/dateUtils';
+import { storage } from '@/lib/storage';
 
 function renderStore() {
   return renderHook(() => useStore(), {
@@ -213,6 +214,84 @@ describe('importBackup', () => {
     expect(result.current.weights).toHaveLength(1);
     expect(result.current.settings.calorieGoal).toBe(1700);
     expect(result.current.profile).toEqual({ name: 'Restored' });
+  });
+});
+
+describe('persistence to localStorage', () => {
+  it('writes to storage as soon as addMeal is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.addMeal({ date: '2026-01-01', mealType: 'Breakfast', items: [], calories: 100, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' });
+    });
+    expect(storage.getMeals()).toHaveLength(1);
+    expect(storage.getMeals()[0].calories).toBe(100);
+  });
+
+  it('writes to storage as soon as updateMeal is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.addMeal({ date: '2026-01-01', mealType: 'Breakfast', items: [], calories: 100, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' });
+    });
+    const id = result.current.meals[0].id;
+    act(() => {
+      result.current.updateMeal(id, { calories: 999 });
+    });
+    expect(storage.getMeals()[0].calories).toBe(999);
+  });
+
+  it('writes to storage as soon as deleteMeal is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.addMeal({ date: '2026-01-01', mealType: 'Breakfast', items: [], calories: 100, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' });
+    });
+    const id = result.current.meals[0].id;
+    act(() => {
+      result.current.deleteMeal(id);
+    });
+    expect(storage.getMeals()).toEqual([]);
+  });
+
+  it('writes to storage as soon as logWeight is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.logWeight(70);
+    });
+    expect(storage.getWeights()).toHaveLength(1);
+    expect(storage.getWeights()[0].weight).toBe(70);
+  });
+
+  it('writes to storage as soon as logWeightForDate is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.logWeightForDate(70, '2026-01-05');
+    });
+    expect(storage.getWeights()).toEqual([{ date: '2026-01-05', weight: 70, createdAt: expect.any(Number) }]);
+  });
+
+  it('writes to storage as soon as deleteWeight is called', () => {
+    const { result } = renderStore();
+    act(() => {
+      result.current.logWeightForDate(70, '2026-01-05');
+    });
+    act(() => {
+      result.current.deleteWeight('2026-01-05');
+    });
+    expect(storage.getWeights()).toEqual([]);
+  });
+
+  it('rehydrates from localStorage on a fresh mount without dropping existing data', () => {
+    const first = renderStore();
+    act(() => {
+      first.result.current.addMeal({ date: '2026-01-01', mealType: 'Breakfast', items: [], calories: 321, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' });
+      first.result.current.logWeightForDate(88, '2026-01-01');
+    });
+    first.unmount();
+
+    const second = renderStore();
+    expect(second.result.current.meals).toHaveLength(1);
+    expect(second.result.current.meals[0].calories).toBe(321);
+    expect(second.result.current.weights).toHaveLength(1);
+    expect(second.result.current.weights[0].weight).toBe(88);
   });
 });
 
