@@ -4,11 +4,6 @@ import { storage, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 
-const MEALS_KEY = 'calorie_tracker_meals';
-function persistMeals(m: MealEntry[]) {
-  try { localStorage.setItem(MEALS_KEY, JSON.stringify(m)); } catch { /* ignore */ }
-}
-
 interface StoreValue {
   meals: MealEntry[];
   weights: WeightEntry[];
@@ -39,11 +34,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(() => storage.getSettings());
   const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
 
-  useEffect(() => { storage.setMeals(meals); }, [meals]);
-  // No background cloud sync or remote fetch — meals are local-only. The effect
-  // above mirrors localStorage so storage stays in sync; meal actions also write
-  // directly via persistMeals() for instant persistence.
-  useEffect(() => { storage.setWeights(weights); }, [weights]);
+  // Meals/weights persist synchronously inside each action below (see addMeal,
+  // deleteMeal, updateMeal, logWeight, logWeightForDate, deleteWeight) so every
+  // change is written to localStorage immediately rather than on a delayed effect.
+  // There is no background cloud sync or remote fetch — meals/weights are local-only.
   useEffect(() => { storage.setSettings(settings); }, [settings]);
   useEffect(() => { storage.setProfile(profile); }, [profile]);
 
@@ -52,7 +46,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
       setMeals((prev) => {
         const next = [entry, ...prev];
-        persistMeals(next);
+        storage.setMeals(next);
         return next;
       });
     };
@@ -60,7 +54,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       setMeals((prev) => {
         const next = prev.filter((m) => m.id !== id);
-        persistMeals(next);
+        storage.setMeals(next);
         return next;
       });
     };
@@ -68,7 +62,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
       setMeals((prev) => {
         const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
-        persistMeals(next);
+        storage.setMeals(next);
         return next;
       });
     };
@@ -76,7 +70,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const clearAll: StoreValue['clearAll'] = () => {
       storage.clearAll();
       setMeals([]);
-      try { localStorage.removeItem(MEALS_KEY); } catch { /* ignore */ }
       setWeights([]);
       setSettings(storage.getSettings());
       setProfile(storage.getProfile());
@@ -84,9 +77,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
       storage.importBackup(payload);
-      const restored = storage.getMeals();
-      persistMeals(restored);
-      setMeals(restored);
+      setMeals(storage.getMeals());
       setWeights(storage.getWeights());
       setSettings(storage.getSettings());
       setProfile(storage.getProfile());
@@ -98,7 +89,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        storage.setWeights(next);
+        return next;
       });
     };
 
@@ -107,12 +100,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
+        storage.setWeights(next);
+        return next;
       });
     };
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
-      setWeights((prev) => prev.filter((w) => w.date !== dateKey));
+      setWeights((prev) => {
+        const next = prev.filter((w) => w.date !== dateKey);
+        storage.setWeights(next);
+        return next;
+      });
     };
 
     const updateSettings: StoreValue['updateSettings'] = (patch) => {
