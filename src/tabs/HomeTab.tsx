@@ -59,9 +59,7 @@ export function HomeTab() {
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
             {overTarget && (
-              <span className="inline-flex items-center justify-center whitespace-nowrap text-[8px] font-extrabold text-rose-600 bg-rose-100/90 px-2 py-1 rounded-full uppercase tracking-wider leading-none">
-      OVER TARGET
-    </span>
+              <span className="text-[9px] font-bold tracking-wider text-white bg-rose-500 px-1.5 py-0.5 rounded-full animate-pulse">OVER DEFICIT</span>
             )}
           </div>
           <div className="my-auto py-2 flex justify-center">

@@ -1,29 +1,20 @@
 import type { MealType, FoodItem } from '@/types';
 
-// Read API key from Vite environment variables first
-const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
+const DEFAULT_API_KEY = 'AQ.Ab8RN6InG_lJeThIdBJZR3LEcRrJ9vtf8n8WhIcZn2GWDeyZZA';
 
-// Use a valid current Gemini model name
-const MODEL = 'gemini-3.5-flash';
+const PRIMARY_MODEL = 'gemini-3.5-flash';
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
+const RETRY_DELAY_MS = 1000;
 
-function endpoint(apiKey: string): string {
-  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+function endpoint(apiKey: string, model: string): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${model}:generateContent?key=${apiKey}`;
 }
 
-const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
-function normalizeImageMime(mime: string | undefined): string {
-  const m = (mime || '').trim().toLowerCase();
-  return SUPPORTED_IMAGE_MIME_TYPES.has(m) ? m : 'image/jpeg';
-}
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export function resolveApiKey(userKey?: string): string {
-  const key = (userKey && userKey.trim()) || ENV_API_KEY;
-  if (!key) {
-    throw new Error('Gemini API key is not configured. Please set VITE_GEMINI_API_KEY in your environment settings.');
-  }
-  return key;
+  return (userKey && userKey.trim()) || DEFAULT_API_KEY;
 }
 
 export class RateLimitError extends Error {
@@ -100,15 +91,20 @@ function parseRetrySecs(res: Response, body: GeminiErrorBody | null): number {
 export async function estimateMeal(
   apiKey: string,
   text: string,
-  imageBase64?: { data: string; mimeType: string }
+  imageB64s?: Array<{ data: string; mimeType: string }>
 ): Promise<ParsedMeal> {
   const key = resolveApiKey(apiKey);
 
   const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
-  const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
+  const hasImages = imageB64s && imageB64s.length > 0;
+  const userText = text.trim() || (hasImages
+    ? `Estimate the total nutrition across all ${imageB64s!.length === 1 ? 'attached image' : `${imageB64s!.length} attached images`} combined.`
+    : '');
   parts.push({ text: userText });
-  if (imageBase64 && typeof imageBase64.data === 'string' && imageBase64.data.length > 0) {
-    parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data.trim() } });
+  if (hasImages) {
+    for (const img of imageB64s!) {
+      parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+    }
   }
 
   const body = {
@@ -116,12 +112,42 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json' },
   };
 
-  const res = await fetch(endpoint(key), {
+  return callWithFallback(key, body);
+}
+
+async function callWithFallback(key: string, body: unknown): Promise<ParsedMeal> {
+  const models = [PRIMARY_MODEL, FALLBACK_MODEL];
+  let lastErr: Error | null = null;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(key, model, body);
+      } catch (err) {
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        if (err instanceof RateLimitError) throw lastErr;
+        const status = (err as ApiError).status;
+        const transient = status === 503 || status === 429;
+        if (!transient) throw lastErr;
+        if (attempt === 0) {
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+      }
+    }
+  }
+
+  throw lastErr ?? new Error('All Gemini model attempts failed.');
+}
+
+interface ApiError extends Error {
+  status?: number;
+}
+
+async function callModel(key: string, model: string, body: unknown): Promise<ParsedMeal> {
+  const res = await fetch(endpoint(key, model), {
     method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'x-goog-api-key': key,
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
 
@@ -140,6 +166,12 @@ export async function estimateMeal(
       throw new RateLimitError(secs, detail || 'Too many requests. Please slow down.');
     }
 
+    if (res.status === 503) {
+      const err = new Error(`Gemini API error (503): ${detail || res.statusText}`) as ApiError;
+      err.status = 503;
+      throw err;
+    }
+
     throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
   }
 
@@ -151,6 +183,7 @@ export async function estimateMeal(
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
   let parsed: ParsedMeal;
+  // Always extract only the inner JSON object between curly braces
   const match = textOut.match(/\{[\s\S]*\}/);
   if (!match) {
     throw new Error('Could not parse Gemini response as JSON.');
@@ -193,15 +226,15 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
     reader.onload = () => {
       const result = reader.result as string;
       const comma = result.indexOf(',');
-      resolve({ data: result.slice(comma + 1), mimeType: normalizeImageMime(file.type) });
+      resolve({ data: result.slice(comma + 1), mimeType: file.type || 'image/jpeg' });
     };
     reader.onerror = () => reject(new Error('Failed to read image file.'));
     reader.readAsDataURL(file);
   });
 }
 
-const COMPRESS_MAX = 1024;
-const COMPRESS_QUALITY = 0.85;
+const COMPRESS_MAX = 400;
+const COMPRESS_QUALITY = 0.7;
 
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
@@ -221,8 +254,6 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas not supported.')); return; }
-        ctx.fillStyle = '#FFFFFF';
-        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
         const comma = dataUrl.indexOf(',');

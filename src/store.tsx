@@ -4,11 +4,6 @@ import { storage, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 
-const MEALS_KEY = 'calorie_tracker_meals';
-function persistMeals(m: MealEntry[]) {
-  try { localStorage.setItem(MEALS_KEY, JSON.stringify(m)); } catch { /* ignore */ }
-}
-
 interface StoreValue {
   meals: MealEntry[];
   weights: WeightEntry[];
@@ -40,9 +35,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
 
   useEffect(() => { storage.setMeals(meals); }, [meals]);
-  // No background cloud sync or remote fetch — meals are local-only. The effect
-  // above mirrors localStorage so storage stays in sync; meal actions also write
-  // directly via persistMeals() for instant persistence.
   useEffect(() => { storage.setWeights(weights); }, [weights]);
   useEffect(() => { storage.setSettings(settings); }, [settings]);
   useEffect(() => { storage.setProfile(profile); }, [profile]);
@@ -50,33 +42,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
-      setMeals((prev) => {
-        const next = [entry, ...prev];
-        persistMeals(next);
-        return next;
-      });
+      setMeals((prev) => [entry, ...prev]);
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
-      setMeals((prev) => {
-        const next = prev.filter((m) => m.id !== id);
-        persistMeals(next);
-        return next;
-      });
+      setMeals((prev) => prev.filter((m) => m.id !== id));
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
-      setMeals((prev) => {
-        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
-        persistMeals(next);
-        return next;
-      });
+      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
       storage.clearAll();
       setMeals([]);
-      try { localStorage.removeItem(MEALS_KEY); } catch { /* ignore */ }
       setWeights([]);
       setSettings(storage.getSettings());
       setProfile(storage.getProfile());
@@ -84,9 +63,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
       storage.importBackup(payload);
-      const restored = storage.getMeals();
-      persistMeals(restored);
-      setMeals(restored);
+      setMeals(storage.getMeals());
       setWeights(storage.getWeights());
       setSettings(storage.getSettings());
       setProfile(storage.getProfile());
