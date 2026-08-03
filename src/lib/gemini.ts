@@ -112,7 +112,9 @@ export async function estimateMeal(
   parts.push({ text: userText });
   if (hasImages) {
     for (const img of images!) {
-      parts.push({ inlineData: { mimeType: normalizeImageMime(img.mimeType), data: img.data } });
+      if (typeof img.data === 'string' && img.data.length > 0) {
+        parts.push({ inlineData: { mimeType: normalizeImageMime(img.mimeType), data: img.data.trim() } });
+      }
     }
   }
 
@@ -205,8 +207,8 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
   });
 }
 
-const COMPRESS_MAX = 400;
-const COMPRESS_QUALITY = 0.7;
+const COMPRESS_MAX = 1024;
+const COMPRESS_QUALITY = 0.85;
 
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
@@ -226,6 +228,8 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) { reject(new Error('Canvas not supported.')); return; }
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
         const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
         const comma = dataUrl.indexOf(',');

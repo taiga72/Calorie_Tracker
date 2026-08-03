@@ -37,6 +37,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Meals/weights persist synchronously inside each action below (see addMeal,
   // deleteMeal, updateMeal, logWeight, logWeightForDate, deleteWeight) so every
   // change is written to localStorage immediately rather than on a delayed effect.
+  // There is no background cloud sync or remote fetch — meals/weights are local-only.
   useEffect(() => { storage.setSettings(settings); }, [settings]);
   useEffect(() => { storage.setProfile(profile); }, [profile]);
 
