@@ -100,15 +100,20 @@ function parseRetrySecs(res: Response, body: GeminiErrorBody | null): number {
 export async function estimateMeal(
   apiKey: string,
   text: string,
-  imageBase64?: { data: string; mimeType: string }
+  images?: Array<{ data: string; mimeType: string }>
 ): Promise<ParsedMeal> {
   const key = resolveApiKey(apiKey);
 
   const parts: GeminiPart[] = [{ text: SYSTEM_PROMPT }];
-  const userText = text.trim() || (imageBase64 ? 'Estimate this meal from the attached image.' : '');
+  const hasImages = images && images.length > 0;
+  const userText = text.trim() || (hasImages
+    ? `Estimate the total nutrition across all ${images!.length === 1 ? 'attached image' : `${images!.length} attached images`} combined.`
+    : '');
   parts.push({ text: userText });
-  if (imageBase64) {
-    parts.push({ inlineData: { mimeType: normalizeImageMime(imageBase64.mimeType), data: imageBase64.data } });
+  if (hasImages) {
+    for (const img of images!) {
+      parts.push({ inlineData: { mimeType: normalizeImageMime(img.mimeType), data: img.data } });
+    }
   }
 
   const body = {

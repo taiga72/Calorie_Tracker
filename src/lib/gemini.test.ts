@@ -83,12 +83,44 @@ describe('estimateMeal', () => {
     fetchMock.mockResolvedValueOnce(
       geminiTextResponse({ mealType: 'Snack', items: [], calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' })
     );
-    await estimateMeal('user-key', '', { data: 'BASE64DATA', mimeType: 'image/heic' });
+    await estimateMeal('user-key', '', [{ data: 'BASE64DATA', mimeType: 'image/heic' }]);
     const [, init] = fetchMock.mock.calls[0];
     const body = JSON.parse((init as RequestInit).body as string);
     const parts = body.contents[0].parts;
-    const imagePart = parts.find((p: { inlineData?: unknown }) => p.inlineData);
-    expect(imagePart.inlineData).toEqual({ mimeType: 'image/jpeg', data: 'BASE64DATA' });
+    const imageParts = parts.filter((p: { inlineData?: unknown }) => p.inlineData);
+    expect(imageParts).toHaveLength(1);
+    expect(imageParts[0].inlineData).toEqual({ mimeType: 'image/jpeg', data: 'BASE64DATA' });
+  });
+
+  it('attaches multiple images, each with its own normalized mime type', async () => {
+    fetchMock.mockResolvedValueOnce(
+      geminiTextResponse({ mealType: 'Snack', items: [], calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' })
+    );
+    await estimateMeal('user-key', '', [
+      { data: 'FIRST', mimeType: 'image/png' },
+      { data: 'SECOND', mimeType: 'image/heic' },
+    ]);
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    const parts = body.contents[0].parts;
+    const imageParts = parts.filter((p: { inlineData?: unknown }) => p.inlineData);
+    expect(imageParts).toHaveLength(2);
+    expect(imageParts[0].inlineData).toEqual({ mimeType: 'image/png', data: 'FIRST' });
+    expect(imageParts[1].inlineData).toEqual({ mimeType: 'image/jpeg', data: 'SECOND' });
+  });
+
+  it('uses a generic multi-image prompt when no text is given', async () => {
+    fetchMock.mockResolvedValueOnce(
+      geminiTextResponse({ mealType: 'Snack', items: [], calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '' })
+    );
+    await estimateMeal('user-key', '', [
+      { data: 'A', mimeType: 'image/jpeg' },
+      { data: 'B', mimeType: 'image/jpeg' },
+    ]);
+    const [, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse((init as RequestInit).body as string);
+    const textPart = body.contents[0].parts[1];
+    expect(textPart.text).toMatch(/2 attached images/);
   });
 
   it('extracts JSON even when wrapped in markdown code fences', async () => {
