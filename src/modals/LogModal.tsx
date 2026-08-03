@@ -138,7 +138,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     }
     setLoading(true);
     try {
-      const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64s.length > 0 ? imageB64s : undefined);
+      const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64s.length > 0 ? imageB64s[0] : undefined);
       if (mealType !== 'auto') parsed.mealType = mealType;
       setResult(parsed);
     } catch (e) {
@@ -207,7 +207,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     }
     setLoading(true);
     try {
-      const parsed = await estimateMeal(settings.geminiApiKey, editNote, imageB64s.length > 0 ? imageB64s : undefined);
+      const parsed = await estimateMeal(settings.geminiApiKey, editNote, imageB64s.length > 0 ? imageB64s[0] : undefined);
       setEditItems(parsed.items.length ? parsed.items : [emptyItem()]);
       setTotalCalInput(String(Math.round(parsed.calories)));
       setEditReasoning(parsed.reasoning ?? null);

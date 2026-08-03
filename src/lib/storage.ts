@@ -1,11 +1,13 @@
 import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
 
 const KEYS = {
-  meals: 'cc_meals',
+  meals: 'calorie_tracker_meals',
   weights: 'cc_weights',
   settings: 'cc_settings',
   profile: 'cc_profile',
 };
+
+const LEGACY_MEALS_KEY = 'cc_meals';
 
 const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -47,7 +49,17 @@ function write<T>(key: string, value: T): void {
 }
 
 export const storage = {
-  getMeals: (): MealEntry[] => read<MealEntry[]>(KEYS.meals, []),
+  getMeals: (): MealEntry[] => {
+    const current = read<MealEntry[]>(KEYS.meals, []);
+    if (current.length) return current;
+    const legacy = read<MealEntry[]>(LEGACY_MEALS_KEY, []);
+    if (legacy.length) {
+      write(KEYS.meals, legacy);
+      try { localStorage.removeItem(LEGACY_MEALS_KEY); } catch { /* ignore */ }
+      return legacy;
+    }
+    return [];
+  },
   setMeals: (m: MealEntry[]) => write(KEYS.meals, m),
 
   getWeights: (): WeightEntry[] => read<WeightEntry[]>(KEYS.weights, []),
@@ -77,6 +89,7 @@ export const storage = {
 
   clearAll: () => {
     localStorage.removeItem(KEYS.meals);
+    try { localStorage.removeItem(LEGACY_MEALS_KEY); } catch { /* ignore */ }
     localStorage.removeItem(KEYS.weights);
     localStorage.removeItem(KEYS.settings);
     localStorage.removeItem(KEYS.profile);
