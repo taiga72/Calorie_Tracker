@@ -166,7 +166,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       fat: result.fat,
       fiber: result.fiber,
       reasoning: result.reasoning,
-      imageData: imagePreviews[0] ?? undefined,
       imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
     close();
@@ -244,7 +243,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       fat: totals.fat,
       fiber: totals.fiber,
       reasoning: editReasoning ?? undefined,
-      imageData: imagePreviews[0] ?? undefined,
       imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
     close();
