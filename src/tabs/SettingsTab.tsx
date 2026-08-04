@@ -1,20 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
+import { useAuth } from '@/auth';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
-import { storage, type BackupPayload } from '@/lib/storage';
+import type { BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save,
+  ChevronDown, ChevronUp, Save, LogOut,
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup } = useStore();
+  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, exportBackup } = useStore();
+  const { user, signOut } = useAuth();
 
   const setupComplete = !!settings.calc;
 
@@ -134,7 +136,7 @@ export function SettingsTab() {
   };
 
   const onExportJson = () => {
-    const payload = storage.exportBackup();
+    const payload = exportBackup();
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -451,6 +453,21 @@ export function SettingsTab() {
         </div>
       </div>
 
+      {/* Account */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+        <div className="flex items-center gap-2 mb-3">
+          <User size={18} className="text-emerald-600" />
+          <h2 className="text-sm font-bold text-gray-900">Account</h2>
+        </div>
+        <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
+        <button
+          onClick={() => signOut()}
+          className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-600 font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform"
+        >
+          <LogOut size={16} /> Sign out
+        </button>
+      </div>
+
       {/* Danger Zone */}
       <div className="bg-white rounded-3xl p-5 shadow-sm border border-red-100 mt-4">
         <div className="flex items-center gap-2 mb-3">
@@ -469,7 +486,7 @@ export function SettingsTab() {
       </div>
 
       <p className="text-center text-[11px] text-gray-300 mt-6">
-        All data is stored locally in your browser.
+        All data is securely synced to your account.
       </p>
 
       <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />

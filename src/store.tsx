@@ -1,14 +1,16 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, Profile, DaySummary } from '@/types';
-import { storage, type BackupPayload } from '@/lib/storage';
+import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
+import { useAuth } from '@/auth';
 
 interface StoreValue {
   meals: MealEntry[];
   weights: WeightEntry[];
   settings: Settings;
   profile: Profile;
+  loading: boolean;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
@@ -19,6 +21,7 @@ interface StoreValue {
   updateProfile: (patch: Partial<Profile>) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
+  exportBackup: () => BackupPayload;
   getDay: (dateKey: string) => DaySummary;
 }
 
@@ -29,97 +32,131 @@ function makeId(): string {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [meals, setMeals] = useState<MealEntry[]>(() => storage.getMeals());
-  const [weights, setWeights] = useState<WeightEntry[]>(() => storage.getWeights());
-  const [settings, setSettings] = useState<Settings>(() => storage.getSettings());
-  const [profile, setProfile] = useState<Profile>(() => storage.getProfile());
+  const { user } = useAuth();
+  const userId = user?.id;
 
-  // Meals/weights persist synchronously inside each action below (see addMeal,
-  // deleteMeal, updateMeal, logWeight, logWeightForDate, deleteWeight) so every
-  // change is written to localStorage immediately rather than on a delayed effect.
-  // There is no background cloud sync or remote fetch — meals/weights are local-only.
-  useEffect(() => { storage.setSettings(settings); }, [settings]);
-  useEffect(() => { storage.setProfile(profile); }, [profile]);
+  const [meals, setMeals] = useState<MealEntry[]>([]);
+  const [weights, setWeights] = useState<WeightEntry[]>([]);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [loading, setLoading] = useState(true);
+
+  // StoreProvider is only mounted once a user is signed in (see App.tsx), but
+  // guard against a transient render before that so hooks stay unconditional.
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    setLoading(true);
+    Promise.all([
+      storage.getMeals(userId),
+      storage.getWeights(userId),
+      storage.getSettings(userId),
+      storage.getProfile(userId),
+    ]).then(([m, w, s, p]) => {
+      if (!active) return;
+      setMeals(m);
+      setWeights(w);
+      setSettings(s);
+      setProfile(p);
+      setLoading(false);
+    });
+    return () => { active = false; };
+  }, [userId]);
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
+      if (!userId) return;
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
-      setMeals((prev) => {
-        const next = [entry, ...prev];
-        storage.setMeals(next);
-        return next;
-      });
+      setMeals((prev) => [entry, ...prev]);
+      void storage.insertMeal(userId, entry);
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
-      setMeals((prev) => {
-        const next = prev.filter((m) => m.id !== id);
-        storage.setMeals(next);
-        return next;
-      });
+      if (!userId) return;
+      setMeals((prev) => prev.filter((m) => m.id !== id));
+      void storage.deleteMeal(userId, id);
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
-      setMeals((prev) => {
-        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m));
-        storage.setMeals(next);
-        return next;
-      });
+      if (!userId) return;
+      setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
+      void storage.updateMeal(userId, id, patch);
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
-      storage.clearAll();
+      if (!userId) return;
       setMeals([]);
       setWeights([]);
-      setSettings(storage.getSettings());
-      setProfile(storage.getProfile());
+      setSettings(DEFAULT_SETTINGS);
+      setProfile(DEFAULT_PROFILE);
+      void storage.clearAll(userId);
     };
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
-      storage.importBackup(payload);
-      setMeals(storage.getMeals());
-      setWeights(storage.getWeights());
-      setSettings(storage.getSettings());
-      setProfile(storage.getProfile());
+      if (!userId) return;
+      const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
+      const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
+      setMeals(payload.meals ?? []);
+      setWeights(payload.weights ?? []);
+      setSettings(nextSettings);
+      setProfile(nextProfile);
+      void storage.importBackup(userId, payload);
     };
 
+    const exportBackup: StoreValue['exportBackup'] = () => ({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      meals,
+      weights,
+      settings,
+      profile,
+    });
+
     const logWeight: StoreValue['logWeight'] = (displayValue) => {
+      if (!userId) return;
       const kg = unitToKg(displayValue, settings.weightUnit);
       const dateKey = toKey(new Date());
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-        storage.setWeights(next);
-        return next;
+        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
+      void storage.upsertWeight(userId, entry);
     };
 
     const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => {
+      if (!userId) return;
       const kg = unitToKg(displayValue, settings.weightUnit);
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
-        const next = [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-        storage.setWeights(next);
-        return next;
+        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
+      void storage.upsertWeight(userId, entry);
     };
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
-      setWeights((prev) => {
-        const next = prev.filter((w) => w.date !== dateKey);
-        storage.setWeights(next);
+      if (!userId) return;
+      setWeights((prev) => prev.filter((w) => w.date !== dateKey));
+      void storage.deleteWeight(userId, dateKey);
+    };
+
+    const updateSettings: StoreValue['updateSettings'] = (patch) => {
+      if (!userId) return;
+      setSettings((prev) => {
+        const next = { ...prev, ...patch };
+        void storage.setSettings(userId, next);
         return next;
       });
     };
 
-    const updateSettings: StoreValue['updateSettings'] = (patch) => {
-      setSettings((prev) => ({ ...prev, ...patch }));
-    };
-
     const updateProfile: StoreValue['updateProfile'] = (patch) => {
-      setProfile((prev) => ({ ...prev, ...patch }));
+      if (!userId) return;
+      setProfile((prev) => {
+        const next = { ...prev, ...patch };
+        void storage.setProfile(userId, next);
+        return next;
+      });
     };
 
     const getDay: StoreValue['getDay'] = (dateKey) => {
@@ -138,8 +175,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
-    return { meals, weights, settings, profile, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, updateSettings, updateProfile, clearAll, importBackup, getDay };
-  }, [meals, weights, settings, profile]);
+    return {
+      meals, weights, settings, profile, loading,
+      addMeal, updateMeal, deleteMeal,
+      logWeight, logWeightForDate, deleteWeight,
+      updateSettings, updateProfile,
+      clearAll, importBackup, exportBackup, getDay,
+    };
+  }, [meals, weights, settings, profile, loading, userId]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
