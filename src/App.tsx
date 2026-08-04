@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react';
 import { StoreProvider, useStore } from '@/store';
+import { AuthProvider, useAuth } from '@/auth';
+import { AuthScreen } from '@/components/AuthScreen';
+import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
+import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
 import { LogModal } from '@/modals/LogModal';
@@ -10,9 +14,35 @@ import { StatsTab } from '@/tabs/StatsTab';
 import { CalendarTab } from '@/tabs/CalendarTab';
 import { SettingsTab } from '@/tabs/SettingsTab';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
+import { Loader2 } from 'lucide-react';
 import type { TabKey } from '@/types';
 
 function App() {
+  if (!isSupabaseConfigured) {
+    return <SupabaseSetupScreen />;
+  }
+  return (
+    <AuthProvider>
+      <AuthGate />
+    </AuthProvider>
+  );
+}
+
+function AuthGate() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F4F5F6] flex items-center justify-center">
+        <Loader2 size={28} className="text-emerald-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
   return (
     <StoreProvider>
       <AppInner />
@@ -26,15 +56,24 @@ function AppInner() {
   const [coachOpen, setCoachOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const { meals, profile } = useStore();
+  const { meals, profile, loading } = useStore();
 
   useEffect(() => {
+    if (loading) return;
     const { count } = calculateStreak(meals);
     if (shouldShowStreakPopup(count)) {
       setStreakCount(count);
       setStreakOpen(true);
     }
-  }, [meals]);
+  }, [meals, loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F4F5F6] flex items-center justify-center">
+        <Loader2 size={28} className="text-emerald-600 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
