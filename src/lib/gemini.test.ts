@@ -140,6 +140,55 @@ describe('estimateMeal', () => {
     expect(result.items[0].name).toBe('Apple');
   });
 
+  it('reassembles JSON split across multiple response parts', async () => {
+    const json = JSON.stringify({
+      mealType: 'Lunch',
+      items: [{ name: 'Salad', calories: 220, protein: 6, carbs: 18, fat: 12, fiber: 5 }],
+      calories: 220,
+      protein: 6,
+      carbs: 18,
+      fat: 12,
+      fiber: 5,
+      reasoning: 'A salad.',
+    });
+    const half = Math.floor(json.length / 2);
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, {
+        candidates: [{ content: { parts: [{ text: json.slice(0, half) }, { text: json.slice(half) }] } }],
+      })
+    );
+
+    const result = await estimateMeal('user-key', 'a salad');
+    expect(result.items[0].name).toBe('Salad');
+    expect(result.calories).toBe(220);
+  });
+
+  it('gives a clear "cut off" error when the response is truncated by the token limit', async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, {
+        candidates: [{
+          content: { parts: [{ text: '{"mealType": "Lunch", "items": [{"name": "Salad", "calories": 22' }] },
+          finishReason: 'MAX_TOKENS',
+        }],
+      })
+    );
+
+    await expect(estimateMeal('user-key', 'a huge meal')).rejects.toThrow(/cut off/i);
+  });
+
+  it('falls back to a generic parse error for malformed JSON that was not truncated', async () => {
+    fetchMock.mockResolvedValueOnce(
+      mockResponse(200, {
+        candidates: [{
+          content: { parts: [{ text: '{"mealType": "Lunch", items: [}' }] },
+          finishReason: 'STOP',
+        }],
+      })
+    );
+
+    await expect(estimateMeal('user-key', 'text')).rejects.toThrow(/Could not parse Gemini's response as JSON/);
+  });
+
   it('defaults an invalid mealType to Snack', async () => {
     fetchMock.mockResolvedValueOnce(
       geminiTextResponse({
@@ -195,7 +244,7 @@ describe('estimateMeal', () => {
 
   it('rejects when the response text has no JSON object', async () => {
     fetchMock.mockResolvedValueOnce(mockResponse(200, { candidates: [{ content: { parts: [{ text: 'no json here' }] } }] }));
-    await expect(estimateMeal('user-key', 'text')).rejects.toThrow(/Could not parse Gemini response as JSON/);
+    await expect(estimateMeal('user-key', 'text')).rejects.toThrow(/Could not parse Gemini's response as JSON/);
   });
 
   it('rejects when items is missing from the parsed response', async () => {

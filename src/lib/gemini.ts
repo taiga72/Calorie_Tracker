@@ -120,7 +120,7 @@ export async function estimateMeal(
 
   const body = {
     contents: [{ role: 'user', parts }],
-    generationConfig: { responseMimeType: 'application/json' },
+    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 },
   };
 
   const res = await fetch(endpoint(key), {
@@ -150,23 +150,35 @@ export async function estimateMeal(
     throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
   }
 
-  const data: { candidates?: { content?: { parts?: GeminiPart[] } }[] } = await res.json();
-  const textOut: string | undefined =
-    data?.candidates?.[0]?.content?.parts?.[0]?.text ??
-    data?.candidates?.[0]?.content?.parts?.map((p: GeminiPart) => p.text).join('');
+  const data: { candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[] } = await res.json();
+  const candidate = data?.candidates?.[0];
+  // Concatenate every part's text — the response can be split across multiple
+  // parts, and using only the first one silently drops the rest of the JSON.
+  const textOut = (candidate?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
 
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
-  let parsed: ParsedMeal;
-  const match = textOut.match(/\{[\s\S]*\}/);
-  if (!match) {
-    throw new Error('Could not parse Gemini response as JSON.');
+  let parsed: ParsedMeal | undefined;
+  try {
+    // With responseMimeType: 'application/json' the text is normally already
+    // pure JSON; only fall back to extracting a {...} substring if that fails.
+    parsed = JSON.parse(textOut);
+  } catch {
+    const match = textOut.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch {
+        // fall through — handled by the !parsed check below
+      }
+    }
   }
 
-  try {
-    parsed = JSON.parse(match[0]);
-  } catch (err) {
-    throw new Error('Failed to parse clean JSON object from Gemini response.');
+  if (!parsed) {
+    if (candidate?.finishReason === 'MAX_TOKENS') {
+      throw new Error("Gemini's response was cut off before it finished. Try describing fewer items, or fewer/smaller photos, at once.");
+    }
+    throw new Error("Could not parse Gemini's response as JSON.");
   }
 
   if (!parsed.items || !Array.isArray(parsed.items)) {
