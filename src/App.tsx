@@ -77,7 +77,7 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
-      <main className="pb-24">
+      <main className="pb-28">
         {tab === 'home' && <HomeTab />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'calendar' && <CalendarTab />}
