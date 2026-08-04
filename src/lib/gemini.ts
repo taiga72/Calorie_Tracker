@@ -207,8 +207,8 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
   });
 }
 
-const COMPRESS_MAX = 1024;
-const COMPRESS_QUALITY = 0.85;
+const COMPRESS_MAX = 480;
+const COMPRESS_QUALITY = 0.7;
 
 export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
