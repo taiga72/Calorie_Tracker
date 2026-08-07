@@ -2,7 +2,7 @@ import { Plus, Sparkles } from 'lucide-react';
 
 export function FAB({ onClick, onCoachClick }: { onClick: () => void; onCoachClick: () => void }) {
   return (
-    <div className="fixed right-5 bottom-20 z-40 flex flex-col items-center gap-3">
+    <div className="fixed right-5 bottom-24 z-50 flex flex-col items-center gap-3">
       <button
         onClick={onCoachClick}
         aria-label="Open AI Coach"
