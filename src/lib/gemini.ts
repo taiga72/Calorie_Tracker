@@ -5,11 +5,15 @@ const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // Use a valid current Gemini model name
 const MODEL = 'gemini-3.5-flash';
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
+const RETRY_DELAY_MS = 1200;
 
-function endpoint(apiKey: string): string {
-  return `https://generativelanguage.googleapis.com/${VERSION}/models/${MODEL}:generateContent?key=${apiKey}`;
+function endpoint(apiKey: string, model: string): string {
+  return `https://generativelanguage.googleapis.com/${VERSION}/models/${model}:generateContent?key=${apiKey}`;
 }
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const SUPPORTED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -123,14 +127,54 @@ export async function estimateMeal(
     generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 4096 },
   };
 
-  const res = await fetch(endpoint(key), {
-    method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'x-goog-api-key': key,
-    },
-    body: JSON.stringify(body),
-  });
+  return callWithFallback(key, body);
+}
+
+interface ApiError extends Error {
+  status?: number; // HTTP status, or 0 for a network-level (fetch) failure
+}
+
+async function callWithFallback(key: string, body: unknown): Promise<ParsedMeal> {
+  const models = [MODEL, FALLBACK_MODEL];
+  let lastErr: Error | null = null;
+
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(key, model, body);
+      } catch (err) {
+        if (err instanceof RateLimitError) throw err;
+        lastErr = err instanceof Error ? err : new Error(String(err));
+        const status = (err as ApiError).status;
+        const transient = status === 503 || status === 0;
+        if (!transient) throw lastErr;
+        if (attempt === 0) {
+          await sleep(RETRY_DELAY_MS);
+          continue;
+        }
+      }
+    }
+  }
+
+  throw lastErr ?? new Error('All Gemini model attempts failed.');
+}
+
+async function callModel(key: string, model: string, body: unknown): Promise<ParsedMeal> {
+  let res: Response;
+  try {
+    res = await fetch(endpoint(key, model), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': key,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    const netErr = new Error('Network error while contacting Gemini. Check your connection and try again.') as ApiError;
+    netErr.status = 0;
+    throw netErr;
+  }
 
   if (!res.ok) {
     let detail = '';
@@ -147,7 +191,9 @@ export async function estimateMeal(
       throw new RateLimitError(secs, detail || 'Too many requests. Please slow down.');
     }
 
-    throw new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`);
+    const err = new Error(`Gemini API error (${res.status}): ${detail || res.statusText}`) as ApiError;
+    err.status = res.status;
+    throw err;
   }
 
   const data: { candidates?: { content?: { parts?: GeminiPart[] }; finishReason?: string }[] } = await res.json();

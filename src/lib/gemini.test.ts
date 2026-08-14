@@ -284,11 +284,62 @@ describe('estimateMeal', () => {
     expect((err as InstanceType<typeof RateLimitError>).retryAfterSec).toBe(120);
   });
 
-  it('throws immediately on a non-429 error status without retrying', async () => {
-    fetchMock.mockResolvedValueOnce(mockResponse(503, { error: { message: 'Overloaded' } }));
+  it('retries the same model once on a 503, then succeeds', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(503, { error: { message: 'Overloaded' } }))
+      .mockResolvedValueOnce(
+        geminiTextResponse({
+          mealType: 'Dinner',
+          items: [{ name: 'Salmon', calories: 350, protein: 34, carbs: 0, fat: 20, fiber: 0 }],
+          calories: 350, protein: 34, carbs: 0, fat: 20, fiber: 0, reasoning: '',
+        })
+      );
+
+    const result = await estimateMeal('user-key', 'salmon');
+    expect(result.mealType).toBe('Dinner');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.5-flash:generateContent');
+    expect(fetchMock.mock.calls[1][0]).toContain('gemini-3.5-flash:generateContent');
+  }, 8000);
+
+  it('falls back to the secondary model after the primary is exhausted on repeated 503s', async () => {
+    fetchMock
+      .mockResolvedValueOnce(mockResponse(503, { error: { message: 'Overloaded' } }))
+      .mockResolvedValueOnce(mockResponse(503, { error: { message: 'Overloaded' } }))
+      .mockResolvedValueOnce(
+        geminiTextResponse({
+          mealType: 'Snack',
+          items: [{ name: 'Yogurt', calories: 120, protein: 10, carbs: 12, fat: 3, fiber: 0 }],
+          calories: 120, protein: 10, carbs: 12, fat: 3, fiber: 0, reasoning: '',
+        })
+      );
+
+    const result = await estimateMeal('user-key', 'yogurt');
+    expect(result.mealType).toBe('Snack');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[2][0]).toContain('gemini-3.5-flash-lite:generateContent');
+  }, 8000);
+
+  it('throws after exhausting retries on both models when 503s never stop', async () => {
+    fetchMock.mockResolvedValue(mockResponse(503, { error: { message: 'Overloaded' } }));
     await expect(estimateMeal('user-key', 'text')).rejects.toThrow(/Gemini API error \(503\)/);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  }, 10000);
+
+  it('retries once on a network-level failure, then succeeds', async () => {
+    fetchMock
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        geminiTextResponse({
+          mealType: 'Snack', items: [{ name: 'Bar', calories: 90, protein: 2, carbs: 15, fat: 2, fiber: 1 }],
+          calories: 90, protein: 2, carbs: 15, fat: 2, fiber: 1, reasoning: '',
+        })
+      );
+
+    const result = await estimateMeal('user-key', 'a bar');
+    expect(result.items[0].name).toBe('Bar');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  }, 8000);
 
   it('does not retry or fall back on a non-transient error status', async () => {
     fetchMock.mockResolvedValueOnce(mockResponse(400, { error: { message: 'Bad request' } }));
