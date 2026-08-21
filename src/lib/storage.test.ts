@@ -240,11 +240,11 @@ describe('getProfile / setProfile', () => {
 });
 
 describe('importBackup', () => {
-  it('replaces meals/weights and upserts settings/profile for the user', async () => {
+  it('replaces meals/weights and upserts settings/profile for the user, returning true on success', async () => {
     const { from } = makeFrom({ error: null });
     vi.mocked(supabase.from).mockReturnValue(from as never);
 
-    await storage.importBackup(USER_ID, {
+    const ok = await storage.importBackup(USER_ID, {
       version: 1,
       exportedAt: new Date().toISOString(),
       meals: [meal('m1')],
@@ -253,6 +253,7 @@ describe('importBackup', () => {
       profile: { name: 'Imported' },
     });
 
+    expect(ok).toBe(true);
     expect(supabase.from).toHaveBeenCalledWith('meals');
     expect(supabase.from).toHaveBeenCalledWith('weights');
     expect(supabase.from).toHaveBeenCalledWith('settings');
@@ -262,20 +263,49 @@ describe('importBackup', () => {
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, calorie_goal: 1900 }), { onConflict: 'user_id' });
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, name: 'Imported' }), { onConflict: 'user_id' });
   });
+
+  it('returns false if any sub-operation fails', async () => {
+    const { from } = makeFrom({ error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await storage.importBackup(USER_ID, {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      meals: [],
+      weights: [],
+      settings: { calorieGoal: 1900, goalWeight: 65, weeklyWeightTarget: -0.4, weightUnit: 'lb', geminiApiKey: '' },
+    });
+
+    expect(ok).toBe(false);
+    spy.mockRestore();
+  });
 });
 
 describe('clearAll', () => {
-  it('deletes rows from all four tables for the user', async () => {
+  it('deletes rows from all four tables for the user, returning true on success', async () => {
     const { from } = makeFrom({ error: null });
     vi.mocked(supabase.from).mockReturnValue(from as never);
 
-    await storage.clearAll(USER_ID);
+    const ok = await storage.clearAll(USER_ID);
 
+    expect(ok).toBe(true);
     expect(supabase.from).toHaveBeenCalledWith('meals');
     expect(supabase.from).toHaveBeenCalledWith('weights');
     expect(supabase.from).toHaveBeenCalledWith('settings');
     expect(supabase.from).toHaveBeenCalledWith('profiles');
     expect(from.delete).toHaveBeenCalledTimes(4);
     expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
+  });
+
+  it('returns false if any table fails to clear', async () => {
+    const { from } = makeFrom({ error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await storage.clearAll(USER_ID);
+
+    expect(ok).toBe(false);
+    spy.mockRestore();
   });
 });

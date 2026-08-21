@@ -81,12 +81,14 @@ vi.mock('@/lib/storage', () => ({
       db.weights = payload.weights ?? [];
       db.settings = { ...DEFAULT_SETTINGS, ...payload.settings };
       db.profile = { ...DEFAULT_PROFILE, ...payload.profile };
+      return true;
     }),
     clearAll: vi.fn(async () => {
       db.meals = [];
       db.weights = [];
       db.settings = { ...DEFAULT_SETTINGS };
       db.profile = { ...DEFAULT_PROFILE };
+      return true;
     }),
   },
 }));
@@ -308,6 +310,45 @@ describe('exportBackup', () => {
     expect(backup.meals[0].calories).toBe(321);
     expect(backup.weights).toHaveLength(1);
     expect(backup.profile).toEqual({ name: 'Alex' });
+  });
+});
+
+describe('syncError', () => {
+  it('starts null and stays null after a successful write', async () => {
+    const { result } = await renderStore();
+    expect(result.current.syncError).toBeNull();
+    act(() => { result.current.logWeightForDate(70, '2026-01-05'); });
+    expect(result.current.syncError).toBeNull();
+  });
+
+  it('is set when a weight write fails, without reverting the optimistic UI update', async () => {
+    vi.mocked(storage.upsertWeight).mockResolvedValueOnce(false);
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.logWeightForDate(70, '2026-01-05'); });
+
+    expect(result.current.weights).toHaveLength(1); // still shown in the UI
+    expect(result.current.syncError).toMatch(/couldn't save your weight/i);
+  });
+
+  it('is set when a meal write fails', async () => {
+    vi.mocked(storage.insertMeal).mockResolvedValueOnce(false);
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.addMeal(emptyMeal()); });
+
+    expect(result.current.syncError).toMatch(/couldn't save your meal/i);
+  });
+
+  it('is cleared by dismissSyncError', async () => {
+    vi.mocked(storage.upsertWeight).mockResolvedValueOnce(false);
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.logWeightForDate(70, '2026-01-05'); });
+    expect(result.current.syncError).not.toBeNull();
+
+    act(() => { result.current.dismissSyncError(); });
+    expect(result.current.syncError).toBeNull();
   });
 });
 

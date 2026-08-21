@@ -14,7 +14,7 @@ import { StatsTab } from '@/tabs/StatsTab';
 import { CalendarTab } from '@/tabs/CalendarTab';
 import { SettingsTab } from '@/tabs/SettingsTab';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 import type { TabKey } from '@/types';
 
 function App() {
@@ -56,7 +56,7 @@ function AppInner() {
   const [coachOpen, setCoachOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const { meals, profile, loading } = useStore();
+  const { meals, profile, loading, syncError, dismissSyncError } = useStore();
 
   useEffect(() => {
     if (loading) return;
@@ -77,6 +77,15 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
+      {syncError && (
+        <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 text-red-600 text-xs p-3 border-b border-red-100">
+          <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+          <span className="flex-1">{syncError}</span>
+          <button onClick={dismissSyncError} aria-label="Dismiss" className="flex-shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+      )}
       <main className="pb-28">
         {tab === 'home' && <HomeTab />}
         {tab === 'stats' && <StatsTab />}

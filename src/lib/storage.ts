@@ -239,32 +239,44 @@ export const storage = {
     return !error;
   },
 
-  importBackup: async (userId: string, payload: BackupPayload): Promise<void> => {
+  importBackup: async (userId: string, payload: BackupPayload): Promise<boolean> => {
     // Replace all of this user's rows with the backup's contents.
-    await supabase.from('meals').delete().eq('user_id', userId);
-    await supabase.from('weights').delete().eq('user_id', userId);
+    let ok = true;
+    const del1 = await supabase.from('meals').delete().eq('user_id', userId);
+    if (del1.error) { console.error('Failed to clear meals before import', del1.error); ok = false; }
+    const del2 = await supabase.from('weights').delete().eq('user_id', userId);
+    if (del2.error) { console.error('Failed to clear weights before import', del2.error); ok = false; }
     if (payload.meals?.length) {
       const { error } = await supabase.from('meals').insert(payload.meals.map((m) => mealToRow(userId, m)));
-      if (error) console.error('Failed to import meals', error);
+      if (error) { console.error('Failed to import meals', error); ok = false; }
     }
     if (payload.weights?.length) {
       const { error } = await supabase.from('weights').insert(payload.weights.map((w) => weightToRow(userId, w)));
-      if (error) console.error('Failed to import weights', error);
+      if (error) { console.error('Failed to import weights', error); ok = false; }
     }
-    await supabase.from('settings').upsert(
+    const s = await supabase.from('settings').upsert(
       settingsToRow(userId, { ...DEFAULT_SETTINGS, ...payload.settings }),
       { onConflict: 'user_id' }
     );
-    await supabase.from('profiles').upsert(
+    if (s.error) { console.error('Failed to import settings', s.error); ok = false; }
+    const p = await supabase.from('profiles').upsert(
       profileToRow(userId, { ...DEFAULT_PROFILE, ...payload.profile }),
       { onConflict: 'user_id' }
     );
+    if (p.error) { console.error('Failed to import profile', p.error); ok = false; }
+    return ok;
   },
 
-  clearAll: async (userId: string): Promise<void> => {
-    await supabase.from('meals').delete().eq('user_id', userId);
-    await supabase.from('weights').delete().eq('user_id', userId);
-    await supabase.from('settings').delete().eq('user_id', userId);
-    await supabase.from('profiles').delete().eq('user_id', userId);
+  clearAll: async (userId: string): Promise<boolean> => {
+    let ok = true;
+    const r1 = await supabase.from('meals').delete().eq('user_id', userId);
+    if (r1.error) { console.error('Failed to clear meals', r1.error); ok = false; }
+    const r2 = await supabase.from('weights').delete().eq('user_id', userId);
+    if (r2.error) { console.error('Failed to clear weights', r2.error); ok = false; }
+    const r3 = await supabase.from('settings').delete().eq('user_id', userId);
+    if (r3.error) { console.error('Failed to clear settings', r3.error); ok = false; }
+    const r4 = await supabase.from('profiles').delete().eq('user_id', userId);
+    if (r4.error) { console.error('Failed to clear profile', r4.error); ok = false; }
+    return ok;
   },
 };
