@@ -23,6 +23,8 @@ interface StoreValue {
   importBackup: (payload: BackupPayload) => void;
   exportBackup: () => BackupPayload;
   getDay: (dateKey: string) => DaySummary;
+  syncError: string | null;
+  dismissSyncError: () => void;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -40,6 +42,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [loading, setLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Storage writes are fire-and-forget for a responsive UI, but a failure
+  // (e.g. a blocked write, dropped connection) must never fail silently —
+  // that's exactly how data quietly stops persisting while the UI still
+  // looks like it saved. This surfaces it as a dismissible banner instead.
+  const onSaveResult = (label: string) => (ok: boolean) => {
+    if (!ok) setSyncError(`Couldn't save ${label} — check your connection and try again.`);
+  };
 
   // StoreProvider is only mounted once a user is signed in (see App.tsx), but
   // guard against a transient render before that so hooks stay unconditional.
@@ -68,19 +79,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!userId) return;
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
       setMeals((prev) => [entry, ...prev]);
-      void storage.insertMeal(userId, entry);
+      void storage.insertMeal(userId, entry).then(onSaveResult('your meal'));
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       if (!userId) return;
       setMeals((prev) => prev.filter((m) => m.id !== id));
-      void storage.deleteMeal(userId, id);
+      void storage.deleteMeal(userId, id).then(onSaveResult('that deletion'));
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
       if (!userId) return;
       setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-      void storage.updateMeal(userId, id, patch);
+      void storage.updateMeal(userId, id, patch).then(onSaveResult('your changes'));
     };
 
     const clearAll: StoreValue['clearAll'] = () => {
@@ -89,7 +100,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setWeights([]);
       setSettings(DEFAULT_SETTINGS);
       setProfile(DEFAULT_PROFILE);
-      void storage.clearAll(userId);
+      void storage.clearAll(userId).then(onSaveResult('the reset'));
     };
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
@@ -100,7 +111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setWeights(payload.weights ?? []);
       setSettings(nextSettings);
       setProfile(nextProfile);
-      void storage.importBackup(userId, payload);
+      void storage.importBackup(userId, payload).then(onSaveResult('the imported backup'));
     };
 
     const exportBackup: StoreValue['exportBackup'] = () => ({
@@ -121,7 +132,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const filtered = prev.filter((w) => w.date !== dateKey);
         return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
-      void storage.upsertWeight(userId, entry);
+      void storage.upsertWeight(userId, entry).then(onSaveResult('your weight'));
     };
 
     const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => {
@@ -132,20 +143,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         const filtered = prev.filter((w) => w.date !== dateKey);
         return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
-      void storage.upsertWeight(userId, entry);
+      void storage.upsertWeight(userId, entry).then(onSaveResult('your weight'));
     };
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
       if (!userId) return;
       setWeights((prev) => prev.filter((w) => w.date !== dateKey));
-      void storage.deleteWeight(userId, dateKey);
+      void storage.deleteWeight(userId, dateKey).then(onSaveResult('that deletion'));
     };
 
     const updateSettings: StoreValue['updateSettings'] = (patch) => {
       if (!userId) return;
       setSettings((prev) => {
         const next = { ...prev, ...patch };
-        void storage.setSettings(userId, next);
+        void storage.setSettings(userId, next).then(onSaveResult('your settings'));
         return next;
       });
     };
@@ -154,7 +165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!userId) return;
       setProfile((prev) => {
         const next = { ...prev, ...patch };
-        void storage.setProfile(userId, next);
+        void storage.setProfile(userId, next).then(onSaveResult('your profile'));
         return next;
       });
     };
@@ -175,14 +186,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
     };
 
+    const dismissSyncError: StoreValue['dismissSyncError'] = () => setSyncError(null);
+
     return {
       meals, weights, settings, profile, loading,
       addMeal, updateMeal, deleteMeal,
       logWeight, logWeightForDate, deleteWeight,
       updateSettings, updateProfile,
       clearAll, importBackup, exportBackup, getDay,
+      syncError, dismissSyncError,
     };
-  }, [meals, weights, settings, profile, loading, userId]);
+  }, [meals, weights, settings, profile, loading, userId, syncError]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
