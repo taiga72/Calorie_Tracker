@@ -295,6 +295,26 @@ describe('importBackup', () => {
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, name: 'Imported' }), { onConflict: 'user_id' });
   });
 
+  it('splits meals with large photos across multiple insert requests instead of one oversized payload', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const bigMeal = (id: string): MealEntry => ({ ...meal(id), imageData: 'x'.repeat(2_000_000) });
+
+    const ok = await storage.importBackup(USER_ID, {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      meals: [bigMeal('m1'), bigMeal('m2')],
+      weights: [],
+      settings: { calorieGoal: 1900, goalWeight: 65, weeklyWeightTarget: -0.4, weightUnit: 'lb', geminiApiKey: '' },
+    });
+
+    expect(ok).toBe(true);
+    const calls = from.insert.mock.calls as unknown as [Array<{ id?: string }>][];
+    const mealInsertCalls = calls.filter(([rows]) => rows[0]?.id?.startsWith('m'));
+    expect(mealInsertCalls.length).toBeGreaterThan(1);
+    expect(mealInsertCalls.every(([rows]) => rows.length === 1)).toBe(true);
+  });
+
   it('returns false if any sub-operation fails', async () => {
     const { from } = makeFrom({ error: { message: 'boom' } });
     vi.mocked(supabase.from).mockReturnValue(from as never);
