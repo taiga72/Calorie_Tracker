@@ -140,6 +140,18 @@ describe('initial load', () => {
     expect(result.current.meals).toEqual(db.meals);
     expect(storage.getMeals).toHaveBeenCalledWith(TEST_USER_ID);
   });
+
+  it('still loads meals/settings/profile and stops loading when only the weights fetch fails', async () => {
+    db.meals = [{ id: 'seed', date: '2026-01-01', mealType: 'Snack', items: [], calories: 42, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '', createdAt: 1 }];
+    vi.mocked(storage.getWeights).mockRejectedValueOnce(new Error('boom'));
+
+    const { result } = await renderStore();
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.meals).toEqual(db.meals);
+    expect(result.current.weights).toEqual([]);
+    expect(result.current.syncError).toMatch(/couldn't load your weight history/i);
+  });
 });
 
 describe('meals', () => {

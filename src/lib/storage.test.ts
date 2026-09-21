@@ -88,12 +88,13 @@ describe('getMeals', () => {
     }]);
   });
 
-  it('returns an empty array and logs on error', async () => {
+  it('throws and logs on error, rather than silently returning an empty array', async () => {
     const { from } = makeFrom({ data: null, error: { message: 'boom' } });
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect(await storage.getMeals(USER_ID)).toEqual([]);
+    await expect(storage.getMeals(USER_ID)).rejects.toBeTruthy();
+    expect(spy).toHaveBeenCalledWith('Failed to load meals', { message: 'boom' });
     spy.mockRestore();
   });
 });
@@ -176,6 +177,16 @@ describe('getWeights / upsertWeight / deleteWeight', () => {
     expect(from.node.eq).toHaveBeenNthCalledWith(1, 'user_id', USER_ID);
     expect(from.node.eq).toHaveBeenNthCalledWith(2, 'date', '2026-01-01');
   });
+
+  it('throws and logs on error, rather than silently returning an empty array', async () => {
+    const { from } = makeFrom({ data: null, error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(storage.getWeights(USER_ID)).rejects.toBeTruthy();
+    expect(spy).toHaveBeenCalledWith('Failed to load weights', { message: 'boom' });
+    spy.mockRestore();
+  });
 });
 
 describe('getSettings / setSettings', () => {
@@ -211,6 +222,16 @@ describe('getSettings / setSettings', () => {
 
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, calorie_goal: 2000 }), { onConflict: 'user_id' });
   });
+
+  it('throws and logs on error, rather than silently returning defaults', async () => {
+    const { from } = makeFrom({ data: null, error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(storage.getSettings(USER_ID)).rejects.toBeTruthy();
+    expect(spy).toHaveBeenCalledWith('Failed to load settings', { message: 'boom' });
+    spy.mockRestore();
+  });
 });
 
 describe('getProfile / setProfile', () => {
@@ -236,6 +257,16 @@ describe('getProfile / setProfile', () => {
     await storage.setProfile(USER_ID, p);
 
     expect(from.upsert).toHaveBeenCalledWith({ user_id: USER_ID, name: 'Alex', avatar: null }, { onConflict: 'user_id' });
+  });
+
+  it('throws and logs on error, rather than silently returning defaults', async () => {
+    const { from } = makeFrom({ data: null, error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(storage.getProfile(USER_ID)).rejects.toBeTruthy();
+    expect(spy).toHaveBeenCalledWith('Failed to load profile', { message: 'boom' });
+    spy.mockRestore();
   });
 });
 
