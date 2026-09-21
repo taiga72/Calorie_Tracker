@@ -152,6 +152,31 @@ function profileToRow(userId: string, p: Profile) {
   return { user_id: userId, name: p.name, avatar: p.avatar ?? null };
 }
 
+// Meal rows can carry full-size base64 photos, so a backup's full meal list
+// can add up to tens of MB — far past what a single insert request survives
+// (gateway/network limits reject it outright, failing the whole import).
+// Splitting into byte-bounded batches keeps each request small regardless of
+// how many oversized photos happen to land in the same backup.
+const MAX_IMPORT_BATCH_BYTES = 3_000_000;
+
+function batchRowsBySize<T>(rows: T[], maxBytes: number): T[][] {
+  const batches: T[][] = [];
+  let current: T[] = [];
+  let currentBytes = 0;
+  for (const row of rows) {
+    const bytes = JSON.stringify(row).length;
+    if (current.length > 0 && currentBytes + bytes > maxBytes) {
+      batches.push(current);
+      current = [];
+      currentBytes = 0;
+    }
+    current.push(row);
+    currentBytes += bytes;
+  }
+  if (current.length > 0) batches.push(current);
+  return batches;
+}
+
 export const storage = {
   getMeals: async (userId: string): Promise<MealEntry[]> => {
     const { data, error } = await supabase
@@ -247,12 +272,18 @@ export const storage = {
     const del2 = await supabase.from('weights').delete().eq('user_id', userId);
     if (del2.error) { console.error('Failed to clear weights before import', del2.error); ok = false; }
     if (payload.meals?.length) {
-      const { error } = await supabase.from('meals').insert(payload.meals.map((m) => mealToRow(userId, m)));
-      if (error) { console.error('Failed to import meals', error); ok = false; }
+      const rows = payload.meals.map((m) => mealToRow(userId, m));
+      for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
+        const { error } = await supabase.from('meals').insert(batch);
+        if (error) { console.error('Failed to import meals', error); ok = false; }
+      }
     }
     if (payload.weights?.length) {
-      const { error } = await supabase.from('weights').insert(payload.weights.map((w) => weightToRow(userId, w)));
-      if (error) { console.error('Failed to import weights', error); ok = false; }
+      const rows = payload.weights.map((w) => weightToRow(userId, w));
+      for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
+        const { error } = await supabase.from('weights').insert(batch);
+        if (error) { console.error('Failed to import weights', error); ok = false; }
+      }
     }
     const s = await supabase.from('settings').upsert(
       settingsToRow(userId, { ...DEFAULT_SETTINGS, ...payload.settings }),
