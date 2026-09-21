@@ -58,17 +58,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!userId) return;
     let active = true;
     setLoading(true);
-    Promise.all([
+    Promise.allSettled([
       storage.getMeals(userId),
       storage.getWeights(userId),
       storage.getSettings(userId),
       storage.getProfile(userId),
     ]).then(([m, w, s, p]) => {
       if (!active) return;
-      setMeals(m);
-      setWeights(w);
-      setSettings(s);
-      setProfile(p);
+      const failed: string[] = [];
+      if (m.status === 'fulfilled') setMeals(m.value); else failed.push('meals');
+      if (w.status === 'fulfilled') setWeights(w.value); else failed.push('weight history');
+      if (s.status === 'fulfilled') setSettings(s.value); else failed.push('settings');
+      if (p.status === 'fulfilled') setProfile(p.value); else failed.push('profile');
+      if (failed.length) {
+        setSyncError(`Couldn't load your ${failed.join(', ')} — check your connection and reload.`);
+      }
       setLoading(false);
     });
     return () => { active = false; };

@@ -161,7 +161,7 @@ export const storage = {
       .order('created_at', { ascending: false });
     if (error) {
       console.error('Failed to load meals', error);
-      return [];
+      throw error;
     }
     return ((data as MealRow[] | null) ?? []).map(rowToMeal);
   },
@@ -192,7 +192,7 @@ export const storage = {
       .order('date', { ascending: true });
     if (error) {
       console.error('Failed to load weights', error);
-      return [];
+      throw error;
     }
     return ((data as WeightRow[] | null) ?? []).map(rowToWeight);
   },
@@ -213,7 +213,7 @@ export const storage = {
     const { data, error } = await supabase.from('settings').select('*').eq('user_id', userId).maybeSingle();
     if (error) {
       console.error('Failed to load settings', error);
-      return DEFAULT_SETTINGS;
+      throw error;
     }
     return rowToSettings(data as SettingsRow | null);
   },
@@ -228,7 +228,7 @@ export const storage = {
     const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
     if (error) {
       console.error('Failed to load profile', error);
-      return DEFAULT_PROFILE;
+      throw error;
     }
     return rowToProfile(data as ProfileRow | null);
   },
