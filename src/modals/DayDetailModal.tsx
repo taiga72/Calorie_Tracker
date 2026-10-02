@@ -46,15 +46,15 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
 
             {/* Weight stat - interactive */}
             {day.weight ? (
-              <div className="flex items-center gap-3 bg-blue-50 rounded-2xl p-3 mb-4">
+              <div className="flex items-center gap-3 bg-blue-50 dark:bg-blue-950 rounded-2xl p-3 mb-4">
                 <Scale size={18} className="text-blue-600" />
-                <span className="text-sm font-medium text-blue-900">Weight</span>
-                <span className="ml-auto text-lg font-bold text-blue-700">
+                <span className="text-sm font-medium text-blue-900 dark:text-blue-200">Weight</span>
+                <span className="ml-auto text-lg font-bold text-blue-700 dark:text-blue-300">
                   {fmtWeight(day.weight.weight, settings.weightUnit, 1)}
                 </span>
                 <button
                   onClick={() => setWeightOpen(true)}
-                  className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-100 transition-colors"
+                  className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
                   aria-label="Edit weight"
                 >
                   <Pencil size={15} />
@@ -63,7 +63,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
             ) : (
               <button
                 onClick={() => setWeightOpen(true)}
-                className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl p-3 mb-4 active:scale-[.99] transition-transform"
+                className="w-full flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 mb-4 active:scale-[.99] transition-transform"
               >
                 <Scale size={18} className="text-gray-400" />
                 <span className="text-sm text-gray-400">No weight logged this day</span>
@@ -76,11 +76,11 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
             {/* Stat pills */}
             <div className="grid grid-cols-3 gap-2 mb-5">
               {[
-                { label: 'Calories', val: String(Math.round(day.totalCalories)), Icon: Flame, color: 'text-orange-500 bg-orange-50' },
-                { label: 'Protein', val: `${day.totalProtein.toFixed(1)}g`, Icon: Beef, color: 'text-emerald-600 bg-emerald-50' },
-                { label: 'Carbs', val: `${day.totalCarbs.toFixed(0)}g`, Icon: Wheat, color: 'text-orange-400 bg-orange-50' },
-                { label: 'Fat', val: `${day.totalFat.toFixed(1)}g`, Icon: Droplet, color: 'text-amber-500 bg-amber-50' },
-                { label: 'Fiber', val: `${day.totalFiber.toFixed(1)}g`, Icon: Sparkles, color: 'text-purple-500 bg-purple-50' },
+                { label: 'Calories', val: String(Math.round(day.totalCalories)), Icon: Flame, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950' },
+                { label: 'Protein', val: `${day.totalProtein.toFixed(1)}g`, Icon: Beef, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950' },
+                { label: 'Carbs', val: `${day.totalCarbs.toFixed(0)}g`, Icon: Wheat, color: 'text-orange-400 bg-orange-50 dark:bg-orange-950' },
+                { label: 'Fat', val: `${day.totalFat.toFixed(1)}g`, Icon: Droplet, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
+                { label: 'Fiber', val: `${day.totalFiber.toFixed(1)}g`, Icon: Sparkles, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950' },
               ].map(({ label, val, Icon, color }) => (
                 <div key={label} className={`rounded-2xl p-3 flex flex-col items-center ${color}`}>
                   <Icon size={16} />
@@ -110,13 +110,13 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                   const Icon = MEAL_ICON[type];
                   const typeCals = meals.reduce((a, b) => a + b.calories, 0);
                   return (
-                    <div key={type} className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
-                      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
+                    <div key={type} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 overflow-hidden">
+                      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800">
                         <Icon size={15} className="text-gray-400" />
-                        <span className="text-sm font-bold text-gray-900">{type}</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">{type}</span>
                         <span className="text-xs text-gray-400 ml-auto">• {Math.round(typeCals).toLocaleString()} kcal</span>
                       </div>
-                      <div className="px-4 divide-y divide-gray-50">
+                      <div className="px-4 divide-y divide-gray-50 dark:divide-gray-800">
                         {meals.map((m) => {
                           const itemNames = m.items.map((i) => i.name).join(', ');
                           const thumb = m.imageDatas?.[0] || m.imageData;
@@ -131,12 +131,12 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                                     )}
                                   </div>
                                 ) : (
-                                  <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                  <div className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                                     <Utensils size={16} className="text-gray-300" />
                                   </div>
                                 )}
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-gray-900 truncate">{itemNames || m.mealType}</p>
+                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
                                   <p className="text-[11px] text-gray-400 mt-0.5">
                                     <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
                                     {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g

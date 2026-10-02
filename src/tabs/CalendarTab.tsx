@@ -31,22 +31,22 @@ export function CalendarTab() {
     <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Daily history</p>
-      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Calendar</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Calendar</h1>
 
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-5">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-5">
         {/* Month navigation */}
         <div className="flex items-center justify-between mb-3">
           <button
             onClick={() => setCursor(addMonths(cursor, -1))}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
             aria-label="Previous month"
           >
             <ChevronLeft size={20} />
           </button>
-          <span className="text-sm font-bold text-gray-900">{formatMonthYear(cursor)}</span>
+          <span className="text-sm font-bold text-gray-900 dark:text-white">{formatMonthYear(cursor)}</span>
           <button
             onClick={() => setCursor(addMonths(cursor, 1))}
-            className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
             aria-label="Next month"
           >
             <ChevronRight size={20} />
@@ -75,17 +75,17 @@ export function CalendarTab() {
             // A quick-scan heatmap of goal adherence, so trends read at a
             // glance instead of relying on the tiny numbers alone.
             const cellTint = hasMeals
-              ? overTarget ? 'bg-rose-50' : 'bg-emerald-50'
-              : day.weight ? 'bg-blue-50' : '';
+              ? overTarget ? 'bg-rose-50 dark:bg-rose-950' : 'bg-emerald-50 dark:bg-emerald-950'
+              : day.weight ? 'bg-blue-50 dark:bg-blue-950' : '';
             return (
               <button
                 key={key}
                 onClick={() => setSelected(key)}
-                className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-colors relative ${cellTint || 'hover:bg-gray-50'} ${cellTint ? 'hover:brightness-95' : ''}`}
+                className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-colors relative ${cellTint || 'hover:bg-gray-50 dark:hover:bg-gray-800'} ${cellTint ? 'hover:brightness-95' : ''}`}
               >
                 <span
                   className={`text-xs font-semibold ${
-                    isCur ? 'bg-emerald-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-700'
+                    isCur ? 'bg-emerald-600 text-white w-6 h-6 flex items-center justify-center rounded-full' : 'text-gray-700 dark:text-gray-300'
                   }`}
                 >
                   {d.getDate()}
@@ -109,9 +109,9 @@ export function CalendarTab() {
       </div>
 
       <div className="flex items-center justify-center gap-4 mt-3 flex-wrap">
-        <Legend color="bg-emerald-50" label="Within goal" />
-        <Legend color="bg-rose-50" label="Over goal" />
-        <Legend color="bg-blue-50" label="Weight only" />
+        <Legend color="bg-emerald-50 dark:bg-emerald-950" label="Within goal" />
+        <Legend color="bg-rose-50 dark:bg-rose-950" label="Over goal" />
+        <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
       </div>
       <p className="text-[11px] text-gray-400 text-center mt-2">
         Tap any day to see its full breakdown.

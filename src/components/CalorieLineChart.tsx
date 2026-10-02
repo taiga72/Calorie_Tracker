@@ -67,14 +67,14 @@ export function CalorieLineChart({ data, goal, height = 160 }: CalorieLineChartP
             {tickValues.map((tv, i) => {
               const y = yFor(tv);
               return (
-                <line key={`tick-${i}`} x1={padX} x2={width - padX} y1={y} y2={y} stroke="#F3F4F6" strokeWidth={1} />
+                <line key={`tick-${i}`} x1={padX} x2={width - padX} y1={y} y2={y} className="stroke-gray-100 dark:stroke-gray-800" strokeWidth={1} />
               );
             })}
             {goal && goal > 0 && (
               <line
                 x1={padX} x2={width - padX}
                 y1={yFor(goal)} y2={yFor(goal)}
-                stroke="#E5E7EB" strokeDasharray="4 4" strokeWidth={1}
+                className="stroke-gray-200 dark:stroke-gray-700" strokeDasharray="4 4" strokeWidth={1}
               />
             )}
             <path d={areaPath} fill="url(#calArea)" />

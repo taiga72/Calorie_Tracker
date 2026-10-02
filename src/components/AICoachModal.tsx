@@ -66,9 +66,9 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
   return (
     <Modal open={open} onClose={onClose} title={<span className="flex items-center gap-2"><Sparkles size={18} className="text-emerald-600" /> AI Coach</span>}>
       {insight && (
-        <div className="flex items-start gap-2 bg-emerald-50 border border-emerald-100 rounded-2xl px-3.5 py-3 mb-3">
+        <div className="flex items-start gap-2 bg-emerald-50 dark:bg-emerald-950 border border-emerald-100 dark:border-emerald-900 rounded-2xl px-3.5 py-3 mb-3">
           <Sparkles size={15} className="mt-0.5 flex-shrink-0 text-emerald-600" />
-          <p className="text-xs leading-relaxed text-emerald-900">{insight.summary}</p>
+          <p className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">{insight.summary}</p>
         </div>
       )}
 
@@ -80,7 +80,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                 m.role === 'user'
                   ? 'bg-emerald-600 text-white rounded-br-md'
-                  : 'bg-white border border-gray-100 text-gray-700 rounded-bl-md'
+                  : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 rounded-bl-md'
               }`}
             >
               {m.text}
@@ -90,11 +90,11 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
 
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white border border-gray-100 rounded-2xl rounded-bl-md px-3.5 py-3 flex items-center gap-1.5">
+            <div className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl rounded-bl-md px-3.5 py-3 flex items-center gap-1.5">
               {[0, 1, 2].map((i) => (
                 <span
                   key={i}
-                  className="w-1.5 h-1.5 rounded-full bg-gray-300 animate-bounce"
+                  className="w-1.5 h-1.5 rounded-full bg-gray-300 dark:bg-gray-600 animate-bounce"
                   style={{ animationDelay: `${i * 0.15}s` }}
                 />
               ))}
@@ -104,7 +104,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
       </div>
 
       {error && (
-        <div className="flex items-start gap-2 bg-red-50 text-red-600 text-xs rounded-xl p-3 mt-3">
+        <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mt-3">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
         </div>
@@ -117,7 +117,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
             key={p}
             onClick={() => send(p)}
             disabled={loading}
-            className="flex-shrink-0 bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-2 rounded-full whitespace-nowrap disabled:opacity-50 active:scale-[.98] transition-transform"
+            className="flex-shrink-0 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-medium px-3 py-2 rounded-full whitespace-nowrap disabled:opacity-50 active:scale-[.98] transition-transform"
           >
             {p}
           </button>
@@ -125,14 +125,14 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
       </div>
 
       {/* Input */}
-      <div className="flex items-center gap-2 mt-3 bg-white border border-gray-100 rounded-2xl px-3 py-2">
+      <div className="flex items-center gap-2 mt-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-3 py-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send(input); }}
           placeholder="Ask your coach anything..."
           disabled={loading}
-          className="flex-1 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-300 disabled:opacity-50"
+          className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50"
         />
         <button
           onClick={() => send(input)}

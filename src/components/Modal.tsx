@@ -56,7 +56,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${maxWidth} bg-[#F8F9FA] rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto animate-[slideUp_.25s_ease]`}
+        className={`relative w-full ${maxWidth} bg-[#F8F9FA] dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto animate-[slideUp_.25s_ease]`}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transition: dragging ? 'none' : 'transform .2s ease',
@@ -72,9 +72,9 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
           <div className="w-9 h-1.5 rounded-full bg-gray-300" />
         </div>
         {title && (
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#F8F9FA]/95 backdrop-blur border-b border-gray-100">
-            <h2 className="text-lg font-bold text-gray-900">{title}</h2>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 text-gray-500" aria-label="Close">
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#F8F9FA]/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
+            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400" aria-label="Close">
               <X size={20} />
             </button>
           </div>
