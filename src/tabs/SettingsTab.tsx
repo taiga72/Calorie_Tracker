@@ -4,6 +4,7 @@ import { useAuth } from '@/auth';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
+import { formatRelativeTime } from '@/lib/dateUtils';
 import type { BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
@@ -11,12 +12,22 @@ import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, LogOut,
+  ChevronDown, ChevronUp, Save, LogOut, RefreshCw,
 } from 'lucide-react';
 
 export function SettingsTab() {
-  const { settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, exportBackup } = useStore();
+  const {
+    settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, exportBackup,
+    lastSyncedAt, refreshing, refresh,
+  } = useStore();
   const { user, signOut } = useAuth();
+  const [, setTick] = useState(0);
+
+  // Keeps the "Last synced Xm ago" text fresh without needing a user action.
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const setupComplete = !!settings.calc;
 
@@ -485,9 +496,14 @@ export function SettingsTab() {
         </button>
       </div>
 
-      <p className="text-center text-[11px] text-gray-300 mt-6">
-        All data is securely synced to your account.
-      </p>
+      <button
+        onClick={() => refresh()}
+        disabled={refreshing}
+        className="w-full flex items-center justify-center gap-1.5 text-[11px] text-gray-400 mt-6 py-2 disabled:opacity-60"
+      >
+        <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+        {refreshing ? 'Syncing…' : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)} — tap to sync now` : 'Tap to sync now'}
+      </button>
 
       <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
 

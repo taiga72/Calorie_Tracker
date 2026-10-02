@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
+import { useUndoToast } from '@/components/UndoToastProvider';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
+import { kgToUnit } from '@/lib/units';
 import type { MealType, MealEntry, FoodItem } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown } from 'lucide-react';
 
@@ -42,6 +44,7 @@ interface LogModalProps {
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
   const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
+  const { requestUndo } = useUndoToast();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
   const existingWeight = isWeightEdit ? weights.find((w) => w.date === weightDate) : undefined;
@@ -257,7 +260,11 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   };
 
   const onDeleteWeight = () => {
-    if (weightDate) deleteWeight(weightDate);
+    if (weightDate && existingWeight) {
+      const restoreValue = kgToUnit(existingWeight.weight, settings.weightUnit);
+      deleteWeight(weightDate);
+      requestUndo('Weight entry deleted', () => logWeightForDate(restoreValue, weightDate));
+    }
     close();
   };
 

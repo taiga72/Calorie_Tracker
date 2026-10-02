@@ -76,3 +76,26 @@ export function rangeKeys(end: Date, count: number): string[] {
   }
   return keys;
 }
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** A short, human label for a date key relative to today: "Today", "Yesterday", "N days ago". */
+export function relativeDayLabel(key: string): string {
+  const diffDays = Math.round((fromKey(toKey(new Date())).getTime() - fromKey(key).getTime()) / MS_PER_DAY);
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays > 1) return `${diffDays} days ago`;
+  if (diffDays === -1) return 'Tomorrow';
+  return formatShortDate(key);
+}
+
+/** A short, human label for a timestamp relative to now: "Just now", "5m ago", "3h ago", or a short date. */
+export function formatRelativeTime(ms: number): string {
+  const diffMs = Date.now() - ms;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'Just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  return formatShortDate(toKey(new Date(ms)));
+}

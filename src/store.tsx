@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, Profile, DaySummary } from '@/types';
 import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
@@ -25,6 +25,9 @@ interface StoreValue {
   getDay: (dateKey: string) => DaySummary;
   syncError: string | null;
   dismissSyncError: () => void;
+  refreshing: boolean;
+  lastSyncedAt: number | null;
+  refresh: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
@@ -42,7 +45,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
   // Storage writes are fire-and-forget for a responsive UI, but a failure
   // (e.g. a blocked write, dropped connection) must never fail silently —
@@ -52,31 +57,39 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!ok) setSyncError(`Couldn't save ${label} — check your connection and try again.`);
   };
 
+  // Shared by the initial load and the manual pull-to-refresh/retry path, so
+  // both report failures and a fresh lastSyncedAt the same way.
+  const loadAll = useCallback(async (uid: string) => {
+    const [m, w, s, p] = await Promise.allSettled([
+      storage.getMeals(uid),
+      storage.getWeights(uid),
+      storage.getSettings(uid),
+      storage.getProfile(uid),
+    ]);
+    const failed: string[] = [];
+    if (m.status === 'fulfilled') setMeals(m.value); else failed.push('meals');
+    if (w.status === 'fulfilled') setWeights(w.value); else failed.push('weight history');
+    if (s.status === 'fulfilled') setSettings(s.value); else failed.push('settings');
+    if (p.status === 'fulfilled') setProfile(p.value); else failed.push('profile');
+    if (failed.length) {
+      setSyncError(`Couldn't load your ${failed.join(', ')} — check your connection and reload.`);
+    } else {
+      setSyncError(null);
+      setLastSyncedAt(Date.now());
+    }
+  }, []);
+
   // StoreProvider is only mounted once a user is signed in (see App.tsx), but
   // guard against a transient render before that so hooks stay unconditional.
   useEffect(() => {
     if (!userId) return;
     let active = true;
     setLoading(true);
-    Promise.allSettled([
-      storage.getMeals(userId),
-      storage.getWeights(userId),
-      storage.getSettings(userId),
-      storage.getProfile(userId),
-    ]).then(([m, w, s, p]) => {
-      if (!active) return;
-      const failed: string[] = [];
-      if (m.status === 'fulfilled') setMeals(m.value); else failed.push('meals');
-      if (w.status === 'fulfilled') setWeights(w.value); else failed.push('weight history');
-      if (s.status === 'fulfilled') setSettings(s.value); else failed.push('settings');
-      if (p.status === 'fulfilled') setProfile(p.value); else failed.push('profile');
-      if (failed.length) {
-        setSyncError(`Couldn't load your ${failed.join(', ')} — check your connection and reload.`);
-      }
-      setLoading(false);
+    loadAll(userId).then(() => {
+      if (active) setLoading(false);
     });
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, loadAll]);
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
@@ -192,6 +205,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const dismissSyncError: StoreValue['dismissSyncError'] = () => setSyncError(null);
 
+    const refresh: StoreValue['refresh'] = async () => {
+      if (!userId) return;
+      setRefreshing(true);
+      await loadAll(userId);
+      setRefreshing(false);
+    };
+
     return {
       meals, weights, settings, profile, loading,
       addMeal, updateMeal, deleteMeal,
@@ -199,8 +219,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateSettings, updateProfile,
       clearAll, importBackup, exportBackup, getDay,
       syncError, dismissSyncError,
+      refreshing, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, loading, userId, syncError]);
+  }, [meals, weights, settings, profile, loading, userId, syncError, refreshing, lastSyncedAt, loadAll]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

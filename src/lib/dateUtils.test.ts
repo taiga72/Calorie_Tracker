@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   toKey,
   fromKey,
@@ -14,6 +14,8 @@ import {
   addMonths,
   startOfWeek,
   rangeKeys,
+  relativeDayLabel,
+  formatRelativeTime,
 } from '@/lib/dateUtils';
 
 describe('toKey / fromKey', () => {
@@ -158,5 +160,50 @@ describe('rangeKeys', () => {
 
   it('returns a single-element array when count is 1', () => {
     expect(rangeKeys(new Date(2026, 0, 10), 1)).toEqual(['2026-01-10']);
+  });
+});
+
+describe('relativeDayLabel', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('labels today, yesterday, and further-past days', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 10));
+
+    expect(relativeDayLabel('2026-01-10')).toBe('Today');
+    expect(relativeDayLabel('2026-01-09')).toBe('Yesterday');
+    expect(relativeDayLabel('2026-01-05')).toBe('5 days ago');
+  });
+
+  it('falls back to a short date for a future-dated key', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 10));
+
+    expect(relativeDayLabel('2026-01-20')).toBe('Jan 20');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('labels sub-minute as "Just now"', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 0, 10, 12, 0, 0));
+    expect(formatRelativeTime(new Date(2026, 0, 10, 12, 0, 0).getTime())).toBe('Just now');
+  });
+
+  it('labels minutes and hours ago', () => {
+    vi.useFakeTimers();
+    const now = new Date(2026, 0, 10, 12, 0, 0);
+    vi.setSystemTime(now);
+    expect(formatRelativeTime(now.getTime() - 5 * 60_000)).toBe('5m ago');
+    expect(formatRelativeTime(now.getTime() - 3 * 3_600_000)).toBe('3h ago');
+  });
+
+  it('falls back to a short date beyond 24 hours', () => {
+    vi.useFakeTimers();
+    const now = new Date(2026, 0, 10, 12, 0, 0);
+    vi.setSystemTime(now);
+    expect(formatRelativeTime(new Date(2026, 0, 8).getTime())).toBe('Jan 8');
   });
 });

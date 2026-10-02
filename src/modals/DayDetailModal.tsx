@@ -4,7 +4,9 @@ import { fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
-import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Trash2, Coffee, Sun, Moon, Cookie, Utensils } from 'lucide-react';
+import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { useUndoToast } from '@/components/UndoToastProvider';
+import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -18,7 +20,8 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
-  const { getDay, settings, deleteMeal } = useStore();
+  const { getDay, settings, addMeal, deleteMeal } = useStore();
+  const { requestUndo } = useUndoToast();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
@@ -27,6 +30,12 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
   const mealsByType = day ? MEAL_ORDER.map((type) => ({
     type, meals: day.meals.filter((m) => m.mealType === type),
   })).filter((g) => g.meals.length > 0) : [];
+
+  const onDeleteMeal = (meal: MealEntry) => {
+    deleteMeal(meal.id);
+    const { id, createdAt, ...rest } = meal;
+    requestUndo('Meal deleted', () => addMeal(rest));
+  };
 
   return (
     <>
@@ -112,35 +121,32 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                           const itemNames = m.items.map((i) => i.name).join(', ');
                           const thumb = m.imageDatas?.[0] || m.imageData;
                           return (
-                            <div key={m.id} className="flex items-center gap-3 py-2.5">
-                              {thumb ? (
-                                <div className="relative flex-shrink-0">
-                                  <img src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
-                                  {m.imageDatas && m.imageDatas.length > 1 && (
-                                    <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
-                                  )}
+                            <SwipeToDelete key={m.id} onDelete={() => onDeleteMeal(m)}>
+                              <div className="flex items-center gap-3 py-2.5">
+                                {thumb ? (
+                                  <div className="relative flex-shrink-0">
+                                    <img src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
+                                    {m.imageDatas && m.imageDatas.length > 1 && (
+                                      <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                    <Utensils size={16} className="text-gray-300" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-semibold text-gray-900 truncate">{itemNames || m.mealType}</p>
+                                  <p className="text-[11px] text-gray-400 mt-0.5">
+                                    <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
+                                    {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
+                                  </p>
                                 </div>
-                              ) : (
-                                <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                  <Utensils size={16} className="text-gray-300" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{itemNames || m.mealType}</p>
-                                <p className="text-[11px] text-gray-400 mt-0.5">
-                                  <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
-                                  {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-0.5 flex-shrink-0">
-                                <button onClick={() => setEditing(m)} className="text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
+                                <button onClick={() => setEditing(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
                                   <Pencil size={14} />
                                 </button>
-                                <button onClick={() => deleteMeal(m.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1" aria-label="Delete meal">
-                                  <Trash2 size={14} />
-                                </button>
                               </div>
-                            </div>
+                            </SwipeToDelete>
                           );
                         })}
                       </div>

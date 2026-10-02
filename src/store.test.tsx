@@ -364,6 +364,40 @@ describe('syncError', () => {
   });
 });
 
+describe('refresh', () => {
+  it('sets lastSyncedAt after a successful initial load', async () => {
+    const { result } = await renderStore();
+    expect(result.current.lastSyncedAt).toBeGreaterThan(0);
+  });
+
+  it('re-fetches on demand, toggling refreshing and updating lastSyncedAt', async () => {
+    const { result } = await renderStore();
+    const firstSync = result.current.lastSyncedAt;
+    db.meals = [{ id: 'new', date: '2026-01-01', mealType: 'Snack', items: [], calories: 1, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '', createdAt: 1 }];
+
+    expect(result.current.refreshing).toBe(false);
+    let pending!: Promise<void>;
+    act(() => { pending = result.current.refresh(); });
+    expect(result.current.refreshing).toBe(true);
+    await act(async () => { await pending; });
+
+    expect(result.current.refreshing).toBe(false);
+    expect(result.current.meals).toEqual(db.meals);
+    expect(result.current.lastSyncedAt).toBeGreaterThanOrEqual(firstSync!);
+  });
+
+  it('surfaces a syncError and leaves lastSyncedAt unchanged when the refresh fails', async () => {
+    const { result } = await renderStore();
+    const firstSync = result.current.lastSyncedAt;
+    vi.mocked(storage.getWeights).mockRejectedValueOnce(new Error('boom'));
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.syncError).toMatch(/couldn't load your weight history/i);
+    expect(result.current.lastSyncedAt).toBe(firstSync);
+  });
+});
+
 describe('persistence to the backing storage layer', () => {
   it('rehydrates from the backing store on a fresh mount without dropping existing data', async () => {
     const first = await renderStore();
