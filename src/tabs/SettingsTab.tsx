@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { useAuth } from '@/auth';
+import { useTheme, type ThemePreference } from '@/lib/theme';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
@@ -12,7 +13,7 @@ import { Modal } from '@/components/Modal';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, LogOut, RefreshCw,
+  ChevronDown, ChevronUp, Save, LogOut, RefreshCw, Sun, Moon, MonitorSmartphone,
 } from 'lucide-react';
 
 export function SettingsTab() {
@@ -21,6 +22,7 @@ export function SettingsTab() {
     lastSyncedAt, refreshing, refresh,
   } = useStore();
   const { user, signOut } = useAuth();
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
   const [, setTick] = useState(0);
 
   // Keeps the "Last synced Xm ago" text fresh without needing a user action.
@@ -191,18 +193,18 @@ export function SettingsTab() {
   return (
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Personalize your plan</p>
-      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Settings</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Settings</h1>
 
       {/* Profile card */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-5">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-5">
         <div className="flex items-center gap-2 mb-4">
           <User size={18} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Profile</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile</h2>
         </div>
         <div className="flex flex-col items-center mb-4">
           <button
             onClick={() => avatarRef.current?.click()}
-            className="relative w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
+            className="relative w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
           >
             {avatar ? (
               <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
@@ -233,14 +235,14 @@ export function SettingsTab() {
           )}
         </div>
         <Field label="Display name">
-          <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
               maxLength={40}
-              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
             />
           </div>
         </Field>
@@ -250,6 +252,34 @@ export function SettingsTab() {
         >
           {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
         </button>
+      </div>
+
+      {/* Theme */}
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
+        <div className="flex items-center gap-2 mb-4">
+          <Sun size={18} className="text-emerald-600" />
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Appearance</h2>
+        </div>
+        <div className="flex gap-2">
+          {([
+            { key: 'light', label: 'Light', Icon: Sun },
+            { key: 'dark', label: 'Dark', Icon: Moon },
+            { key: 'system', label: 'System', Icon: MonitorSmartphone },
+          ] as { key: ThemePreference; label: string; Icon: typeof Sun }[]).map(({ key, label, Icon }) => (
+            <button
+              key={key}
+              onClick={() => setThemePreference(key)}
+              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
+                themePreference === key
+                  ? 'bg-gray-900 dark:bg-emerald-600 text-white'
+                  : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+              }`}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Wizard banner — only for new users who haven't completed setup */}
@@ -269,19 +299,19 @@ export function SettingsTab() {
       )}
 
       {/* Goals card */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-4">
           <Target size={18} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Your goals</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your goals</h2>
         </div>
 
         {!setupComplete ? (
           /* Empty state for new users */
           <div className="flex flex-col items-center text-center py-8">
-            <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mb-3">
+            <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-3">
               <Sparkles size={24} className="text-emerald-600" />
             </div>
-            <p className="text-sm font-semibold text-gray-700 mb-1">No goals set yet</p>
+            <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">No goals set yet</p>
             <p className="text-xs text-gray-400 mb-4 leading-relaxed px-4">
               Run the Setup Wizard to calculate your personalized calorie target, macro breakdown, and estimated goal date.
             </p>
@@ -314,7 +344,7 @@ export function SettingsTab() {
             {/* Toggle button */}
             <button
               onClick={() => setExpanded((e) => !e)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 py-2.5 mt-2 rounded-xl hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 py-2.5 mt-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {expanded ? (
                 <><ChevronUp size={16} /> Minimize details</>
@@ -325,28 +355,28 @@ export function SettingsTab() {
 
             {/* Collapsible section */}
             {expanded && (
-              <div className="space-y-4 pt-3 border-t border-gray-100 mt-1">
+              <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-800 mt-1">
                 <Field label="Daily calorie goal">
-                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
                     <input
                       type="number"
                       inputMode="numeric"
                       value={calorieGoal}
                       onChange={(e) => setCalorieGoal(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
                     />
                     <span className="text-xs text-gray-400">kcal</span>
                   </div>
                 </Field>
 
                 <Field label="Goal weight">
-                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5">
+                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
                     <input
                       type="number"
                       inputMode="decimal"
                       value={goalWeight}
                       onChange={(e) => setGoalWeight(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
                     />
                     <span className="text-xs text-gray-400">{unit}</span>
                   </div>
@@ -356,25 +386,25 @@ export function SettingsTab() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setLose(true)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                     >
                       Lose
                     </button>
                     <button
                       onClick={() => setLose(false)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-500'}`}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                     >
                       Gain
                     </button>
                   </div>
-                  <div className="flex items-center bg-gray-50 rounded-xl px-3 py-2.5 mt-2">
+                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 mt-2">
                     <input
                       type="number"
                       inputMode="decimal"
                       step="0.1"
                       value={weeklyTarget}
                       onChange={(e) => setWeeklyTarget(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 outline-none"
+                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
                     />
                     <span className="text-xs text-gray-400">{unit}/week</span>
                   </div>
@@ -386,7 +416,7 @@ export function SettingsTab() {
                       <button
                         key={u}
                         onClick={() => setUnit(u)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'}`}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                       >
                         {u === 'kg' ? 'Kilograms' : 'Pounds'}
                       </button>
@@ -395,7 +425,7 @@ export function SettingsTab() {
                 </Field>
 
                 {/* Macro breakdown */}
-                <div className="bg-gray-50 rounded-2xl p-4 mt-1">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 mt-1">
                   <div className="flex items-center gap-2 mb-3">
                     <Activity size={14} className="text-gray-400" />
                     <p className="text-xs font-semibold text-gray-400">MACRO BREAKDOWN</p>
@@ -408,7 +438,7 @@ export function SettingsTab() {
                 </div>
 
                 {/* Meal calorie split */}
-                <div className="bg-gray-50 rounded-2xl p-4 overflow-hidden">
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 overflow-hidden">
                   <div className="flex items-center gap-2 mb-3">
                     <Utensils size={14} className="text-gray-400" />
                     <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
@@ -424,7 +454,7 @@ export function SettingsTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => setWizardOpen(true)}
-                    className="flex-1 bg-emerald-50 text-emerald-800 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                    className="flex-1 bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
                   >
                     <Sparkles size={15} /> Re-calculate
                   </button>
@@ -442,10 +472,10 @@ export function SettingsTab() {
       </div>
 
       {/* Backup & Export */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <FileSpreadsheet size={18} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Backup & Export</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Backup & Export</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
           Back up your full data for transferring between devices, or export meal logs as a CSV for Google Sheets or Excel.
@@ -465,25 +495,25 @@ export function SettingsTab() {
       </div>
 
       {/* Account */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-50 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <User size={18} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Account</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
         <button
           onClick={() => signOut()}
-          className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-600 font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform"
+          className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform"
         >
           <LogOut size={16} /> Sign out
         </button>
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-red-100 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-red-100 dark:border-red-900 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle size={18} className="text-red-500" />
-          <h2 className="text-sm font-bold text-red-600">Danger Zone</h2>
+          <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
           Permanently delete all meal logs, weight history, and reset settings to defaults. This cannot be undone.
@@ -509,9 +539,9 @@ export function SettingsTab() {
 
       {/* Clear-all confirmation */}
       <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Clear all data?">
-        <div className="flex items-start gap-3 bg-red-50 rounded-2xl p-3 mb-4">
+        <div className="flex items-start gap-3 bg-red-50 dark:bg-red-950 rounded-2xl p-3 mb-4">
           <AlertTriangle size={20} className="text-red-500 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-700 font-medium">
+          <p className="text-sm text-red-700 dark:text-red-300 font-medium">
             Are you sure you want to delete all meal logs, weight history, and custom settings?
           </p>
         </div>
@@ -519,7 +549,7 @@ export function SettingsTab() {
         <div className="flex gap-2">
           <button
             onClick={() => setConfirmOpen(false)}
-            className="flex-1 bg-gray-100 text-gray-600 font-semibold py-3.5 rounded-2xl text-sm"
+            className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3.5 rounded-2xl text-sm"
           >
             Cancel
           </button>
@@ -557,13 +587,13 @@ function ActionBtn({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="w-full flex items-center gap-3 bg-gray-50 rounded-2xl p-3.5 text-left disabled:opacity-40 active:scale-[.99] transition-transform"
+      className="w-full flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-2xl p-3.5 text-left disabled:opacity-40 active:scale-[.99] transition-transform"
     >
-      <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+      <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center flex-shrink-0">
         <Icon size={17} className="text-emerald-600" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-gray-900">{label}</p>
+        <p className="text-sm font-semibold text-gray-900 dark:text-white">{label}</p>
         <p className="text-xs text-gray-400">{sub}</p>
       </div>
     </button>
@@ -572,12 +602,12 @@ function ActionBtn({
 
 function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; label: string; value: number | string; isText?: boolean }) {
   return (
-    <div className="bg-white rounded-xl p-2.5 border border-gray-50 text-center">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 text-center">
       <div className="flex items-center justify-center gap-1 mb-0.5">
         {icon}
         <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
       </div>
-      <p className={`font-bold text-gray-900 ${isText ? 'text-[11px]' : 'text-sm'}`}>{value}</p>
+      <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-[11px]' : 'text-sm'}`}>{value}</p>
     </div>
   );
 }
@@ -603,13 +633,13 @@ function MacroField({
         <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
         {!compact && sub && <span className="text-[10px] text-gray-400 truncate ml-1">{sub}</span>}
       </div>
-      <div className="flex items-center bg-white rounded-xl px-2.5 py-2 border border-gray-100 min-w-0">
+      <div className="flex items-center bg-white dark:bg-gray-900 rounded-xl px-2.5 py-2 border border-gray-100 dark:border-gray-700 min-w-0">
         <input
           type="number"
           inputMode="numeric"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={`w-full min-w-0 bg-transparent font-bold text-gray-900 outline-none ${
+          className={`w-full min-w-0 bg-transparent font-bold text-gray-900 dark:text-white outline-none ${
             compact ? 'text-xs' : 'text-sm'
           }`}
         />

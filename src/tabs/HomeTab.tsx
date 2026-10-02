@@ -56,7 +56,7 @@ export function HomeTab() {
         )}
         <div className="min-w-0">
           <p className="text-sm text-gray-400 font-medium truncate">{formatHeaderDate(new Date())}</p>
-          <h1 className="text-2xl font-bold text-gray-900 mt-0.5 truncate">{greeting}, {displayName}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5 truncate">{greeting}, {displayName}</h1>
         </div>
       </div>
 
@@ -69,7 +69,7 @@ export function HomeTab() {
       <div className="grid grid-cols-2 gap-3 mt-5">
         
         {/* Left Column: Today's Calories */}
-        <div className={`bg-white rounded-3xl p-4 shadow-sm border flex flex-col justify-between transition-colors duration-300 ${overTarget ? 'border-rose-100' : 'border-gray-50'}`}>
+        <div className={`bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border flex flex-col justify-between transition-colors duration-300 ${overTarget ? 'border-rose-100 dark:border-rose-900' : 'border-gray-50 dark:border-gray-800'}`}>
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
             {overTarget && (
@@ -88,7 +88,7 @@ export function HomeTab() {
               sublabel={`of ${settings.calorieGoal}`}
             />
           </div>
-          <div className="w-full space-y-1 pt-2 border-t border-gray-50 text-[11px]">
+          <div className="w-full space-y-1 pt-2 border-t border-gray-50 dark:border-gray-800 text-[11px]">
             {overTarget ? (
               <div className="flex justify-between">
                 <span className="text-rose-400">Over target</span>
@@ -97,7 +97,7 @@ export function HomeTab() {
             ) : (
               <div className="flex justify-between">
                 <span className="text-gray-400">Remaining</span>
-                <span className="font-semibold text-gray-700">{Math.round(remaining)} kcal</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">{Math.round(remaining)} kcal</span>
               </div>
             )}
             <div className="flex justify-between">
@@ -137,7 +137,7 @@ export function HomeTab() {
           </div>
 
           {/* Bottom Half: Today's Macros (Compact Font Layout) */}
-          <div className="bg-white rounded-3xl p-3 shadow-sm border border-gray-50 flex-1 flex flex-col justify-between">
+          <div className="bg-white dark:bg-gray-900 rounded-3xl p-3 shadow-sm border border-gray-50 dark:border-gray-800 flex-1 flex flex-col justify-between">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[9px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
               <span className="text-[8px] font-semibold text-gray-300">g</span>
@@ -147,7 +147,7 @@ export function HomeTab() {
               value={day.totalProtein}
               target={settings.calc?.recommendedMacros?.protein ?? 128}
               color="bg-emerald-500"
-              track="bg-emerald-50"
+              track="bg-emerald-50 dark:bg-emerald-950"
               text="text-emerald-600"
             />
             <MacroProgress
@@ -155,7 +155,7 @@ export function HomeTab() {
               value={day.totalCarbs}
               target={settings.calc?.recommendedMacros?.carbs ?? 182}
               color="bg-orange-400"
-              track="bg-orange-50"
+              track="bg-orange-50 dark:bg-orange-950"
               text="text-orange-500"
             />
             <MacroProgress
@@ -163,7 +163,7 @@ export function HomeTab() {
               value={day.totalFat}
               target={settings.calc?.recommendedMacros?.fat ?? 46}
               color="bg-amber-300"
-              track="bg-amber-50"
+              track="bg-amber-50 dark:bg-amber-950"
               text="text-amber-500"
             />
           </div>
@@ -174,12 +174,12 @@ export function HomeTab() {
 
       {/* Meals today count */}
       <div className="flex items-center justify-between mt-6">
-        <h2 className="text-base font-bold text-gray-900">Meals today</h2>
+        <h2 className="text-base font-bold text-gray-900 dark:text-white">Meals today</h2>
         <span className="text-sm font-semibold text-emerald-600">{day.meals.length}</span>
       </div>
 
       {mealsByType.length === 0 ? (
-        <div className="bg-white rounded-2xl p-6 text-center border border-gray-50 mt-3">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 text-center border border-gray-50 dark:border-gray-800 mt-3">
           <p className="text-sm text-gray-400">No meals logged yet.</p>
           <p className="text-xs text-gray-300 mt-1">Tap the + button to log your first meal.</p>
         </div>
@@ -189,10 +189,10 @@ export function HomeTab() {
             const Icon = MEAL_ICON[type];
             const typeCals = meals.reduce((a, b) => a + b.calories, 0);
             return (
-              <div key={type} className="bg-white rounded-2xl shadow-sm border border-gray-50 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50">
+              <div key={type} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800">
                   <Icon size={15} className="text-gray-400" />
-                  <span className="text-sm font-bold text-gray-900">{type}</span>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white">{type}</span>
                   <span className="text-xs text-gray-400 ml-auto">• {Math.round(typeCals)} kcal</span>
                 </div>
                 <div className="px-4 divide-y divide-gray-50">
@@ -210,12 +210,12 @@ export function HomeTab() {
                               )}
                             </div>
                           ) : (
-                            <div className="w-11 h-11 rounded-2xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+                            <div className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                               <Utensils size={16} className="text-gray-300" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{itemNames || m.mealType}</p>
+                            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
                             <p className="text-[11px] text-gray-400 mt-0.5">
                               <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
                               {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g

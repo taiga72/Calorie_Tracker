@@ -15,7 +15,7 @@ interface BottomNavProps {
 
 export function BottomNav({ active, onChange }: BottomNavProps) {
   return (
-    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-gray-100 pb-[env(safe-area-inset-bottom)]">
+    <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-gray-900/95 backdrop-blur border-t border-gray-100 dark:border-gray-800 pb-[env(safe-area-inset-bottom)]">
       <div className="max-w-md mx-auto grid grid-cols-4">
         {ITEMS.map(({ key, label, Icon }) => {
           const isActive = active === key;

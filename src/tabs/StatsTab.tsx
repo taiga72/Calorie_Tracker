@@ -58,7 +58,7 @@ export function StatsTab() {
   return (
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Your trends</p>
-      <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Statistics</h1>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Statistics</h1>
 
       {/* Range selector */}
       <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar -mx-1 px-1">
@@ -67,7 +67,7 @@ export function StatsTab() {
             key={r.key}
             onClick={() => setRange(r.key)}
             className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-              range === r.key ? 'bg-gray-900 text-white' : 'bg-white text-gray-500 border border-gray-100'
+              range === r.key ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800'
             }`}
           >
             {r.label}
@@ -76,11 +76,11 @@ export function StatsTab() {
       </div>
 
       {/* Calories trend */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-5">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-5">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <Flame size={16} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-gray-900">Calories trend</h2>
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Calories trend</h2>
           </div>
           <span className="text-[11px] text-gray-400">{loggedDays} logged days</span>
         </div>
@@ -94,10 +94,10 @@ export function StatsTab() {
       </div>
 
       {/* Macros breakdown */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-1">
           <TrendingUp size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900">Macros breakdown</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Macros breakdown</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
         <MacroBar
@@ -113,16 +113,16 @@ export function StatsTab() {
       </div>
 
       {/* Weight trend */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-gray-50 mt-4">
+      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-1">
           <Scale size={16} className="text-blue-600" />
-          <h2 className="text-sm font-bold text-gray-900">Weight trend</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Weight trend</h2>
         </div>
         <p className="text-xs text-gray-400 mb-3">Change over the selected range</p>
         {weightSeries.length > 0 ? (
           <div className="flex items-end justify-between">
             <div>
-              <span className="text-2xl font-bold text-gray-900">
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">
                 {latestWeight ? (settings.weightUnit === 'lb' ? latestWeight.weight * 2.2046 : latestWeight.weight).toFixed(1) : '—'}
               </span>
               <span className="text-sm text-gray-400 ml-1">{settings.weightUnit}</span>
@@ -144,10 +144,10 @@ function Stat({ label, value, unit, tone }: { label: string; value: string; unit
     orange: 'text-orange-500',
     green: 'text-emerald-600',
     amber: 'text-amber-500',
-    gray: 'text-gray-900',
+    gray: 'text-gray-900 dark:text-white',
   }[tone];
   return (
-    <div className="bg-gray-50 rounded-xl p-2.5">
+    <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2.5">
       <p className="text-[10px] text-gray-400 font-medium">{label}</p>
       <p className={`text-base font-bold ${toneClass}`}>{value}</p>
       <p className="text-[9px] text-gray-400">{unit}</p>

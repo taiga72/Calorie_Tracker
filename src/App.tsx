@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '@/auth';
 import { AuthScreen } from '@/components/AuthScreen';
 import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
+import { ThemeProvider } from '@/lib/theme';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
@@ -19,13 +20,16 @@ import { Loader2, AlertTriangle, X } from 'lucide-react';
 import type { TabKey } from '@/types';
 
 function App() {
-  if (!isSupabaseConfigured) {
-    return <SupabaseSetupScreen />;
-  }
   return (
-    <AuthProvider>
-      <AuthGate />
-    </AuthProvider>
+    <ThemeProvider>
+      {isSupabaseConfigured ? (
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      ) : (
+        <SupabaseSetupScreen />
+      )}
+    </ThemeProvider>
   );
 }
 
@@ -34,7 +38,7 @@ function AuthGate() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F4F5F6] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center">
         <Loader2 size={28} className="text-emerald-600 animate-spin" />
       </div>
     );
@@ -72,16 +76,16 @@ function AppInner() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F4F5F6] flex items-center justify-center">
+      <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center">
         <Loader2 size={28} className="text-emerald-600 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F5F6] text-gray-900 max-w-md mx-auto">
+    <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] text-gray-900 dark:text-gray-100 max-w-md mx-auto">
       {syncError && (
-        <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 text-red-600 text-xs p-3 border-b border-red-100">
+        <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs p-3 border-b border-red-100 dark:border-red-900">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
           <span className="flex-1">{syncError}</span>
           <button

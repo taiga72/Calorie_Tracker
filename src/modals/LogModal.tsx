@@ -286,14 +286,14 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       )}
 
       {error && (
-        <div className="flex items-start gap-2 bg-red-50 text-red-600 text-xs rounded-xl p-3 mb-4">
+        <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mb-4">
           <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
       {rateLimitSecs !== null && rateLimitSecs > 0 && (
-        <div className="flex items-start gap-2 bg-orange-50 text-orange-600 text-xs rounded-xl p-3 mb-4">
+        <div className="flex items-start gap-2 bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 text-xs rounded-xl p-3 mb-4">
           <Clock size={16} className="flex-shrink-0 mt-0.5 animate-pulse" />
           <span>
             Rate limit reached. Please wait <strong className="tabular-nums">{rateLimitSecs}s</strong> before trying again.
@@ -302,7 +302,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       )}
 
       {!isEdit && mode === 'food' && targetDate && !isToday(targetDate) && (
-        <div className="flex items-center gap-2 bg-blue-50 text-blue-700 text-xs rounded-xl p-2.5 mb-4">
+        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-xs rounded-xl p-2.5 mb-4">
           <Calendar size={14} className="flex-shrink-0" />
           <span>Logging for <strong>{formatHeaderDate(fromKey(targetDate))}</strong></span>
         </div>
@@ -343,7 +343,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               ))}
               <button
                 onClick={() => fileRef.current?.click()}
-                className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
+                className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
               >
                 <Camera size={20} />
                 <span className="text-[10px] font-semibold">Add photo</span>
@@ -352,7 +352,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           ) : (
             <button
               onClick={() => fileRef.current?.click()}
-              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mb-3"
+              className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-semibold py-2.5 rounded-xl text-sm mb-3"
             >
               <Camera size={16} /> Add photo
             </button>
@@ -367,12 +367,12 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 placeholder="e.g. Added a side salad and extra sauce"
-                className="flex-1 bg-gray-50 rounded-xl px-3 py-2.5 text-sm text-gray-900 outline-none focus:ring-2 ring-emerald-500/30"
+                className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 ring-emerald-500/30"
               />
               <button
                 onClick={onReestimate}
                 disabled={loading || (rateLimitSecs !== null && rateLimitSecs > 0)}
-                className="flex-shrink-0 bg-emerald-50 text-emerald-700 font-semibold px-3 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 active:scale-95 transition-transform"
+                className="flex-shrink-0 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-semibold px-3 rounded-xl text-xs flex items-center gap-1.5 disabled:opacity-40 active:scale-95 transition-transform"
               >
                 {loading ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 Re-estimate
@@ -382,23 +382,23 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
           {/* AI Estimation callout */}
           {editReasoning && (
-            <div className="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3.5 mb-3">
-              <p className="text-[10px] font-bold text-emerald-700 tracking-wider mb-1">✨ AI ESTIMATION NOTE</p>
-              <p className="text-xs text-gray-600 italic leading-relaxed">{editReasoning}</p>
+            <div className="bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-3.5 mb-3">
+              <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 tracking-wider mb-1">✨ AI ESTIMATION NOTE</p>
+              <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">{editReasoning}</p>
             </div>
           )}
 
           {/* Quick calorie override */}
           <div className="mb-3">
             <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Total calories</label>
-            <div className="flex items-center bg-gray-50 rounded-xl px-3 py-3">
+            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
               <input
                 type="number"
                 inputMode="numeric"
                 value={totalCalInput}
                 onChange={(e) => setTotalCalInput(e.target.value)}
                 onBlur={applyTotalCal}
-                className="flex-1 bg-transparent text-xl font-bold text-gray-900 outline-none"
+                className="flex-1 bg-transparent text-xl font-bold text-gray-900 dark:text-white outline-none"
               />
               <span className="text-xs text-gray-400">kcal</span>
             </div>
@@ -406,23 +406,23 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
           {/* Live aggregated macro summary */}
           <div className="grid grid-cols-5 gap-2 mb-3">
-            <div className="bg-gray-50 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-gray-900">{Math.round(editTotals.calories)}</p>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">{Math.round(editTotals.calories)}</p>
               <p className="text-[10px] text-gray-400">kcal</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
               <p className="text-sm font-bold text-emerald-600">{editTotals.protein.toFixed(1)}</p>
               <p className="text-[10px] text-gray-400">Protein</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
               <p className="text-sm font-bold text-orange-500">{editTotals.carbs.toFixed(0)}</p>
               <p className="text-[10px] text-gray-400">Carbs</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
               <p className="text-sm font-bold text-amber-500">{editTotals.fat.toFixed(1)}</p>
               <p className="text-[10px] text-gray-400">Fat</p>
             </div>
-            <div className="bg-gray-50 rounded-xl p-2 text-center">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
               <p className="text-sm font-bold text-purple-500">{editTotals.fiber.toFixed(1)}</p>
               <p className="text-[10px] text-gray-400">Fiber</p>
             </div>
@@ -430,25 +430,25 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
           {/* Collapsible advanced item breakdown */}
           <details className="group mb-3">
-            <summary className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 py-2.5 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors list-none [&::-webkit-details-marker]:hidden">
+            <summary className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors list-none [&::-webkit-details-marker]:hidden">
               <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
               Advanced item breakdown ({editItems.length} items)
             </summary>
             <div className="space-y-2 mt-2">
               {editItems.map((it, i) => (
-                <div key={i} className="bg-white rounded-xl p-3 border border-gray-100">
+                <div key={i} className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
                   <div className="flex items-center gap-2 mb-2">
                     <input
                       type="text"
                       value={it.name}
                       onChange={(e) => updateItem(i, { name: e.target.value })}
                       placeholder="Food item (e.g. 100g cooked white rice)"
-                      className="flex-1 bg-gray-50 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 ring-emerald-500/30"
+                      className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-emerald-500/30"
                     />
                     <button
                       onClick={() => removeItem(i)}
                       disabled={editItems.length <= 1}
-                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 transition-colors"
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-30 transition-colors"
                       aria-label="Remove item"
                     >
                       <Trash2 size={16} />
@@ -466,7 +466,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </div>
             <button
               onClick={addItem}
-              className="w-full flex items-center justify-center gap-2 bg-gray-50 text-gray-500 font-semibold py-2.5 rounded-xl text-sm mt-2 active:scale-[.99] transition-transform"
+              className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 font-semibold py-2.5 rounded-xl text-sm mt-2 active:scale-[.99] transition-transform"
             >
               <Plus size={16} /> Add item
             </button>
@@ -494,8 +494,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
             <div className="space-y-2 mb-3">
               {result.items.map((it, i) => (
-                <div key={i} className="bg-white rounded-xl p-3 border border-gray-50">
-                  <p className="text-sm font-semibold text-gray-900">{it.name}</p>
+                <div key={i} className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-50 dark:border-gray-800">
+                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{it.name}</p>
                   <p className="text-[11px] text-orange-500 font-semibold mt-0.5">
                     {Math.round(it.calories)} kcal · P {it.protein.toFixed(1)}g · C {it.carbs.toFixed(0)}g · F {it.fat.toFixed(1)}g
                   </p>
@@ -510,7 +510,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 { l: 'Fat', v: result.fat, c: 'text-amber-500' },
                 { l: 'Fiber', v: result.fiber, c: 'text-purple-500' },
               ].map((m) => (
-                <div key={m.l} className="bg-gray-50 rounded-xl p-2 text-center">
+                <div key={m.l} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
                   <p className={`text-sm font-bold ${m.c}`}>{m.v.toFixed(m.l === 'Carbs' ? 0 : 1)}g</p>
                   <p className="text-[10px] text-gray-400">{m.l}</p>
                 </div>
@@ -518,11 +518,11 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </div>
 
             {result.reasoning && (
-              <p className="text-[11px] text-gray-400 italic bg-gray-50 rounded-xl p-3 mb-4">{result.reasoning}</p>
+              <p className="text-[11px] text-gray-400 italic bg-gray-50 dark:bg-gray-800 rounded-xl p-3 mb-4">{result.reasoning}</p>
             )}
 
             <div className="flex gap-2">
-              <button onClick={() => setResult(null)} className="flex-1 bg-gray-100 text-gray-600 font-semibold py-3 rounded-xl text-sm">
+              <button onClick={() => setResult(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm">
                 Redo
               </button>
               <button onClick={onSave} className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2">
@@ -563,7 +563,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 ))}
                 <button
                   onClick={() => fileRef.current?.click()}
-                  className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
+                  className="flex-shrink-0 w-24 h-24 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700 flex flex-col items-center justify-center gap-1 text-gray-400 active:scale-95 transition-transform"
                 >
                   <Camera size={20} />
                   <span className="text-[10px] font-semibold">Add photo</span>
@@ -576,7 +576,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
               placeholder="e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli"
               rows={3}
-              className="w-full bg-gray-50 rounded-2xl p-3 text-sm text-gray-900 outline-none resize-none focus:ring-2 ring-emerald-500/30"
+              className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 ring-emerald-500/30"
             />
 
             {/* Meal type selector */}
@@ -607,14 +607,14 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           ) : (
             <p className="text-xs text-gray-400 mb-3">Log your weight for today. Overwrites any existing entry for today.</p>
           )}
-          <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-4">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               type="number"
               inputMode="decimal"
               value={weightVal}
               onChange={(e) => setWeightVal(e.target.value)}
               placeholder="0.0"
-              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none"
+              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
             />
             <span className="text-sm font-semibold text-gray-400">{settings.weightUnit}</span>
           </div>
@@ -627,7 +627,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           {isWeightEdit && existingWeight && (
             <button
               onClick={onDeleteWeight}
-              className="w-full bg-red-50 text-red-600 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+              className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
             >
               <Trash2 size={16} /> Delete weight
             </button>
@@ -640,13 +640,13 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
 function ItemNumInput({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
   return (
-    <div className="bg-gray-50 rounded-lg px-1.5 py-1.5 text-center">
+    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg px-1.5 py-1.5 text-center">
       <input
         type="number"
         inputMode="decimal"
         value={Number.isFinite(value) ? value : 0}
         onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-        className="w-full bg-transparent text-sm font-bold text-gray-900 outline-none text-center"
+        className="w-full bg-transparent text-sm font-bold text-gray-900 dark:text-white outline-none text-center"
       />
       <p className="text-[9px] text-gray-400 font-semibold mt-0.5">{label}</p>
     </div>
@@ -657,7 +657,7 @@ function ModeBtn({ active, onClick, Icon, label }: { active: boolean; onClick: (
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
     >
       <Icon size={15} /> {label}
     </button>
@@ -668,7 +668,7 @@ function InputToggle({ active, onClick, Icon, label }: { active: boolean; onClic
   return (
     <button
       onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}
+      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
     >
       {label === 'Photo' ? <Camera size={15} /> : <Icon size={15} />} {label}
     </button>
@@ -679,7 +679,7 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${active ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-500'}`}
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${active ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
     >
       {children}
     </button>

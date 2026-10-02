@@ -79,7 +79,7 @@ export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
-        className="relative bg-white touch-pan-y"
+        className="relative bg-white dark:bg-gray-900 touch-pan-y"
         style={{
           transform: translateX ? `translateX(${translateX}px)` : undefined,
           transition: dragging ? 'none' : 'transform .2s ease',

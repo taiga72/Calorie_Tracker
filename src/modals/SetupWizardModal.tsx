@@ -126,22 +126,22 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
         {STEP_TITLES.map((_, i) => (
           <div
             key={i}
-            className={`h-1.5 rounded-full transition-all ${i <= step ? 'bg-emerald-600 flex-1' : 'bg-gray-200 w-4'}`}
+            className={`h-1.5 rounded-full transition-all ${i <= step ? 'bg-emerald-600 flex-1' : 'bg-gray-200 dark:bg-gray-700 w-4'}`}
           />
         ))}
       </div>
 
       <p className="text-xs font-semibold text-gray-400 mb-1">Step {Math.min(step + 1, 8)} of 8</p>
-      <h3 className="text-lg font-bold text-gray-900 mb-4">{STEP_TITLES[step]}</h3>
+      <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{STEP_TITLES[step]}</h3>
 
       {error && (
-        <div className="bg-red-50 text-red-600 text-xs rounded-xl p-3 mb-4">{error}</div>
+        <div className="bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mb-4">{error}</div>
       )}
 
       {step === 0 && (
         <div>
           <p className="text-sm text-gray-500 mb-4">How old are you?</p>
-          <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-4">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               autoFocus
               type="number"
@@ -149,7 +149,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               value={age}
               onChange={(e) => setAge(e.target.value)}
               placeholder="e.g. 28"
-              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none"
+              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
             />
             <span className="text-sm font-semibold text-gray-400">years</span>
           </div>
@@ -164,7 +164,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={s.key}
                 onClick={() => { setSex(s.key); setError(null); }}
-                className={`py-6 rounded-2xl text-sm font-bold transition-colors ${sex === s.key ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-600'}`}
+                className={`py-6 rounded-2xl text-sm font-bold transition-colors ${sex === s.key ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
               >
                 {s.label}
               </button>
@@ -181,13 +181,13 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={u}
                 onClick={() => setHeightUnit(u)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${heightUnit === u ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'}`}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${heightUnit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
               >
                 {u === 'cm' ? 'Centimeters' : 'Inches'}
               </button>
             ))}
           </div>
-          <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-4">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               autoFocus
               type="number"
@@ -195,7 +195,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               value={height}
               onChange={(e) => setHeight(e.target.value)}
               placeholder={heightUnit === 'cm' ? 'e.g. 175' : 'e.g. 69'}
-              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none"
+              className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
             />
             <span className="text-sm font-semibold text-gray-400">{heightUnit}</span>
           </div>
@@ -226,12 +226,12 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={a}
                 onClick={() => { setActivity(a); setError(null); }}
-                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors ${activity === a ? 'bg-emerald-600 text-white' : 'bg-gray-50 text-gray-700'}`}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors ${activity === a ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold">{ACTIVITY_LABELS[a]}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activity === a ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-500'}`}>
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activity === a ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                       ×{ACTIVITY_FACTORS[a]}
                     </span>
                   </div>
@@ -256,7 +256,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
                 <button
                   key={d.key}
                   onClick={() => { setDeficit(d.key); setError(null); }}
-                  className={`w-full p-4 rounded-2xl text-left transition-all ${active ? 'bg-emerald-600 text-white border-2 border-emerald-600' : 'bg-gray-50 text-gray-700 border-2 border-transparent'}`}
+                  className={`w-full p-4 rounded-2xl text-left transition-all ${active ? 'bg-emerald-600 text-white border-2 border-emerald-600' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-transparent'}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
@@ -264,12 +264,12 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
                       <p className={`text-xs mt-0.5 ${active ? 'text-emerald-50' : 'text-gray-400'}`}>{d.sub}</p>
                     </div>
                     <div className="text-right">
-                      <p className={`text-sm font-bold ${active ? 'text-white' : 'text-gray-700'}`}>-{d.kcal} kcal</p>
+                      <p className={`text-sm font-bold ${active ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>-{d.kcal} kcal</p>
                       <p className={`text-[10px] ${active ? 'text-emerald-50' : 'text-gray-400'}`}>{rateText}</p>
                     </div>
                   </div>
                   {previewTarget && (
-                    <div className={`mt-3 pt-3 border-t ${active ? 'border-white/20' : 'border-gray-200'} flex items-center justify-between`}>
+                    <div className={`mt-3 pt-3 border-t ${active ? 'border-white/20' : 'border-gray-200 dark:border-gray-700'} flex items-center justify-between`}>
                       <span className={`text-[11px] font-medium ${active ? 'text-emerald-50' : 'text-gray-400'}`}>Target</span>
                       <span className={`text-sm font-bold ${active ? 'text-white' : 'text-emerald-600'}`}>{previewTarget} kcal/day</span>
                     </div>
@@ -290,22 +290,22 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       {step === 7 && result && (
         <div>
           {/* Header: goal date + progress */}
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-4 mb-4 border border-emerald-100/60">
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-2xl p-4 mb-4 border border-emerald-100/60 dark:border-emerald-900">
             <div className="flex items-center gap-2 mb-2">
               <Target size={16} className="text-emerald-600" />
               <p className="text-xs font-bold tracking-wider text-emerald-600">ESTIMATED GOAL DATE</p>
             </div>
-            <p className="text-sm font-bold text-gray-800 mb-3">{fmtGoalDate(result.goalDate, result.weeksToGoal)}</p>
-            <div className="bg-white/70 rounded-xl p-3">
+            <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">{fmtGoalDate(result.goalDate, result.weeksToGoal)}</p>
+            <div className="bg-white/70 dark:bg-gray-900/60 rounded-xl p-3">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-semibold text-gray-500">
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                   {weightUnit === 'lb' ? (result.currentWeightKg * 2.2046).toFixed(0) : result.currentWeightKg.toFixed(0)} {weightUnit}
                 </span>
                 <span className="text-xs font-semibold text-emerald-600">
                   {weightUnit === 'lb' ? (result.goalWeightKg * 2.2046).toFixed(0) : result.goalWeightKg.toFixed(0)} {weightUnit}
                 </span>
               </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full" style={{ width: '100%' }} />
               </div>
             </div>
@@ -320,7 +320,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           {/* Macros */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-50 mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-50 dark:border-gray-800 mb-4">
             <p className="text-xs font-semibold text-gray-400 mb-3">RECOMMENDED MACROS</p>
             <div className="space-y-3">
               <MacroRow label="Protein" value={result.protein} color="text-emerald-600" sub="Preserves muscle during weight loss" />
@@ -330,7 +330,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           {/* Meal split */}
-          <div className="bg-white rounded-2xl p-4 border border-gray-50 mb-4">
+          <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-50 dark:border-gray-800 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <Utensils size={14} className="text-gray-400" />
               <p className="text-xs font-semibold text-gray-400">SUGGESTED MEAL CALORIE SPLIT</p>
@@ -344,8 +344,8 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           </div>
 
           {/* Adjustment reminder */}
-          <div className="bg-amber-50 border border-amber-100 rounded-2xl p-3.5 mb-4">
-            <p className="text-xs text-amber-800 leading-relaxed">
+          <div className="bg-amber-50 dark:bg-amber-950 border border-amber-100 dark:border-amber-900 rounded-2xl p-3.5 mb-4">
+            <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
               💡 <strong>Note:</strong> This is an initial estimate calculated via the Mifflin-St Jeor equation. TDEE varies per individual. Weigh yourself weekly and adjust your calorie target if your progress stalls.
             </p>
           </div>
@@ -358,7 +358,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           </button>
           <button
             onClick={() => setStep(6)}
-            className="w-full text-gray-500 font-semibold py-3 rounded-2xl text-sm mt-2"
+            className="w-full text-gray-500 dark:text-gray-400 font-semibold py-3 rounded-2xl text-sm mt-2"
           >
             Back to deficit selection
           </button>
@@ -371,7 +371,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           {step > 0 && (
             <button
               onClick={() => { setError(null); setStep((s) => s - 1); }}
-              className="flex-1 bg-gray-100 text-gray-600 font-semibold py-3.5 rounded-2xl text-sm"
+              className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3.5 rounded-2xl text-sm"
             >
               Back
             </button>
@@ -396,7 +396,7 @@ function UnitToggle({ unit, onChange }: { unit: InputWeightUnit; onChange: (u: I
         <button
           key={u}
           onClick={() => onChange(u)}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-500'}`}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
         >
           {u === 'kg' ? 'Kilograms' : 'Pounds'}
         </button>
@@ -407,7 +407,7 @@ function UnitToggle({ unit, onChange }: { unit: InputWeightUnit; onChange: (u: I
 
 function NumberField({ value, onChange, unit, placeholder }: { value: string; onChange: (v: string) => void; unit: string; placeholder: string }) {
   return (
-    <div className="flex items-center bg-gray-50 rounded-2xl px-4 py-4">
+    <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
       <input
         autoFocus
         type="number"
@@ -415,7 +415,7 @@ function NumberField({ value, onChange, unit, placeholder }: { value: string; on
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 bg-transparent text-2xl font-bold text-gray-900 outline-none"
+        className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
       />
       <span className="text-sm font-semibold text-gray-400">{unit}</span>
     </div>
@@ -424,12 +424,12 @@ function NumberField({ value, onChange, unit, placeholder }: { value: string; on
 
 function MetricCard({ icon, label, value, sub, highlight }: { icon: React.ReactNode; label: string; value: number | string; sub: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl p-3.5 border ${highlight ? 'bg-emerald-50 border-emerald-100' : 'bg-white border-gray-50'}`}>
+    <div className={`rounded-2xl p-3.5 border ${highlight ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-100 dark:border-emerald-900' : 'bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800'}`}>
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <p className="text-xs font-semibold text-gray-400">{label}</p>
       </div>
-      <p className={`text-lg font-bold ${highlight ? 'text-emerald-700' : 'text-gray-900'}`}>{value}</p>
+      <p className={`text-lg font-bold ${highlight ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>{value}</p>
       <p className="text-[10px] text-gray-400">{sub}</p>
     </div>
   );

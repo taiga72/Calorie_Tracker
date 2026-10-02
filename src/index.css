@@ -10,6 +10,9 @@
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
     background-color: #F4F5F6;
   }
+  .dark body {
+    background-color: #0B0D10;
+  }
 }
 
 @layer utilities {
