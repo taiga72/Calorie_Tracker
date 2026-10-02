@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { toKey } from '@/lib/dateUtils';
-import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal } from '@/types';
 import type { BackupPayload } from '@/lib/storage';
 
 const TEST_USER_ID = 'test-user';
@@ -31,12 +31,13 @@ interface FakeDb {
   weights: WeightEntry[];
   settings: Settings;
   profile: Profile;
+  pinned: PinnedMeal[];
 }
 
 let db: FakeDb;
 
 function resetDb() {
-  db = { meals: [], weights: [], settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE } };
+  db = { meals: [], weights: [], settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, pinned: [] };
 }
 resetDb();
 
@@ -46,7 +47,7 @@ vi.mock('@/lib/storage', () => ({
   storage: {
     getMeals: vi.fn(async () => db.meals),
     insertMeal: vi.fn(async (_userId: string, meal: MealEntry) => {
-      db.meals = [meal, ...db.meals];
+      db.meals = [meal, ...db.meals.filter((m) => m.id !== meal.id)];
       return true;
     }),
     updateMeal: vi.fn(async (_userId: string, id: string, patch: Partial<MealEntry>) => {
@@ -74,6 +75,15 @@ vi.mock('@/lib/storage', () => ({
     getProfile: vi.fn(async () => db.profile),
     setProfile: vi.fn(async (_userId: string, p: Profile) => {
       db.profile = p;
+      return true;
+    }),
+    getPinnedMeals: vi.fn(async (): Promise<PinnedMeal[] | null> => db.pinned),
+    upsertPinnedMeal: vi.fn(async (_userId: string, pin: PinnedMeal) => {
+      db.pinned = [pin, ...db.pinned.filter((p) => p.id !== pin.id)];
+      return true;
+    }),
+    deletePinnedMeal: vi.fn(async (_userId: string, id: string) => {
+      db.pinned = db.pinned.filter((p) => p.id !== id);
       return true;
     }),
     importBackup: vi.fn(async (_userId: string, payload: BackupPayload) => {
@@ -119,9 +129,15 @@ function emptyMeal(overrides: Partial<Omit<MealEntry, 'id' | 'createdAt'>> = {})
   };
 }
 
+function setOnline(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => value });
+}
+
 beforeEach(() => {
   resetDb();
   vi.clearAllMocks();
+  localStorage.clear();
+  setOnline(true);
 });
 
 describe('useStore outside a provider', () => {
@@ -185,7 +201,8 @@ describe('meals', () => {
     act(() => { result.current.updateMeal(id, { calories: 250 }); });
     expect(result.current.meals[0].calories).toBe(250);
     expect(result.current.meals[0].date).toBe('2026-01-01');
-    expect(storage.updateMeal).toHaveBeenCalledWith(TEST_USER_ID, id, { calories: 250 });
+    // Queued writes go out one at a time, in order.
+    await waitFor(() => expect(storage.updateMeal).toHaveBeenCalledWith(TEST_USER_ID, id, { calories: 250 }));
   });
 
   it('deletes a meal by id', async () => {
@@ -194,7 +211,8 @@ describe('meals', () => {
     const id = result.current.meals[0].id;
     act(() => { result.current.deleteMeal(id); });
     expect(result.current.meals).toEqual([]);
-    expect(storage.deleteMeal).toHaveBeenCalledWith(TEST_USER_ID, id);
+    // Queued writes go out one at a time, in order.
+    await waitFor(() => expect(storage.deleteMeal).toHaveBeenCalledWith(TEST_USER_ID, id));
   });
 });
 
@@ -206,7 +224,8 @@ describe('weights', () => {
     expect(result.current.weights).toHaveLength(1);
     expect(result.current.weights[0].weight).toBeCloseTo(100, 5);
     expect(result.current.weights[0].date).toBe(toKey(new Date()));
-    expect(storage.upsertWeight).toHaveBeenCalledWith(TEST_USER_ID, expect.objectContaining({ date: toKey(new Date()) }));
+    // Queued writes go out one at a time, in order.
+    await waitFor(() => expect(storage.upsertWeight).toHaveBeenCalledWith(TEST_USER_ID, expect.objectContaining({ date: toKey(new Date()) })));
   });
 
   it('replaces an existing entry for the same date instead of duplicating it', async () => {
@@ -229,7 +248,8 @@ describe('weights', () => {
     act(() => { result.current.logWeightForDate(70, '2026-01-05'); });
     act(() => { result.current.deleteWeight('2026-01-05'); });
     expect(result.current.weights).toEqual([]);
-    expect(storage.deleteWeight).toHaveBeenCalledWith(TEST_USER_ID, '2026-01-05');
+    // Queued writes go out one at a time, in order.
+    await waitFor(() => expect(storage.deleteWeight).toHaveBeenCalledWith(TEST_USER_ID, '2026-01-05'));
   });
 });
 
@@ -376,7 +396,7 @@ describe('refresh', () => {
     db.meals = [{ id: 'new', date: '2026-01-01', mealType: 'Snack', items: [], calories: 1, protein: 0, carbs: 0, fat: 0, fiber: 0, reasoning: '', createdAt: 1 }];
 
     expect(result.current.refreshing).toBe(false);
-    let pending!: Promise<void>;
+    let pending!: Promise<boolean>;
     act(() => { pending = result.current.refresh(); });
     expect(result.current.refreshing).toBe(true);
     await act(async () => { await pending; });
@@ -429,5 +449,142 @@ describe('updateSettings / updateProfile', () => {
     act(() => { result.current.updateProfile({ name: 'Jamie' }); });
     expect(result.current.profile.name).toBe('Jamie');
     expect(storage.setProfile).toHaveBeenCalledWith(TEST_USER_ID, expect.objectContaining({ name: 'Jamie' }));
+  });
+});
+
+describe('offline logging', () => {
+  it('keeps changes on the device while offline and sends them when the connection returns', async () => {
+    const { result } = await renderStore();
+    setOnline(false);
+
+    act(() => { result.current.addMeal(emptyMeal({ calories: 444 })); });
+
+    expect(result.current.meals[0].calories).toBe(444);
+    expect(result.current.pendingCount).toBe(1);
+    expect(result.current.syncError).toBeNull();
+    expect(storage.insertMeal).not.toHaveBeenCalled();
+
+    setOnline(true);
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+
+    await waitFor(() => expect(result.current.pendingCount).toBe(0));
+    expect(storage.insertMeal).toHaveBeenCalledWith(TEST_USER_ID, expect.objectContaining({ calories: 444 }));
+    expect(db.meals).toHaveLength(1);
+  });
+
+  it('survives closing the app before the changes were sent', async () => {
+    const first = await renderStore();
+    setOnline(false);
+    act(() => { first.result.current.logWeightForDate(81, '2026-02-01'); });
+    first.unmount();
+
+    vi.mocked(storage.getWeights).mockRejectedValueOnce(new Error('offline'));
+    const second = await renderStore();
+
+    expect(second.result.current.weights.map((w) => w.weight)).toEqual([81]);
+    expect(second.result.current.pendingCount).toBe(1);
+    // Being offline is not an error; the offline indicator covers it.
+    expect(second.result.current.syncError).toBeNull();
+  });
+
+  it('a refresh never drops changes that are still waiting to be sent', async () => {
+    const { result } = await renderStore();
+    setOnline(false);
+    act(() => { result.current.addMeal(emptyMeal({ calories: 555 })); });
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.meals.map((m) => m.calories)).toEqual([555]);
+  });
+
+  it('retries a failed save and clears the error once it goes through', async () => {
+    vi.mocked(storage.upsertWeight).mockResolvedValueOnce(false);
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.logWeightForDate(70, '2026-01-05'); });
+    expect(result.current.syncError).toMatch(/retry automatically/i);
+    expect(result.current.pendingCount).toBe(1);
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.pendingCount).toBe(0);
+    expect(result.current.syncError).toBeNull();
+    expect(db.weights).toHaveLength(1);
+  });
+
+  it('opens instantly from the last cached state, before the server answers', async () => {
+    db.meals = [{ ...emptyMeal({ calories: 321 }), id: 'cached', createdAt: 1 }];
+    const first = await renderStore();
+    // The cache is written shortly after changes settle.
+    await waitFor(() => expect(localStorage.getItem(`calorie_tracker_cache_${TEST_USER_ID}`)).not.toBeNull(), { timeout: 2000 });
+    first.unmount();
+
+    vi.mocked(storage.getMeals).mockReturnValueOnce(new Promise(() => {}));
+    const second = renderHook(() => useStore(), {
+      wrapper: ({ children }) => <StoreProvider>{children}</StoreProvider>,
+    });
+
+    expect(second.result.current.loading).toBe(false);
+    expect(second.result.current.meals.map((m) => m.id)).toEqual(['cached']);
+  });
+});
+
+describe('auto-sync', () => {
+  it('re-syncs when the app comes back to the foreground', async () => {
+    await renderStore();
+    expect(storage.getMeals).toHaveBeenCalledTimes(1);
+    const realNow = Date.now;
+    vi.spyOn(Date, 'now').mockImplementation(() => realNow() + 60_000);
+
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+
+    await waitFor(() => expect(storage.getMeals).toHaveBeenCalledTimes(2));
+    vi.mocked(Date.now).mockRestore();
+  });
+
+  it('does not re-sync on a quick app switch', async () => {
+    await renderStore();
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(storage.getMeals).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('pinned meals', () => {
+  const oats = { name: 'Oats', mealType: 'Breakfast' as const, items: [{ name: 'Oats (80g)', calories: 300, protein: 10, carbs: 50, fat: 5, fiber: 8 }], calories: 300, protein: 10, carbs: 50, fat: 5, fiber: 8 };
+
+  it('pins a meal and syncs it', async () => {
+    const { result } = await renderStore();
+    act(() => { result.current.pinMeal(oats); });
+    expect(result.current.pinned.map((p) => p.name)).toEqual(['Oats']);
+    await waitFor(() => expect(db.pinned).toHaveLength(1));
+  });
+
+  it('never pins the same meal twice', async () => {
+    const { result } = await renderStore();
+    let second!: { alreadyPinned: boolean };
+    act(() => { result.current.pinMeal(oats); });
+    act(() => {
+      second = result.current.pinMeal({ ...oats, items: [{ ...oats.items[0], name: 'Oats (100g)' }], calories: 310 });
+    });
+    expect(second.alreadyPinned).toBe(true);
+    expect(result.current.pinned).toHaveLength(1);
+  });
+
+  it('unpins and restores a pin', async () => {
+    const { result } = await renderStore();
+    act(() => { result.current.pinMeal(oats); });
+    const pin = result.current.pinned[0];
+    act(() => { result.current.unpinMeal(pin.id); });
+    expect(result.current.pinned).toEqual([]);
+    act(() => { result.current.restorePin(pin); });
+    expect(result.current.pinned).toEqual([pin]);
+  });
+
+  it('keeps pins on the device when the pinned_meals table has not been created', async () => {
+    vi.mocked(storage.getPinnedMeals).mockResolvedValue(null);
+    const { result } = await renderStore();
+    expect(result.current.pinsSyncEnabled).toBe(false);
+    expect(result.current.syncError).toBeNull();
+    vi.mocked(storage.getPinnedMeals).mockReset();
   });
 });

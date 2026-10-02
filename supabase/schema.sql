@@ -65,3 +65,25 @@ create policy "Users manage their own meals" on public.meals
 drop policy if exists "Users manage their own weights" on public.weights;
 create policy "Users manage their own weights" on public.weights
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Pinned meals (added later — re-running this file creates it).
+create table if not exists public.pinned_meals (
+  id text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  name text not null default '',
+  meal_type text not null,
+  items jsonb not null default '[]'::jsonb,
+  calories numeric not null default 0,
+  protein numeric not null default 0,
+  carbs numeric not null default 0,
+  fat numeric not null default 0,
+  fiber numeric not null default 0,
+  created_at bigint not null
+);
+create index if not exists pinned_meals_user_idx on public.pinned_meals(user_id, created_at desc);
+
+alter table public.pinned_meals enable row level security;
+
+drop policy if exists "Users manage their own pinned meals" on public.pinned_meals;
+create policy "Users manage their own pinned meals" on public.pinned_meals
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);

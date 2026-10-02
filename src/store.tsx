@@ -1,8 +1,13 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { MealEntry, WeightEntry, Settings, Profile, DaySummary } from '@/types';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal } from '@/types';
 import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload } from '@/lib/storage';
 import { toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
+import { findDuplicatePin } from '@/lib/pinnedMeals';
+import {
+  applyPending, describeOp, isOnline, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
+  type OutboxOp, type QueuedOp, type Snapshot,
+} from '@/lib/offline';
 import { useAuth } from '@/auth';
 
 interface StoreValue {
@@ -10,6 +15,9 @@ interface StoreValue {
   weights: WeightEntry[];
   settings: Settings;
   profile: Profile;
+  pinned: PinnedMeal[];
+  /** False until the pinned_meals table exists; pins then stay on this device. */
+  pinsSyncEnabled: boolean;
   loading: boolean;
   addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
@@ -19,21 +27,55 @@ interface StoreValue {
   deleteWeight: (dateKey: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
   updateProfile: (patch: Partial<Profile>) => void;
+  /** Pins a meal; returns the existing pin instead when the same meal is already pinned. */
+  pinMeal: (m: Omit<PinnedMeal, 'id' | 'createdAt'>) => { pin: PinnedMeal; alreadyPinned: boolean };
+  unpinMeal: (id: string) => void;
+  /** Puts a previously removed pin back exactly as it was (for undo). */
+  restorePin: (pin: PinnedMeal) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
   exportBackup: () => BackupPayload;
   getDay: (dateKey: string) => DaySummary;
   syncError: string | null;
   dismissSyncError: () => void;
+  /** A user-initiated refresh (pull-to-refresh, Retry) is in progress. */
   refreshing: boolean;
+  /** A background sync (app reopened, back online) is in progress. */
+  syncing: boolean;
+  online: boolean;
+  /** Changes saved on this device that haven't reached the server yet. */
+  pendingCount: number;
   lastSyncedAt: number | null;
-  refresh: () => Promise<void>;
+  /** Re-syncs with the server; resolves true when everything loaded. */
+  refresh: () => Promise<boolean>;
 }
 
 const StoreContext = createContext<StoreValue | null>(null);
 
 function makeId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// A write rejected this many times while online is given up on, so one bad
+// row can't block every change queued behind it forever.
+const MAX_ATTEMPTS = 5;
+const RETRY_INTERVAL_MS = 15_000;
+// Returning to the app re-syncs, but not on every quick app switch.
+const FOREGROUND_SYNC_MIN_GAP_MS = 30_000;
+const SNAPSHOT_DEBOUNCE_MS = 800;
+
+function runOp(userId: string, op: OutboxOp): Promise<boolean> {
+  switch (op.kind) {
+    case 'insertMeal': return storage.insertMeal(userId, op.meal);
+    case 'updateMeal': return storage.updateMeal(userId, op.id, op.patch);
+    case 'deleteMeal': return storage.deleteMeal(userId, op.id);
+    case 'upsertWeight': return storage.upsertWeight(userId, op.entry);
+    case 'deleteWeight': return storage.deleteWeight(userId, op.date);
+    case 'setSettings': return storage.setSettings(userId, op.settings);
+    case 'setProfile': return storage.setProfile(userId, op.profile);
+    case 'upsertPinned': return storage.upsertPinnedMeal(userId, op.pin);
+    case 'deletePinned': return storage.deletePinnedMeal(userId, op.id);
+  }
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
@@ -44,91 +86,244 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [pinned, setPinned] = useState<PinnedMeal[]>([]);
+  const [pinsSyncEnabled, setPinsSyncEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [online, setOnline] = useState(isOnline);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  // Storage writes are fire-and-forget for a responsive UI, but a failure
-  // (e.g. a blocked write, dropped connection) must never fail silently —
-  // that's exactly how data quietly stops persisting while the UI still
-  // looks like it saved. This surfaces it as a dismissible banner instead.
-  const onSaveResult = (label: string) => (ok: boolean) => {
-    if (!ok) setSyncError(`Couldn't save ${label} — check your connection and try again.`);
-  };
+  const queue = useRef<QueuedOp[]>([]);
+  const flushing = useRef<Promise<void> | null>(null);
+  const syncInFlight = useRef<Promise<boolean> | null>(null);
+  const lastSyncAttempt = useRef(0);
+  // Latest state, for merging a partial load (one table failed) and for undo.
+  const current = useRef<Snapshot>({ meals, weights, settings, profile, pinned });
+  current.current = { meals, weights, settings, profile, pinned };
 
-  // Shared by the initial load and the manual pull-to-refresh/retry path, so
-  // both report failures and a fresh lastSyncedAt the same way.
-  const loadAll = useCallback(async (uid: string) => {
-    const [m, w, s, p] = await Promise.allSettled([
-      storage.getMeals(uid),
-      storage.getWeights(uid),
-      storage.getSettings(uid),
-      storage.getProfile(uid),
-    ]);
-    const failed: string[] = [];
-    if (m.status === 'fulfilled') setMeals(m.value); else failed.push('meals');
-    if (w.status === 'fulfilled') setWeights(w.value); else failed.push('weight history');
-    if (s.status === 'fulfilled') setSettings(s.value); else failed.push('settings');
-    if (p.status === 'fulfilled') setProfile(p.value); else failed.push('profile');
-    if (failed.length) {
-      setSyncError(`Couldn't load your ${failed.join(', ')} — check your connection and reload.`);
-    } else {
-      setSyncError(null);
-      setLastSyncedAt(Date.now());
+  const persistQueue = useCallback((uid: string, next: QueuedOp[]) => {
+    queue.current = next;
+    setPendingCount(next.length);
+    if (!saveOutbox(uid, next)) {
+      setSyncError("Couldn't store your change on this device — it'll only be kept while the app stays open.");
     }
   }, []);
+
+  // Sends queued writes in order. A failure while offline just waits for the
+  // connection; a failure while online is reported (and retried) so data never
+  // quietly stops persisting while the UI still looks like it saved.
+  const flush = useCallback((uid: string): Promise<void> => {
+    if (flushing.current) return flushing.current;
+    let finished = false;
+    const sendAll = async () => {
+      // The lock is released the moment sending ends — synchronously when
+      // there was nothing to send (e.g. offline), not a microtask later — so a
+      // write queued right after always starts a new flush instead of waiting
+      // for the retry timer.
+      try {
+        let hadFailure = false;
+        while (queue.current.length > 0 && isOnline()) {
+          const item = queue.current[0];
+          const ok = await runOp(uid, item.op);
+          if (ok) {
+            persistQueue(uid, queue.current.filter((q) => q.qid !== item.qid));
+            continue;
+          }
+          if (!isOnline()) break;
+          hadFailure = true;
+          const attempts = item.attempts + 1;
+          if (attempts >= MAX_ATTEMPTS) {
+            persistQueue(uid, queue.current.filter((q) => q.qid !== item.qid));
+            setSyncError(`Couldn't save ${describeOp(item.op)} after several tries — please re-enter it.`);
+            continue;
+          }
+          persistQueue(uid, queue.current.map((q) => (q.qid === item.qid ? { ...q, attempts } : q)));
+          setSyncError(`Couldn't save ${describeOp(item.op)} — check your connection. It'll retry automatically.`);
+          break;
+        }
+        if (!hadFailure && queue.current.length === 0) {
+          setSyncError((prev) => (prev?.includes("It'll retry automatically") ? null : prev));
+        }
+      } finally {
+        finished = true;
+        flushing.current = null;
+      }
+    };
+    const run = sendAll();
+    if (!finished) flushing.current = run;
+    return run;
+  }, [persistQueue]);
+
+  const commit = useCallback((op: OutboxOp) => {
+    if (!userId) return;
+    persistQueue(userId, [...queue.current, { qid: makeId(), op, attempts: 0 }]);
+    void flush(userId);
+  }, [userId, flush, persistQueue]);
+
+  const applySnapshot = useCallback((snap: Snapshot) => {
+    current.current = snap;
+    setMeals(snap.meals);
+    setWeights(snap.weights);
+    setSettings(snap.settings);
+    setProfile(snap.profile);
+    setPinned(snap.pinned);
+  }, []);
+
+  // Shared by the initial load, background syncs and pull-to-refresh: push
+  // queued writes first, then pull, then lay any still-unsent writes on top.
+  const loadAll = useCallback((uid: string): Promise<boolean> => {
+    if (syncInFlight.current) return syncInFlight.current;
+    const run = (async () => {
+      lastSyncAttempt.current = Date.now();
+      await flush(uid);
+      const [m, w, s, p, pins] = await Promise.allSettled([
+        storage.getMeals(uid),
+        storage.getWeights(uid),
+        storage.getSettings(uid),
+        storage.getProfile(uid),
+        storage.getPinnedMeals(uid),
+      ]);
+      const base = current.current;
+      const failed: string[] = [];
+      const next: Snapshot = { ...base };
+      if (m.status === 'fulfilled') next.meals = m.value; else failed.push('meals');
+      if (w.status === 'fulfilled') next.weights = w.value; else failed.push('weight history');
+      if (s.status === 'fulfilled') next.settings = s.value; else failed.push('settings');
+      if (p.status === 'fulfilled') next.profile = p.value; else failed.push('profile');
+      if (pins.status === 'fulfilled') {
+        setPinsSyncEnabled(pins.value !== null);
+        if (pins.value !== null) next.pinned = pins.value;
+      } else {
+        failed.push('pinned meals');
+      }
+      applySnapshot(applyPending(next, queue.current));
+      if (failed.length === 0) {
+        setSyncError((prev) => (prev?.startsWith("Couldn't load") ? null : prev));
+        setLastSyncedAt(Date.now());
+        return true;
+      }
+      // Offline is expected, not an error: the offline pill already says so.
+      if (isOnline()) setSyncError(`Couldn't load your ${failed.join(', ')} — check your connection and reload.`);
+      return false;
+    })();
+    syncInFlight.current = run;
+    return run.finally(() => { syncInFlight.current = null; });
+  }, [flush, applySnapshot]);
 
   // StoreProvider is only mounted once a user is signed in (see App.tsx), but
   // guard against a transient render before that so hooks stay unconditional.
   useEffect(() => {
     if (!userId) return;
     let active = true;
-    setLoading(true);
+    queue.current = loadOutbox(userId);
+    setPendingCount(queue.current.length);
+    // The last known state opens the app instantly (and offline); the server
+    // copy replaces it as soon as it arrives.
+    const cached = loadSnapshot(userId);
+    if (cached) {
+      applySnapshot(applyPending(cached, queue.current));
+      setLoading(false);
+      setSyncing(true);
+    } else {
+      setLoading(true);
+    }
     loadAll(userId).then(() => {
-      if (active) setLoading(false);
+      if (!active) return;
+      setLoading(false);
+      setSyncing(false);
     });
     return () => { active = false; };
+  }, [userId, loadAll, applySnapshot]);
+
+  // Cache what's on screen for the next (possibly offline) launch.
+  useEffect(() => {
+    if (!userId || loading) return;
+    const t = setTimeout(() => saveSnapshot(userId, { meals, weights, settings, profile, pinned }), SNAPSHOT_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [userId, loading, meals, weights, settings, profile, pinned]);
+
+  // Auto-sync: when the app comes back to the foreground or the connection
+  // returns, push queued changes and pull anything changed on other devices.
+  useEffect(() => {
+    if (!userId) return;
+    const backgroundSync = () => {
+      setSyncing(true);
+      void loadAll(userId).finally(() => setSyncing(false));
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastSyncAttempt.current < FOREGROUND_SYNC_MIN_GAP_MS) return;
+      backgroundSync();
+    };
+    const onOnline = () => { setOnline(true); backgroundSync(); };
+    const onOffline = () => setOnline(false);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, [userId, loadAll]);
+
+  // While changes are waiting and we seem to be online, keep retrying.
+  useEffect(() => {
+    if (!userId || pendingCount === 0 || !online) return;
+    const id = setInterval(() => { void flush(userId); }, RETRY_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [userId, pendingCount, online, flush]);
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       if (!userId) return;
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
       setMeals((prev) => [entry, ...prev]);
-      void storage.insertMeal(userId, entry).then(onSaveResult('your meal'));
+      commit({ kind: 'insertMeal', meal: entry });
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
       if (!userId) return;
       setMeals((prev) => prev.filter((m) => m.id !== id));
-      void storage.deleteMeal(userId, id).then(onSaveResult('that deletion'));
+      commit({ kind: 'deleteMeal', id });
     };
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
       if (!userId) return;
       setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
-      void storage.updateMeal(userId, id, patch).then(onSaveResult('your changes'));
+      commit({ kind: 'updateMeal', id, patch });
     };
 
+    // Bulk replace/wipe operations go straight to the server (they're not
+    // something to replay later) and supersede anything still queued.
     const clearAll: StoreValue['clearAll'] = () => {
       if (!userId) return;
+      persistQueue(userId, []);
       setMeals([]);
       setWeights([]);
       setSettings(DEFAULT_SETTINGS);
       setProfile(DEFAULT_PROFILE);
-      void storage.clearAll(userId).then(onSaveResult('the reset'));
+      setPinned([]);
+      void storage.clearAll(userId).then((ok) => {
+        if (!ok) setSyncError("Couldn't save the reset — check your connection and try again.");
+      });
     };
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
       if (!userId) return;
+      persistQueue(userId, queue.current.filter((q) => q.op.kind === 'upsertPinned' || q.op.kind === 'deletePinned'));
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
       const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
       setMeals(payload.meals ?? []);
       setWeights(payload.weights ?? []);
       setSettings(nextSettings);
       setProfile(nextProfile);
-      void storage.importBackup(userId, payload).then(onSaveResult('the imported backup'));
+      void storage.importBackup(userId, payload).then((ok) => {
+        if (!ok) setSyncError("Couldn't save the imported backup — check your connection and try again.");
+      });
     };
 
     const exportBackup: StoreValue['exportBackup'] = () => ({
@@ -140,51 +335,61 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       profile,
     });
 
-    const logWeight: StoreValue['logWeight'] = (displayValue) => {
+    const putWeight = (displayValue: number, dateKey: string) => {
       if (!userId) return;
       const kg = unitToKg(displayValue, settings.weightUnit);
-      const dateKey = toKey(new Date());
       const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
       setWeights((prev) => {
         const filtered = prev.filter((w) => w.date !== dateKey);
         return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
       });
-      void storage.upsertWeight(userId, entry).then(onSaveResult('your weight'));
+      commit({ kind: 'upsertWeight', entry });
     };
 
-    const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => {
-      if (!userId) return;
-      const kg = unitToKg(displayValue, settings.weightUnit);
-      const entry: WeightEntry = { date: dateKey, weight: kg, createdAt: Date.now() };
-      setWeights((prev) => {
-        const filtered = prev.filter((w) => w.date !== dateKey);
-        return [...filtered, entry].sort((a, b) => a.date.localeCompare(b.date));
-      });
-      void storage.upsertWeight(userId, entry).then(onSaveResult('your weight'));
-    };
+    const logWeight: StoreValue['logWeight'] = (displayValue) => putWeight(displayValue, toKey(new Date()));
+    const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => putWeight(displayValue, dateKey);
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
       if (!userId) return;
       setWeights((prev) => prev.filter((w) => w.date !== dateKey));
-      void storage.deleteWeight(userId, dateKey).then(onSaveResult('that deletion'));
+      commit({ kind: 'deleteWeight', date: dateKey });
     };
 
     const updateSettings: StoreValue['updateSettings'] = (patch) => {
       if (!userId) return;
-      setSettings((prev) => {
-        const next = { ...prev, ...patch };
-        void storage.setSettings(userId, next).then(onSaveResult('your settings'));
-        return next;
-      });
+      const next = { ...current.current.settings, ...patch };
+      current.current = { ...current.current, settings: next };
+      setSettings(next);
+      commit({ kind: 'setSettings', settings: next });
     };
 
     const updateProfile: StoreValue['updateProfile'] = (patch) => {
       if (!userId) return;
-      setProfile((prev) => {
-        const next = { ...prev, ...patch };
-        void storage.setProfile(userId, next).then(onSaveResult('your profile'));
-        return next;
-      });
+      const next = { ...current.current.profile, ...patch };
+      current.current = { ...current.current, profile: next };
+      setProfile(next);
+      commit({ kind: 'setProfile', profile: next });
+    };
+
+    const pinMeal: StoreValue['pinMeal'] = (m) => {
+      const existing = findDuplicatePin(current.current.pinned, m);
+      if (existing) return { pin: existing, alreadyPinned: true };
+      const pin: PinnedMeal = { ...m, id: makeId(), createdAt: Date.now() };
+      current.current = { ...current.current, pinned: [pin, ...current.current.pinned] };
+      setPinned((prev) => [pin, ...prev]);
+      commit({ kind: 'upsertPinned', pin });
+      return { pin, alreadyPinned: false };
+    };
+
+    const unpinMeal: StoreValue['unpinMeal'] = (id) => {
+      current.current = { ...current.current, pinned: current.current.pinned.filter((p) => p.id !== id) };
+      setPinned((prev) => prev.filter((p) => p.id !== id));
+      commit({ kind: 'deletePinned', id });
+    };
+
+    const restorePin: StoreValue['restorePin'] = (pin) => {
+      setPinned((prev) => [...prev.filter((p) => p.id !== pin.id), pin].sort((a, b) => b.createdAt - a.createdAt));
+      commit({ kind: 'upsertPinned', pin });
     };
 
     const getDay: StoreValue['getDay'] = (dateKey) => {
@@ -206,22 +411,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const dismissSyncError: StoreValue['dismissSyncError'] = () => setSyncError(null);
 
     const refresh: StoreValue['refresh'] = async () => {
-      if (!userId) return;
+      if (!userId) return false;
       setRefreshing(true);
-      await loadAll(userId);
+      const ok = await loadAll(userId);
       setRefreshing(false);
+      return ok;
     };
 
     return {
-      meals, weights, settings, profile, loading,
+      meals, weights, settings, profile, pinned, pinsSyncEnabled, loading,
       addMeal, updateMeal, deleteMeal,
       logWeight, logWeightForDate, deleteWeight,
       updateSettings, updateProfile,
+      pinMeal, unpinMeal, restorePin,
       clearAll, importBackup, exportBackup, getDay,
       syncError, dismissSyncError,
-      refreshing, lastSyncedAt, refresh,
+      refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, loading, userId, syncError, refreshing, lastSyncedAt, loadAll]);
+  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
