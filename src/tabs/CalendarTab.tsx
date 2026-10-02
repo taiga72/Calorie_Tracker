@@ -7,9 +7,10 @@ import {
 import { fmtWeight } from '@/lib/units';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayDetailModal } from '@/modals/DayDetailModal';
+import { PullToRefresh } from '@/components/PullToRefresh';
 
 export function CalendarTab() {
-  const { getDay, settings } = useStore();
+  const { getDay, settings, refresh, refreshing } = useStore();
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -27,6 +28,7 @@ export function CalendarTab() {
   }, [year, month, total, leadBlanks]);
 
   return (
+    <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">Daily history</p>
       <h1 className="text-3xl font-bold text-gray-900 mt-0.5">Calendar</h1>
@@ -67,12 +69,19 @@ export function CalendarTab() {
             const day = getDay(key);
             const d = fromKey(key);
             const isCur = isToday(key);
-            const hasData = day.meals.length > 0 || day.weight;
+            const hasMeals = day.meals.length > 0;
+            const hasData = hasMeals || day.weight;
+            const overTarget = hasMeals && day.totalCalories > settings.calorieGoal;
+            // A quick-scan heatmap of goal adherence, so trends read at a
+            // glance instead of relying on the tiny numbers alone.
+            const cellTint = hasMeals
+              ? overTarget ? 'bg-rose-50' : 'bg-emerald-50'
+              : day.weight ? 'bg-blue-50' : '';
             return (
               <button
                 key={key}
                 onClick={() => setSelected(key)}
-                className="flex flex-col items-center justify-center py-1.5 rounded-xl hover:bg-gray-50 transition-colors relative"
+                className={`flex flex-col items-center justify-center py-1.5 rounded-xl transition-colors relative ${cellTint || 'hover:bg-gray-50'} ${cellTint ? 'hover:brightness-95' : ''}`}
               >
                 <span
                   className={`text-xs font-semibold ${
@@ -99,11 +108,26 @@ export function CalendarTab() {
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 text-center mt-3">
-        Tap any day to see its full breakdown. Days with entries show calories and weight.
+      <div className="flex items-center justify-center gap-4 mt-3 flex-wrap">
+        <Legend color="bg-emerald-50" label="Within goal" />
+        <Legend color="bg-rose-50" label="Over goal" />
+        <Legend color="bg-blue-50" label="Weight only" />
+      </div>
+      <p className="text-[11px] text-gray-400 text-center mt-2">
+        Tap any day to see its full breakdown.
       </p>
 
       <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} />
+    </div>
+    </PullToRefresh>
+  );
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className={`w-2.5 h-2.5 rounded-full ${color} border border-black/5`} />
+      <span className="text-[10px] text-gray-400 font-medium">{label}</span>
     </div>
   );
 }

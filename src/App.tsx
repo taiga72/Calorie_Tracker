@@ -3,6 +3,7 @@ import { StoreProvider, useStore } from '@/store';
 import { AuthProvider, useAuth } from '@/auth';
 import { AuthScreen } from '@/components/AuthScreen';
 import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
+import { UndoToastProvider } from '@/components/UndoToastProvider';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
@@ -45,7 +46,9 @@ function AuthGate() {
 
   return (
     <StoreProvider>
-      <AppInner />
+      <UndoToastProvider>
+        <AppInner />
+      </UndoToastProvider>
     </StoreProvider>
   );
 }
@@ -56,7 +59,7 @@ function AppInner() {
   const [coachOpen, setCoachOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const { meals, profile, loading, syncError, dismissSyncError } = useStore();
+  const { meals, profile, loading, syncError, dismissSyncError, refresh, refreshing } = useStore();
 
   useEffect(() => {
     if (loading) return;
@@ -81,6 +84,14 @@ function AppInner() {
         <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 text-red-600 text-xs p-3 border-b border-red-100">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
           <span className="flex-1">{syncError}</span>
+          <button
+            onClick={() => refresh()}
+            disabled={refreshing}
+            aria-label="Retry"
+            className="flex-shrink-0 flex items-center gap-1 font-semibold underline disabled:opacity-50"
+          >
+            {refreshing ? <Loader2 size={13} className="animate-spin" /> : 'Retry now'}
+          </button>
           <button onClick={dismissSyncError} aria-label="Dismiss" className="flex-shrink-0">
             <X size={16} />
           </button>

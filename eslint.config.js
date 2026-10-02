@@ -23,6 +23,10 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Lets `const { id, createdAt, ...rest } = entry` omit fields without
+      // flagging `id`/`createdAt` as unused — the standard pattern for
+      // dropping properties via destructuring.
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
     },
   }
 );
