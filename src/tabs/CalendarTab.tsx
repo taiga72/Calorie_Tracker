@@ -8,11 +8,16 @@ import { fmtWeight } from '@/lib/units';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayDetailModal } from '@/modals/DayDetailModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 
 export function CalendarTab() {
   const { getDay, settings, refresh, refreshing } = useStore();
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
+  const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
+    onSwipeLeft: () => setCursor((c) => addMonths(c, 1)),
+    onSwipeRight: () => setCursor((c) => addMonths(c, -1)),
+  });
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -55,6 +60,8 @@ export function CalendarTab() {
         <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
       </div>
 
+      {/* Swipe left/right anywhere on the grid to change months */}
+      <div {...swipeHandlers} className="touch-pan-y">
       {/* Weekday header */}
       <div className="grid grid-cols-7 mt-4 border-t border-gray-100 dark:border-gray-800">
         {Array.from({ length: 7 }).map((_, i) => (
@@ -65,7 +72,13 @@ export function CalendarTab() {
       </div>
 
       {/* Day grid — full-bleed, tall cells, filling most of the screen like Apple Calendar */}
-      <div className="grid grid-cols-7 auto-rows-fr min-h-[66vh] border-l border-gray-100 dark:border-gray-800">
+      <div
+        className="grid grid-cols-7 auto-rows-fr min-h-[66vh] border-l border-gray-100 dark:border-gray-800"
+        style={{
+          transform: dragX ? `translateX(${dragX * 0.4}px)` : undefined,
+          transition: dragX ? 'none' : 'transform .2s ease',
+        }}
+      >
         {cells.map((key, i) => {
           if (!key) return <div key={i} className="border-r border-b border-gray-100 dark:border-gray-800" />;
           const day = getDay(key);
@@ -106,6 +119,7 @@ export function CalendarTab() {
             </button>
           );
         })}
+      </div>
       </div>
 
       <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} />

@@ -1,12 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { toKey, addDays } from '@/lib/dateUtils';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { DaySummary, Profile, Settings, WeightEntry } from '@/types';
-
-vi.mock('@/lib/geminiCoach', () => ({
-  getOrFetchInsight: vi.fn(() => new Promise(() => {})), // never resolves — keeps CoachInsightCard in its loading state
-}));
 
 const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -28,6 +24,7 @@ vi.mock('@/store', () => ({
   useStore: () => ({
     getDay,
     settings: DEFAULT_SETTINGS,
+    meals: [],
     addMeal: vi.fn(),
     deleteMeal: vi.fn(),
     profile: DEFAULT_PROFILE,
@@ -86,5 +83,23 @@ describe('HomeTab weight card', () => {
 
     expect(screen.getByText('70.0')).toBeInTheDocument();
     expect(screen.queryByText('71.0')).not.toBeInTheDocument();
+  });
+
+  it("opens the weight entry form for today when the card is tapped", () => {
+    renderHomeTab();
+    expect(screen.queryByText('Add weight')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Log weight'));
+
+    expect(screen.getByText('Add weight')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('0.0')).toBeInTheDocument();
+  });
+});
+
+describe('HomeTab layout', () => {
+  it('no longer shows the AI tip card or the "Total today" banner', () => {
+    renderHomeTab();
+    expect(screen.queryByLabelText('Refresh insight')).not.toBeInTheDocument();
+    expect(screen.queryByText('Total today')).not.toBeInTheDocument();
   });
 });

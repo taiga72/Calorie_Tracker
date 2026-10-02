@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
-import { toKey } from '@/lib/dateUtils';
+import { toKey, addMonths, formatMonthYear } from '@/lib/dateUtils';
 import type { DaySummary, MealEntry, Profile, Settings, WeightEntry } from '@/types';
 
 const DEFAULT_SETTINGS: Settings = {
@@ -29,6 +29,7 @@ vi.mock('@/store', () => ({
   useStore: () => ({
     getDay: (key: string) => days[key] ?? emptyDay(key),
     settings: DEFAULT_SETTINGS,
+    meals: [],
     profile: DEFAULT_PROFILE,
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
@@ -93,3 +94,72 @@ describe('CalendarTab heatmap', () => {
 function fromTodayDayNumber(): string {
   return String(new Date().getDate());
 }
+
+describe('CalendarTab month swiping', () => {
+  function grid(container: HTMLElement): Element {
+    return container.querySelector('.touch-pan-y')!;
+  }
+
+  function swipe(el: Element, dx: number, dy = 0) {
+    fireEvent.pointerDown(el, { clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(el, { clientX: 200 + dx, clientY: 200 + dy });
+    fireEvent.pointerUp(el, { clientX: 200 + dx, clientY: 200 + dy });
+  }
+
+  const thisMonth = formatMonthYear(new Date());
+  const nextMonth = formatMonthYear(addMonths(new Date(), 1));
+  const prevMonth = formatMonthYear(addMonths(new Date(), -1));
+
+  it('goes to the next month on a left swipe and the previous month on a right swipe', () => {
+    days = {};
+    const { container } = renderCalendar();
+    expect(screen.getByText(thisMonth)).toBeInTheDocument();
+
+    swipe(grid(container), -120);
+    expect(screen.getByText(nextMonth)).toBeInTheDocument();
+
+    swipe(grid(container), 120);
+    swipe(grid(container), 120);
+    expect(screen.getByText(prevMonth)).toBeInTheDocument();
+  });
+
+  it('ignores short horizontal drags and vertical drags', () => {
+    days = {};
+    const { container } = renderCalendar();
+
+    swipe(grid(container), -20);
+    swipe(grid(container), -30, 200);
+
+    expect(screen.getByText(thisMonth)).toBeInTheDocument();
+  });
+
+  it('does not open a day when a horizontal drag ends on a day cell', () => {
+    days = {};
+    renderCalendar();
+    const cell = cellFor(fromTodayDayNumber());
+
+    // Below the month-change threshold, so the same cell stays mounted and
+    // this exercises the click suppression rather than an unmount.
+    fireEvent.pointerDown(cell, { clientX: 200, clientY: 200 });
+    fireEvent.pointerMove(cell, { clientX: 170, clientY: 200 });
+    fireEvent.pointerUp(cell, { clientX: 170, clientY: 200 });
+    fireEvent.click(cell);
+
+    expect(screen.getByText(thisMonth)).toBeInTheDocument();
+
+    expect(screen.queryByText('Add weight')).not.toBeInTheDocument();
+    expect(screen.queryByText('No weight logged this day')).not.toBeInTheDocument();
+  });
+
+  it('still opens a day on a plain tap', () => {
+    days = {};
+    renderCalendar();
+    const cell = cellFor(fromTodayDayNumber());
+
+    fireEvent.pointerDown(cell, { clientX: 200, clientY: 200 });
+    fireEvent.pointerUp(cell, { clientX: 200, clientY: 200 });
+    fireEvent.click(cell);
+
+    expect(screen.getByText('No weight logged this day')).toBeInTheDocument();
+  });
+});
