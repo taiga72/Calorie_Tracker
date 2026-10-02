@@ -162,4 +162,28 @@ describe('CalendarTab month swiping', () => {
 
     expect(screen.getByText('No weight logged this day')).toBeInTheDocument();
   });
+
+  it('always renders 6 week rows so cells keep the same size across months', () => {
+    days = {};
+    const { container } = renderCalendar();
+    const dayGrid = () => grid(container).children[1];
+
+    for (let i = 0; i < 14; i++) {
+      expect(dayGrid().children).toHaveLength(42);
+      swipe(grid(container), -120);
+    }
+  });
+
+  it('slides the new month in from the side the swipe came from', () => {
+    days = {};
+    const { container } = renderCalendar();
+    const dayGrid = () => grid(container).children[1];
+
+    swipe(grid(container), -120);
+    expect(dayGrid().className).toMatch(/calSlideFromRight/);
+
+    swipe(grid(container), 120);
+    expect(dayGrid().className).toMatch(/calSlideFromLeft/);
+  });
 });
+

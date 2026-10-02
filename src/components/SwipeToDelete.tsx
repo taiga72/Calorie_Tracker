@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
 
 const REVEAL_PX = 72;
@@ -8,6 +8,7 @@ const AXIS_LOCK_PX = 8;
 interface SwipeToDeleteProps {
   onDelete: () => void;
   children: ReactNode;
+  label?: string;
 }
 
 /**
@@ -16,18 +17,20 @@ interface SwipeToDeleteProps {
  * horizontal axis once the drag clearly leans that way, so it coexists with
  * a vertical pull-to-refresh on the same page.
  */
-export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
+export function SwipeToDelete({ onDelete, children, label = 'Delete' }: SwipeToDeleteProps) {
   const [open, setOpen] = useState(false);
   const [dragX, setDragX] = useState(0);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<'horizontal' | 'vertical' | null>(null);
+  const suppressClick = useRef(false);
 
   const baseX = open ? -REVEAL_PX : 0;
 
   const onPointerDown = (e: ReactPointerEvent) => {
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
+    suppressClick.current = false;
   };
 
   const onPointerMove = (e: ReactPointerEvent) => {
@@ -48,6 +51,7 @@ export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
 
   const onPointerEnd = () => {
     if (axis.current === 'horizontal') {
+      suppressClick.current = true;
       const finalX = baseX + dragX;
       if (finalX < -DELETE_THRESHOLD_PX) {
         onDelete();
@@ -61,6 +65,15 @@ export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
     setDragX(0);
   };
 
+  // The click that ends a drag would otherwise also activate the row
+  // (e.g. pick the meal you were swiping away).
+  const onClickCapture = (e: ReactMouseEvent) => {
+    if (!suppressClick.current) return;
+    suppressClick.current = false;
+    e.stopPropagation();
+    e.preventDefault();
+  };
+
   const translateX = dragging ? baseX + dragX : baseX;
 
   return (
@@ -69,7 +82,7 @@ export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
         <button
           onClick={onDelete}
           className="flex-1 bg-red-500 text-white flex items-center justify-center active:bg-red-600 transition-colors"
-          aria-label="Delete"
+          aria-label={label}
         >
           <Trash2 size={18} />
         </button>
@@ -79,6 +92,7 @@ export function SwipeToDelete({ onDelete, children }: SwipeToDeleteProps) {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
+        onClickCapture={onClickCapture}
         className="relative bg-white dark:bg-gray-900 touch-pan-y"
         style={{
           transform: translateX ? `translateX(${translateX}px)` : undefined,

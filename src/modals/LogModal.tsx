@@ -5,7 +5,8 @@ import { useUndoToast } from '@/components/UndoToastProvider';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
-import { getFrequentMeals, type FrequentMeal } from '@/lib/frequentMeals';
+import { getFrequentMeals, loadHiddenFrequentMeals, saveHiddenFrequentMeals, type FrequentMeal } from '@/lib/frequentMeals';
+import { SwipeToDelete } from '@/components/SwipeToDelete';
 import type { MealType, MealEntry, FoodItem } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, History } from 'lucide-react';
 
@@ -276,7 +277,21 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const editTotals = sumItems(editItems);
 
-  const frequentMeals = useMemo(() => getFrequentMeals(meals), [meals]);
+  const [hiddenFrequent, setHiddenFrequent] = useState(loadHiddenFrequentMeals);
+  const frequentMeals = useMemo(() => getFrequentMeals(meals, { hidden: hiddenFrequent }), [meals, hiddenFrequent]);
+
+  const updateHiddenFrequent = (next: Set<string>) => {
+    setHiddenFrequent(next);
+    saveHiddenFrequentMeals(next);
+  };
+
+  // Swiping a frequent meal away hides it (and its merged variants) on this
+  // device; the next most frequent meal moves up into its place.
+  const onHideFrequent = (fm: FrequentMeal) => {
+    const previous = hiddenFrequent;
+    updateHiddenFrequent(new Set([...previous, ...fm.memberKeys]));
+    requestUndo('Removed from frequent meals', () => updateHiddenFrequent(previous));
+  };
 
   // Re-logs a past meal straight from history — no Gemini call. It lands in
   // the normal result view so it can still be reviewed (or redone) before saving.
@@ -557,19 +572,22 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <div className="mb-4">
                 <div className="flex items-center gap-1.5 mb-2">
                   <History size={13} className="text-gray-400" />
-                  <p className="text-xs font-semibold text-gray-400">Frequent meals · no AI needed</p>
+                  <p className="text-xs font-semibold text-gray-400">Frequent meals · no AI needed · swipe to remove</p>
                 </div>
                 <div className="space-y-1.5">
                   {frequentMeals.map((fm) => (
-                    <button
-                      key={fm.key}
-                      onClick={() => onPickFrequent(fm)}
-                      className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl px-3 py-2.5 text-left active:scale-[.99] transition-transform"
-                    >
-                      <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{fm.label}</span>
-                      <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(fm.template.calories)} kcal</span>
-                      <span className="text-[10px] text-gray-400 flex-shrink-0">{fm.count}×</span>
-                    </button>
+                    <div key={fm.key} className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+                      <SwipeToDelete onDelete={() => onHideFrequent(fm)} label="Remove from frequent meals">
+                        <button
+                          onClick={() => onPickFrequent(fm)}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
+                        >
+                          <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{fm.label}</span>
+                          <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(fm.template.calories)} kcal</span>
+                          <span className="text-[10px] text-gray-400 flex-shrink-0">{fm.count}×</span>
+                        </button>
+                      </SwipeToDelete>
+                    </div>
                   ))}
                 </div>
               </div>

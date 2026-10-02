@@ -14,9 +14,16 @@ export function CalendarTab() {
   const { getDay, settings, refresh, refreshing } = useStore();
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState<string | null>(null);
+  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
+
+  const changeMonth = (delta: 1 | -1) => {
+    setSlideFrom(delta > 0 ? 'right' : 'left');
+    setCursor((c) => addMonths(c, delta));
+  };
+
   const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
-    onSwipeLeft: () => setCursor((c) => addMonths(c, 1)),
-    onSwipeRight: () => setCursor((c) => addMonths(c, -1)),
+    onSwipeLeft: () => changeMonth(1),
+    onSwipeRight: () => changeMonth(-1),
   });
 
   const year = cursor.getFullYear();
@@ -24,11 +31,15 @@ export function CalendarTab() {
   const total = daysInMonth(year, month);
   const leadBlanks = firstWeekdayOfMonth(year, month);
 
+  // Always 6 week rows (like Apple Calendar): months span 5 or 6 weeks, and
+  // with a fixed-height grid a varying row count resizes every cell, which
+  // reads as the calendar zooming in and out while swiping between months.
   const cells: (string | null)[] = useMemo(() => {
     const arr: (string | null)[] = Array(leadBlanks).fill(null);
     for (let d = 1; d <= total; d++) {
       arr.push(toKey(new Date(year, month, d)));
     }
+    while (arr.length < 42) arr.push(null);
     return arr;
   }, [year, month, total, leadBlanks]);
 
@@ -38,7 +49,7 @@ export function CalendarTab() {
       {/* Month navigation — large, Apple-Calendar-style title */}
       <div className="px-5 flex items-center justify-between">
         <button
-          onClick={() => setCursor(addMonths(cursor, -1))}
+          onClick={() => changeMonth(-1)}
           className="p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
           aria-label="Previous month"
         >
@@ -46,7 +57,7 @@ export function CalendarTab() {
         </button>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{formatMonthYear(cursor)}</h1>
         <button
-          onClick={() => setCursor(addMonths(cursor, 1))}
+          onClick={() => changeMonth(1)}
           className="p-2 -mr-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
           aria-label="Next month"
         >
@@ -72,8 +83,14 @@ export function CalendarTab() {
       </div>
 
       {/* Day grid — full-bleed, tall cells, filling most of the screen like Apple Calendar */}
+      {/* Keyed by month so a month change remounts the grid: the dragged-aside
+          old month is dropped instantly and the new one slides in from the
+          side the swipe came from, instead of snapping back from the wrong side. */}
       <div
-        className="grid grid-cols-7 auto-rows-fr min-h-[66vh] border-l border-gray-100 dark:border-gray-800"
+        key={`${year}-${month}`}
+        className={`grid grid-cols-7 auto-rows-fr min-h-[66vh] border-l border-gray-100 dark:border-gray-800 motion-reduce:animate-none ${
+          slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''
+        }`}
         style={{
           transform: dragX ? `translateX(${dragX * 0.4}px)` : undefined,
           transition: dragX ? 'none' : 'transform .2s ease',

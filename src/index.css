@@ -30,3 +30,13 @@
   from { transform: translateY(16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+@keyframes calSlideFromRight {
+  from { transform: translateX(28px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes calSlideFromLeft {
+  from { transform: translateX(-28px); opacity: 0.4; }
+  to { transform: translateX(0); opacity: 1; }
+}
