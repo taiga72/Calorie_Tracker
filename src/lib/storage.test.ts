@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
 
 vi.mock('@/lib/supabaseClient', () => ({
@@ -65,6 +65,55 @@ beforeEach(() => {
   vi.mocked(supabase.from).mockReset();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Runs an operation that retries on failure without the test waiting out the real backoff delays. */
+async function runWithFakeTimers<T>(operation: () => Promise<T>): Promise<T> {
+  vi.useFakeTimers();
+  const promise = operation();
+  // Mark as handled so Node doesn't report it as an unhandled rejection while
+  // we advance the fake timers below; the caller still awaits the real result.
+  promise.catch(() => {});
+  await vi.runAllTimersAsync();
+  return promise;
+}
+
+describe('retrying transient failures', () => {
+  it('retries a failed read and returns the data once a later attempt succeeds', async () => {
+    const failing = makeFrom({ data: null, error: { message: 'network blip' } });
+    const succeeding = makeFrom({
+      data: [{
+        id: 'm1', date: '2026-01-01', meal_type: 'Lunch', items: [], calories: 300,
+        protein: 10, carbs: 20, fat: 5, fiber: 2, reasoning: '', image_data: null, image_datas: null, created_at: 5,
+      }],
+      error: null,
+    });
+    vi.mocked(supabase.from)
+      .mockReturnValueOnce(failing.from as never)
+      .mockReturnValueOnce(succeeding.from as never);
+
+    const result = await runWithFakeTimers(() => storage.getMeals(USER_ID));
+
+    expect(supabase.from).toHaveBeenCalledTimes(2);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('m1');
+  });
+
+  it('gives up after a bounded number of attempts rather than retrying forever', async () => {
+    const { from } = makeFrom({ error: { message: 'boom' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await runWithFakeTimers(() => storage.insertMeal(USER_ID, meal('m1')));
+
+    expect(ok).toBe(false);
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    spy.mockRestore();
+  });
+});
+
 describe('getMeals', () => {
   it('queries the meals table filtered by user and mapped from snake_case rows', async () => {
     const { from } = makeFrom({
@@ -93,7 +142,7 @@ describe('getMeals', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(storage.getMeals(USER_ID)).rejects.toBeTruthy();
+    await expect(runWithFakeTimers(() => storage.getMeals(USER_ID))).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalledWith('Failed to load meals', { message: 'boom' });
     spy.mockRestore();
   });
@@ -138,7 +187,7 @@ describe('insertMeal / updateMeal / deleteMeal', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    expect(await storage.insertMeal(USER_ID, meal('m1'))).toBe(false);
+    expect(await runWithFakeTimers(() => storage.insertMeal(USER_ID, meal('m1')))).toBe(false);
     spy.mockRestore();
   });
 });
@@ -183,7 +232,7 @@ describe('getWeights / upsertWeight / deleteWeight', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(storage.getWeights(USER_ID)).rejects.toBeTruthy();
+    await expect(runWithFakeTimers(() => storage.getWeights(USER_ID))).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalledWith('Failed to load weights', { message: 'boom' });
     spy.mockRestore();
   });
@@ -228,7 +277,7 @@ describe('getSettings / setSettings', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(storage.getSettings(USER_ID)).rejects.toBeTruthy();
+    await expect(runWithFakeTimers(() => storage.getSettings(USER_ID))).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalledWith('Failed to load settings', { message: 'boom' });
     spy.mockRestore();
   });
@@ -264,7 +313,7 @@ describe('getProfile / setProfile', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    await expect(storage.getProfile(USER_ID)).rejects.toBeTruthy();
+    await expect(runWithFakeTimers(() => storage.getProfile(USER_ID))).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalledWith('Failed to load profile', { message: 'boom' });
     spy.mockRestore();
   });
@@ -320,13 +369,13 @@ describe('importBackup', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const ok = await storage.importBackup(USER_ID, {
+    const ok = await runWithFakeTimers(() => storage.importBackup(USER_ID, {
       version: 1,
       exportedAt: new Date().toISOString(),
       meals: [],
       weights: [],
       settings: { calorieGoal: 1900, goalWeight: 65, weeklyWeightTarget: -0.4, weightUnit: 'lb', geminiApiKey: '' },
-    });
+    }));
 
     expect(ok).toBe(false);
     spy.mockRestore();
@@ -354,7 +403,7 @@ describe('clearAll', () => {
     vi.mocked(supabase.from).mockReturnValue(from as never);
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
-    const ok = await storage.clearAll(USER_ID);
+    const ok = await runWithFakeTimers(() => storage.clearAll(USER_ID));
 
     expect(ok).toBe(false);
     spy.mockRestore();

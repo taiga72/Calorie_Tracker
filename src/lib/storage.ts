@@ -152,6 +152,25 @@ function profileToRow(userId: string, p: Profile) {
   return { user_id: userId, name: p.name, avatar: p.avatar ?? null };
 }
 
+// Every Supabase call here is a single shot over the network with no
+// built-in retry, so a brief mobile connectivity blip (switching between
+// wifi/cellular, waking from sleep) fails the whole request outright. A
+// short retry-with-backoff absorbs most of those transient failures instead
+// of surfacing a load/save failure that a user can't do anything about.
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 400;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+async function withRetry<T extends { error: unknown }>(fn: () => PromiseLike<T>): Promise<T> {
+  let result = await fn();
+  for (let attempt = 1; attempt < RETRY_ATTEMPTS && result.error; attempt++) {
+    await sleep(RETRY_DELAY_MS * attempt);
+    result = await fn();
+  }
+  return result;
+}
+
 // Meal rows can carry full-size base64 photos, so a backup's full meal list
 // can add up to tens of MB — far past what a single insert request survives
 // (gateway/network limits reject it outright, failing the whole import).
@@ -179,11 +198,13 @@ function batchRowsBySize<T>(rows: T[], maxBytes: number): T[][] {
 
 export const storage = {
   getMeals: async (userId: string): Promise<MealEntry[]> => {
-    const { data, error } = await supabase
-      .from('meals')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from('meals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+    );
     if (error) {
       console.error('Failed to load meals', error);
       throw error;
@@ -192,29 +213,33 @@ export const storage = {
   },
 
   insertMeal: async (userId: string, meal: MealEntry): Promise<boolean> => {
-    const { error } = await supabase.from('meals').insert(mealToRow(userId, meal));
+    const { error } = await withRetry(() => supabase.from('meals').insert(mealToRow(userId, meal)));
     if (error) console.error('Failed to save meal', error);
     return !error;
   },
 
   updateMeal: async (userId: string, id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>): Promise<boolean> => {
-    const { error } = await supabase.from('meals').update(mealPatchToRow(patch)).eq('user_id', userId).eq('id', id);
+    const { error } = await withRetry(() =>
+      supabase.from('meals').update(mealPatchToRow(patch)).eq('user_id', userId).eq('id', id)
+    );
     if (error) console.error('Failed to update meal', error);
     return !error;
   },
 
   deleteMeal: async (userId: string, id: string): Promise<boolean> => {
-    const { error } = await supabase.from('meals').delete().eq('user_id', userId).eq('id', id);
+    const { error } = await withRetry(() => supabase.from('meals').delete().eq('user_id', userId).eq('id', id));
     if (error) console.error('Failed to delete meal', error);
     return !error;
   },
 
   getWeights: async (userId: string): Promise<WeightEntry[]> => {
-    const { data, error } = await supabase
-      .from('weights')
-      .select('*')
-      .eq('user_id', userId)
-      .order('date', { ascending: true });
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from('weights')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: true })
+    );
     if (error) {
       console.error('Failed to load weights', error);
       throw error;
@@ -223,19 +248,21 @@ export const storage = {
   },
 
   upsertWeight: async (userId: string, entry: WeightEntry): Promise<boolean> => {
-    const { error } = await supabase.from('weights').upsert(weightToRow(userId, entry), { onConflict: 'user_id,date' });
+    const { error } = await withRetry(() =>
+      supabase.from('weights').upsert(weightToRow(userId, entry), { onConflict: 'user_id,date' })
+    );
     if (error) console.error('Failed to save weight', error);
     return !error;
   },
 
   deleteWeight: async (userId: string, dateKey: string): Promise<boolean> => {
-    const { error } = await supabase.from('weights').delete().eq('user_id', userId).eq('date', dateKey);
+    const { error } = await withRetry(() => supabase.from('weights').delete().eq('user_id', userId).eq('date', dateKey));
     if (error) console.error('Failed to delete weight', error);
     return !error;
   },
 
   getSettings: async (userId: string): Promise<Settings> => {
-    const { data, error } = await supabase.from('settings').select('*').eq('user_id', userId).maybeSingle();
+    const { data, error } = await withRetry(() => supabase.from('settings').select('*').eq('user_id', userId).maybeSingle());
     if (error) {
       console.error('Failed to load settings', error);
       throw error;
@@ -244,13 +271,15 @@ export const storage = {
   },
 
   setSettings: async (userId: string, s: Settings): Promise<boolean> => {
-    const { error } = await supabase.from('settings').upsert(settingsToRow(userId, s), { onConflict: 'user_id' });
+    const { error } = await withRetry(() =>
+      supabase.from('settings').upsert(settingsToRow(userId, s), { onConflict: 'user_id' })
+    );
     if (error) console.error('Failed to save settings', error);
     return !error;
   },
 
   getProfile: async (userId: string): Promise<Profile> => {
-    const { data, error } = await supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle();
+    const { data, error } = await withRetry(() => supabase.from('profiles').select('*').eq('user_id', userId).maybeSingle());
     if (error) {
       console.error('Failed to load profile', error);
       throw error;
@@ -259,7 +288,9 @@ export const storage = {
   },
 
   setProfile: async (userId: string, p: Profile): Promise<boolean> => {
-    const { error } = await supabase.from('profiles').upsert(profileToRow(userId, p), { onConflict: 'user_id' });
+    const { error } = await withRetry(() =>
+      supabase.from('profiles').upsert(profileToRow(userId, p), { onConflict: 'user_id' })
+    );
     if (error) console.error('Failed to save profile', error);
     return !error;
   },
@@ -267,32 +298,36 @@ export const storage = {
   importBackup: async (userId: string, payload: BackupPayload): Promise<boolean> => {
     // Replace all of this user's rows with the backup's contents.
     let ok = true;
-    const del1 = await supabase.from('meals').delete().eq('user_id', userId);
+    const del1 = await withRetry(() => supabase.from('meals').delete().eq('user_id', userId));
     if (del1.error) { console.error('Failed to clear meals before import', del1.error); ok = false; }
-    const del2 = await supabase.from('weights').delete().eq('user_id', userId);
+    const del2 = await withRetry(() => supabase.from('weights').delete().eq('user_id', userId));
     if (del2.error) { console.error('Failed to clear weights before import', del2.error); ok = false; }
     if (payload.meals?.length) {
       const rows = payload.meals.map((m) => mealToRow(userId, m));
       for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
-        const { error } = await supabase.from('meals').insert(batch);
+        const { error } = await withRetry(() => supabase.from('meals').insert(batch));
         if (error) { console.error('Failed to import meals', error); ok = false; }
       }
     }
     if (payload.weights?.length) {
       const rows = payload.weights.map((w) => weightToRow(userId, w));
       for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
-        const { error } = await supabase.from('weights').insert(batch);
+        const { error } = await withRetry(() => supabase.from('weights').insert(batch));
         if (error) { console.error('Failed to import weights', error); ok = false; }
       }
     }
-    const s = await supabase.from('settings').upsert(
-      settingsToRow(userId, { ...DEFAULT_SETTINGS, ...payload.settings }),
-      { onConflict: 'user_id' }
+    const s = await withRetry(() =>
+      supabase.from('settings').upsert(
+        settingsToRow(userId, { ...DEFAULT_SETTINGS, ...payload.settings }),
+        { onConflict: 'user_id' }
+      )
     );
     if (s.error) { console.error('Failed to import settings', s.error); ok = false; }
-    const p = await supabase.from('profiles').upsert(
-      profileToRow(userId, { ...DEFAULT_PROFILE, ...payload.profile }),
-      { onConflict: 'user_id' }
+    const p = await withRetry(() =>
+      supabase.from('profiles').upsert(
+        profileToRow(userId, { ...DEFAULT_PROFILE, ...payload.profile }),
+        { onConflict: 'user_id' }
+      )
     );
     if (p.error) { console.error('Failed to import profile', p.error); ok = false; }
     return ok;
@@ -300,13 +335,13 @@ export const storage = {
 
   clearAll: async (userId: string): Promise<boolean> => {
     let ok = true;
-    const r1 = await supabase.from('meals').delete().eq('user_id', userId);
+    const r1 = await withRetry(() => supabase.from('meals').delete().eq('user_id', userId));
     if (r1.error) { console.error('Failed to clear meals', r1.error); ok = false; }
-    const r2 = await supabase.from('weights').delete().eq('user_id', userId);
+    const r2 = await withRetry(() => supabase.from('weights').delete().eq('user_id', userId));
     if (r2.error) { console.error('Failed to clear weights', r2.error); ok = false; }
-    const r3 = await supabase.from('settings').delete().eq('user_id', userId);
+    const r3 = await withRetry(() => supabase.from('settings').delete().eq('user_id', userId));
     if (r3.error) { console.error('Failed to clear settings', r3.error); ok = false; }
-    const r4 = await supabase.from('profiles').delete().eq('user_id', userId);
+    const r4 = await withRetry(() => supabase.from('profiles').delete().eq('user_id', userId));
     if (r4.error) { console.error('Failed to clear profile', r4.error); ok = false; }
     return ok;
   },
