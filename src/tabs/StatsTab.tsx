@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { rangeKeys, formatShortDate, toKey } from '@/lib/dateUtils';
+import { kgToUnit } from '@/lib/units';
 import { CalorieLineChart } from '@/components/CalorieLineChart';
 import { MacroBar } from '@/components/MacroBar';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
@@ -54,6 +55,11 @@ export function StatsTab() {
   const latestWeight = weightSeries[weightSeries.length - 1];
   const firstWeight = weightSeries[0];
   const weightDelta = latestWeight && firstWeight ? latestWeight.weight - firstWeight.weight : 0;
+
+  const weightChartData = useMemo(() => weightSeries.map((w) => ({
+    label: formatShortDate(w.date),
+    value: Number(kgToUnit(w.weight, settings.weightUnit).toFixed(1)),
+  })), [weightSeries, settings.weightUnit]);
 
   return (
     <div className="px-5 pt-6 pb-4">
@@ -120,17 +126,20 @@ export function StatsTab() {
         </div>
         <p className="text-xs text-gray-400 mb-3">Change over the selected range</p>
         {weightSeries.length > 0 ? (
-          <div className="flex items-end justify-between">
-            <div>
-              <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                {latestWeight ? (settings.weightUnit === 'lb' ? latestWeight.weight * 2.2046 : latestWeight.weight).toFixed(1) : '—'}
-              </span>
-              <span className="text-sm text-gray-400 ml-1">{settings.weightUnit}</span>
+          <>
+            <CalorieLineChart data={weightChartData} color="#3B82F6" height={140} />
+            <div className="flex items-end justify-between mt-4 pt-3 border-t border-gray-50 dark:border-gray-800">
+              <div>
+                <span className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {latestWeight ? kgToUnit(latestWeight.weight, settings.weightUnit).toFixed(1) : '—'}
+                </span>
+                <span className="text-sm text-gray-400 ml-1">{settings.weightUnit}</span>
+              </div>
+              <div className={`text-sm font-semibold ${weightDelta <= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
+                {weightDelta > 0 ? '+' : ''}{kgToUnit(weightDelta, settings.weightUnit).toFixed(1)} {settings.weightUnit}
+              </div>
             </div>
-            <div className={`text-sm font-semibold ${weightDelta <= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
-              {weightDelta > 0 ? '+' : ''}{(settings.weightUnit === 'lb' ? weightDelta * 2.2046 : weightDelta).toFixed(1)} {settings.weightUnit}
-            </div>
-          </div>
+          </>
         ) : (
           <p className="text-sm text-gray-400">No weight entries in this range.</p>
         )}
