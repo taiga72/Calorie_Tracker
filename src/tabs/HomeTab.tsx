@@ -4,13 +4,11 @@ import { toKey, formatHeaderDate, relativeDayLabel } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { LogModal } from '@/modals/LogModal';
-import { CoachInsightCard } from '@/components/CoachInsightCard';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
-import { getDailyQuote } from '@/data/quotes';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const MEAL_ICON: Record<string, typeof Coffee> = {
@@ -21,6 +19,7 @@ export function HomeTab() {
   const { getDay, settings, addMeal, deleteMeal, profile, weights, refresh, refreshing } = useStore();
   const { requestUndo } = useUndoToast();
   const [editing, setEditing] = useState<MealEntry | null>(null);
+  const [weightOpen, setWeightOpen] = useState(false);
   const todayKey = toKey(new Date());
   const day = getDay(todayKey);
   const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
@@ -35,7 +34,6 @@ export function HomeTab() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const displayName = profile.name.trim() || 'Friend';
-  const dailyQuote = getDailyQuote();
 
   const mealsByType = MEAL_ORDER.map((type) => ({
     type, meals: day.meals.filter((m) => m.mealType === type),
@@ -58,11 +56,6 @@ export function HomeTab() {
           <p className="text-sm text-gray-400 font-medium truncate">{formatHeaderDate(new Date())}</p>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5 truncate">{greeting}, {displayName}</h1>
         </div>
-      </div>
-
-      {/* Smart Coach Insight */}
-      <div className="mt-4">
-        <CoachInsightCard />
       </div>
 
       {/* Balanced Dashboard Grid (Calories Left, Weight + Macros Right) */}
@@ -110,8 +103,12 @@ export function HomeTab() {
         {/* Right Column: Today's Weight + Today's Macros Stacked */}
         <div className="flex flex-col gap-3 justify-between">
           
-          {/* Top Half: Today's Weight */}
-          <div className="bg-blue-600 rounded-3xl p-3.5 shadow-sm text-white flex flex-col justify-between">
+          {/* Top Half: Latest Weight — tap to log today's weight */}
+          <button
+            onClick={() => setWeightOpen(true)}
+            aria-label="Log weight"
+            className="bg-blue-600 rounded-3xl p-3.5 shadow-sm text-white flex flex-col justify-between text-left active:scale-[.98] transition-transform"
+          >
             <div className="flex items-center justify-between">
               <span className="text-[10px] font-bold tracking-wider text-blue-100">LATEST WEIGHT</span>
               <Scale size={15} className="text-blue-100" />
@@ -134,7 +131,7 @@ export function HomeTab() {
             <span className="text-[10px] text-blue-100 block">
               Goal {fmtWeight(settings.goalWeight, settings.weightUnit, 0)}
             </span>
-          </div>
+          </button>
 
           {/* Bottom Half: Today's Macros (Compact Font Layout) */}
           <div className="bg-white dark:bg-gray-900 rounded-3xl p-3 shadow-sm border border-gray-50 dark:border-gray-800 flex-1 flex flex-col justify-between">
@@ -235,13 +232,8 @@ export function HomeTab() {
         </div>
       )}
 
-      {/* Total banner */}
-      <div className="mt-4 bg-gray-900 rounded-2xl p-4 flex items-center justify-between text-white">
-        <span className="text-sm font-medium text-gray-300">Total today</span>
-        <span className="text-lg font-bold">{Math.round(day.totalCalories)} kcal</span>
-      </div>
-
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
+      <LogModal open={weightOpen} onClose={() => setWeightOpen(false)} weightDate={todayKey} initialMode="weight" />
     </div>
     </PullToRefresh>
   );

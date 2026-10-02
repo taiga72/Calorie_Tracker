@@ -16,7 +16,7 @@ export function calculateStreak(meals: MealEntry[]): StreakResult {
   const todayKey = toKey(today);
   const todayLogged = dates.has(todayKey);
 
-  let cursor = new Date(today);
+  const cursor = new Date(today);
   if (!todayLogged) {
     cursor.setDate(cursor.getDate() - 1);
   }

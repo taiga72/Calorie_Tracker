@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
+import { getFrequentMeals, type FrequentMeal } from '@/lib/frequentMeals';
 import type { MealType, MealEntry, FoodItem } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown } from 'lucide-react';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, History } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
@@ -43,7 +44,7 @@ interface LogModalProps {
 }
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
-  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
+  const { settings, meals, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
   const { requestUndo } = useUndoToast();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
@@ -274,6 +275,25 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     : targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log';
 
   const editTotals = sumItems(editItems);
+
+  const frequentMeals = useMemo(() => getFrequentMeals(meals), [meals]);
+
+  // Re-logs a past meal straight from history — no Gemini call. It lands in
+  // the normal result view so it can still be reviewed (or redone) before saving.
+  const onPickFrequent = (fm: FrequentMeal) => {
+    const t = fm.template;
+    setError(null);
+    setResult({
+      mealType: mealType === 'auto' ? t.mealType : mealType,
+      items: t.items.map((i) => ({ ...i })),
+      calories: t.calories,
+      protein: t.protein,
+      carbs: t.carbs,
+      fat: t.fat,
+      fiber: t.fiber,
+      reasoning: t.reasoning,
+    });
+  };
 
   return (
     <Modal open={open} onClose={close} title={title}>
@@ -533,6 +553,28 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         ) : (
           /* ---- Input view ---- */
           <div>
+            {frequentMeals.length > 0 && (
+              <div className="mb-4">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <History size={13} className="text-gray-400" />
+                  <p className="text-xs font-semibold text-gray-400">Frequent meals · no AI needed</p>
+                </div>
+                <div className="space-y-1.5">
+                  {frequentMeals.map((fm) => (
+                    <button
+                      key={fm.key}
+                      onClick={() => onPickFrequent(fm)}
+                      className="w-full flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl px-3 py-2.5 text-left active:scale-[.99] transition-transform"
+                    >
+                      <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{fm.label}</span>
+                      <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(fm.template.calories)} kcal</span>
+                      <span className="text-[10px] text-gray-400 flex-shrink-0">{fm.count}×</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Input type toggle */}
             <div className="flex gap-2 mb-3">
               <InputToggle active={foodInput !== 'image'} onClick={() => setFoodInput(text.trim() || imageB64s.length > 0 ? 'both' : 'text')} Icon={Type} label="Text" />
