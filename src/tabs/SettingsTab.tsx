@@ -19,7 +19,7 @@ import {
 
 export function SettingsTab() {
   const {
-    settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, exportBackup,
+    settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
     lastSyncedAt, refreshing, refresh, online, pendingCount, pinsSyncEnabled,
   } = useStore();
   const { user, signOut } = useAuth();
@@ -149,8 +149,15 @@ export function SettingsTab() {
     setTimeout(() => setSaved(false), 1800);
   };
 
-  const onExportJson = () => {
-    const payload = exportBackup();
+  const [exporting, setExporting] = useState(false);
+
+  const onExportJson = async () => {
+    // Photos load on demand, so fetch any not loaded yet: the backup is the
+    // same complete file as before.
+    setExporting(true);
+    const { payload, missingPhotos } = await prepareExport();
+    setExporting(false);
+    if (missingPhotos && !window.confirm("Some meal photos couldn't be downloaded (you may be offline). Export the backup without them?")) return;
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -484,7 +491,7 @@ export function SettingsTab() {
           Back up your full data for transferring between devices, or export meal logs as a CSV for Google Sheets or Excel.
         </p>
         <div className="space-y-2.5">
-          <ActionBtn onClick={onExportJson} Icon={Download} label="Export Backup (JSON)" sub="Full state — restore on any device" />
+          <ActionBtn onClick={onExportJson} Icon={Download} label={exporting ? 'Preparing backup…' : 'Export Backup (JSON)'} sub="Full state — restore on any device" disabled={exporting} />
           <input
             ref={fileRef}
             type="file"

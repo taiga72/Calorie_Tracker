@@ -38,6 +38,16 @@ interface MealRow {
   created_at: number;
 }
 
+const MEAL_COLUMNS_WITHOUT_PHOTOS = 'id,date,meal_type,items,calories,protein,carbs,fat,fiber,reasoning,created_at';
+// Keeps each photo request to a few MB at most.
+const PHOTO_BATCH = 40;
+
+export interface MealPhotos {
+  id: string;
+  imageData?: string;
+  imageDatas?: string[];
+}
+
 function rowToMeal(row: MealRow): MealEntry {
   return {
     id: row.id,
@@ -214,9 +224,17 @@ const RETRY_DELAY_MS = 400;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-async function withRetry<T extends { error: unknown }>(fn: () => PromiseLike<T>): Promise<T> {
+// A 4xx (missing table, RLS rejection, bad request) will fail the same way
+// every time, so retrying only delays the inevitable — by over a second.
+function isTransient(result: { error: unknown; status?: number }): boolean {
+  const status = result.status;
+  if (status === undefined || status === 0) return true; // network failure
+  return status >= 500 || status === 408 || status === 429;
+}
+
+async function withRetry<T extends { error: unknown; status?: number }>(fn: () => PromiseLike<T>): Promise<T> {
   let result = await fn();
-  for (let attempt = 1; attempt < RETRY_ATTEMPTS && result.error; attempt++) {
+  for (let attempt = 1; attempt < RETRY_ATTEMPTS && result.error && isTransient(result); attempt++) {
     await sleep(RETRY_DELAY_MS * attempt);
     result = await fn();
   }
@@ -249,11 +267,16 @@ function batchRowsBySize<T>(rows: T[], maxBytes: number): T[][] {
 }
 
 export const storage = {
+  /**
+   * Meals without their photos. Photos are stored inline as base64 and are
+   * most of the payload (tens of MB for a long history), so they're fetched
+   * separately and only where needed — see getMealPhotos.
+   */
   getMeals: async (userId: string): Promise<MealEntry[]> => {
     const { data, error } = await withRetry(() =>
       supabase
         .from('meals')
-        .select('*')
+        .select(MEAL_COLUMNS_WITHOUT_PHOTOS)
         .eq('user_id', userId)
         .order('created_at', { ascending: false })
     );
@@ -262,6 +285,30 @@ export const storage = {
       throw error;
     }
     return ((data as MealRow[] | null) ?? []).map(rowToMeal);
+  },
+
+  /** Photos for the given meals (only those that have any). */
+  getMealPhotos: async (userId: string, ids: string[]): Promise<MealPhotos[]> => {
+    const out: MealPhotos[] = [];
+    for (let i = 0; i < ids.length; i += PHOTO_BATCH) {
+      const batch = ids.slice(i, i + PHOTO_BATCH);
+      const { data, error } = await withRetry(() =>
+        supabase
+          .from('meals')
+          .select('id,image_data,image_datas')
+          .eq('user_id', userId)
+          .in('id', batch)
+          .or('image_data.not.is.null,image_datas.not.is.null')
+      );
+      if (error) {
+        console.error('Failed to load meal photos', error);
+        throw error;
+      }
+      for (const row of (data as Pick<MealRow, 'id' | 'image_data' | 'image_datas'>[] | null) ?? []) {
+        out.push({ id: row.id, imageData: row.image_data ?? undefined, imageDatas: row.image_datas ?? undefined });
+      }
+    }
+    return out;
   },
 
   insertMeal: async (userId: string, meal: MealEntry): Promise<boolean> => {

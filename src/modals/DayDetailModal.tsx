@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
 import { fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
@@ -21,13 +21,19 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
-  const { getDay, settings, addMeal, deleteMeal } = useStore();
+  const { getDay, settings, addMeal, deleteMeal, loadPhotos } = useStore();
   const { requestUndo } = useUndoToast();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
   const open = dateKey !== null;
   const day = dateKey ? getDay(dateKey) : null;
+  // Only recent photos are loaded up front; older days fetch theirs here.
+  const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
+  useEffect(() => {
+    if (mealIdsKey) void loadPhotos(mealIdsKey.split(','));
+  }, [mealIdsKey, loadPhotos]);
+
   const mealsByType = day ? MEAL_ORDER.map((type) => ({
     type, meals: day.meals.filter((m) => m.mealType === type),
   })).filter((g) => g.meals.length > 0) : [];

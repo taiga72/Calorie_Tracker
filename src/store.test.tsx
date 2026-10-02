@@ -6,9 +6,12 @@ import type { BackupPayload } from '@/lib/storage';
 
 const TEST_USER_ID = 'test-user';
 
+let authStatus: 'pending' | 'verified' | 'offline' = 'verified';
+
 vi.mock('@/auth', () => ({
   useAuth: () => ({
     user: { id: TEST_USER_ID },
+    status: authStatus,
     session: null,
     loading: false,
     signIn: vi.fn(),
@@ -45,7 +48,11 @@ vi.mock('@/lib/storage', () => ({
   DEFAULT_SETTINGS,
   DEFAULT_PROFILE,
   storage: {
-    getMeals: vi.fn(async () => db.meals),
+    // Like the real query: meals come back without their photo columns.
+    getMeals: vi.fn(async () => db.meals.map(({ imageData: _a, imageDatas: _b, ...rest }) => rest)),
+    getMealPhotos: vi.fn(async (_userId: string, ids: string[]) => db.meals
+      .filter((m) => ids.includes(m.id) && (m.imageData || m.imageDatas))
+      .map((m) => ({ id: m.id, imageData: m.imageData, imageDatas: m.imageDatas }))),
     insertMeal: vi.fn(async (_userId: string, meal: MealEntry) => {
       db.meals = [meal, ...db.meals.filter((m) => m.id !== meal.id)];
       return true;
@@ -138,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   setOnline(true);
+  authStatus = 'verified';
 });
 
 describe('useStore outside a provider', () => {
@@ -586,5 +594,90 @@ describe('pinned meals', () => {
     expect(result.current.pinsSyncEnabled).toBe(false);
     expect(result.current.syncError).toBeNull();
     vi.mocked(storage.getPinnedMeals).mockReset();
+  });
+});
+
+describe('meal photos', () => {
+  const photoMeal = (id: string, daysAgo: number): MealEntry => {
+    const d = new Date();
+    d.setDate(d.getDate() - daysAgo);
+    return { ...emptyMeal({ date: toKey(d) }), id, imageDatas: [`data:${id}`], createdAt: 1 };
+  };
+
+  it('loads meals first, then fills in photos for recent meals in the background', async () => {
+    db.meals = [photoMeal('recent', 2), photoMeal('old', 90)];
+    const { result } = await renderStore();
+
+    await waitFor(() => expect(result.current.meals.find((m) => m.id === 'recent')?.imageDatas).toEqual(['data:recent']));
+    expect(storage.getMealPhotos).toHaveBeenCalledWith(TEST_USER_ID, ['recent']);
+    // Older photos aren't downloaded until that day is opened.
+    expect(result.current.meals.find((m) => m.id === 'old')?.imageDatas).toBeUndefined();
+
+    await act(async () => { await result.current.loadPhotos(['old']); });
+    expect(result.current.meals.find((m) => m.id === 'old')?.imageDatas).toEqual(['data:old']);
+  });
+
+  it('does not download photos again on the next sync', async () => {
+    db.meals = [photoMeal('recent', 1)];
+    const { result } = await renderStore();
+    await waitFor(() => expect(result.current.meals[0].imageDatas).toBeDefined());
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(storage.getMealPhotos).toHaveBeenCalledTimes(1);
+    expect(result.current.meals[0].imageDatas).toEqual(['data:recent']);
+  });
+
+  it('keeps photos of a meal added on this device across a sync', async () => {
+    const { result } = await renderStore();
+    act(() => { result.current.addMeal(emptyMeal({ imageDatas: ['data:new'] })); });
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.meals[0].imageDatas).toEqual(['data:new']);
+  });
+
+  it('includes every photo in a backup export, fetching any not loaded yet', async () => {
+    db.meals = [photoMeal('recent', 1), photoMeal('old', 200)];
+    const { result } = await renderStore();
+
+    let exported!: Awaited<ReturnType<typeof result.current.prepareExport>>;
+    await act(async () => { exported = await result.current.prepareExport(); });
+
+    expect(exported.missingPhotos).toBe(false);
+    expect(exported.payload.meals.map((m) => m.imageDatas)).toEqual([['data:recent'], ['data:old']]);
+  });
+
+  it('reports missing photos when they cannot be fetched for an export', async () => {
+    db.meals = [photoMeal('old', 200)];
+    const { result } = await renderStore();
+    vi.mocked(storage.getMealPhotos).mockRejectedValueOnce(new Error('offline'));
+
+    let exported!: Awaited<ReturnType<typeof result.current.prepareExport>>;
+    await act(async () => { exported = await result.current.prepareExport(); });
+    expect(exported.missingPhotos).toBe(true);
+  });
+});
+
+describe('before the session is confirmed', () => {
+  it('shows the cache but does not touch the server until verified', async () => {
+    db.meals = [{ ...emptyMeal({ calories: 321 }), id: 'cached', createdAt: 1 }];
+    const first = await renderStore();
+    await waitFor(() => expect(localStorage.getItem(`calorie_tracker_cache_${TEST_USER_ID}`)).not.toBeNull(), { timeout: 2000 });
+    first.unmount();
+    vi.clearAllMocks();
+
+    authStatus = 'pending';
+    const second = renderHook(() => useStore(), { wrapper: ({ children }) => <StoreProvider>{children}</StoreProvider> });
+
+    expect(second.result.current.loading).toBe(false);
+    expect(second.result.current.meals.map((m) => m.id)).toEqual(['cached']);
+    act(() => { second.result.current.addMeal(emptyMeal({ calories: 50 })); });
+    expect(storage.getMeals).not.toHaveBeenCalled();
+    expect(storage.insertMeal).not.toHaveBeenCalled();
+    expect(second.result.current.pendingCount).toBe(1);
+
+    authStatus = 'verified';
+    second.rerender();
+    await waitFor(() => expect(storage.insertMeal).toHaveBeenCalled());
+    await waitFor(() => expect(storage.getMeals).toHaveBeenCalled());
   });
 });

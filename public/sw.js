@@ -2,6 +2,7 @@
 // (data comes from the app's own offline cache) and shows reminder
 // notifications. Supabase/Gemini requests are never touched.
 const CACHE = 'calorie-tracker-shell-v1';
+const NAVIGATION_TIMEOUT_MS = 3000;
 
 self.addEventListener('install', () => {
   self.skipWaiting();
@@ -21,18 +22,24 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Pages: always try the network first so a new deploy shows up right away.
+  // Pages: try the network first so a new deploy shows up right away — but
+  // on a weak connection don't make the app wait on it: after a few seconds
+  // the cached copy is used (the network copy still refreshes the cache).
   if (request.mode === 'navigate') {
+    const network = fetch(request).then((res) => {
+      if (res.ok) {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put('/', copy));
+      }
+      return res;
+    });
+    const cachedAfterTimeout = new Promise((resolve) => setTimeout(resolve, NAVIGATION_TIMEOUT_MS))
+      .then(() => caches.match('/'));
     event.respondWith(
-      fetch(request)
-        .then((res) => {
-          if (res.ok) {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put('/', copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('/').then((r) => r || Response.error())),
+      Promise.race([network.catch(() => null), cachedAfterTimeout])
+        .then((res) => res || caches.match('/'))
+        .then((res) => res || network)
+        .catch(() => Response.error()),
     );
     return;
   }
