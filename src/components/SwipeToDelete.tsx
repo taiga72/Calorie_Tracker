@@ -78,7 +78,9 @@ export function SwipeToDelete({ onDelete, children, label = 'Delete' }: SwipeToD
 
   return (
     <div className="relative overflow-hidden">
-      <div className="absolute inset-y-0 right-0 flex" style={{ width: REVEAL_PX }}>
+      {/* Hidden while the row is at rest, so it can't peek through the
+          anti-aliased edge of a rounded row (or be tabbed to unseen). */}
+      <div className="absolute inset-y-0 right-0 flex" style={{ width: REVEAL_PX, visibility: translateX < 0 ? 'visible' : 'hidden' }}>
         <button
           onClick={onDelete}
           className="flex-1 bg-red-500 text-white flex items-center justify-center active:bg-red-600 transition-colors"

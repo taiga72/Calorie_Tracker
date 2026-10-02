@@ -6,6 +6,9 @@ import { CalorieRing } from '@/components/CalorieRing';
 import { LogModal } from '@/modals/LogModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { PinMealButton } from '@/components/PinMealButton';
+import { useGoalForecast } from '@/lib/useGoalForecast';
+import { formatForecastDate } from '@/lib/forecast';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
@@ -30,6 +33,7 @@ export function HomeTab() {
   // recent one logged — not necessarily today's, which is what the card
   // should actually show (see "why is the app not showing the saved weight").
   const latestWeight = weights.length > 0 ? weights[weights.length - 1] : undefined;
+  const forecast = useGoalForecast();
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -130,6 +134,7 @@ export function HomeTab() {
             </div>
             <span className="text-[10px] text-blue-100 block">
               Goal {fmtWeight(settings.goalWeight, settings.weightUnit, 0)}
+              {forecast.status === 'on-track' && <> · by ~{formatForecastDate(forecast.date, false)}</>}
             </span>
           </button>
 
@@ -218,6 +223,7 @@ export function HomeTab() {
                               {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
                             </p>
                           </div>
+                          <PinMealButton meal={m} />
                           <button onClick={() => setEditing(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
                             <Pencil size={14} />
                           </button>

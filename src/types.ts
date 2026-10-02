@@ -81,3 +81,17 @@ export interface Profile {
 }
 
 export type TabKey = 'home' | 'stats' | 'calendar' | 'settings';
+
+/** A meal saved for one-tap re-logging (no AI call). Photos are not kept. */
+export interface PinnedMeal {
+  id: string;
+  name: string;
+  mealType: MealType;
+  items: FoodItem[];
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  createdAt: number;
+}

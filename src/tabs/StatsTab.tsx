@@ -4,6 +4,7 @@ import { rangeKeys, formatShortDate, toKey } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
 import { CalorieLineChart } from '@/components/CalorieLineChart';
 import { MacroBar } from '@/components/MacroBar';
+import { GoalForecastCard, AdaptiveTargetCard } from '@/components/GoalInsights';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
 
 type Range = '7d' | '30d' | '3m' | '1y';
@@ -79,6 +80,12 @@ export function StatsTab() {
             {r.label}
           </button>
         ))}
+      </div>
+
+      {/* Goal insights (independent of the selected range) */}
+      <div className="space-y-4 mt-5">
+        <GoalForecastCard />
+        <AdaptiveTargetCard />
       </div>
 
       {/* Calories trend */}

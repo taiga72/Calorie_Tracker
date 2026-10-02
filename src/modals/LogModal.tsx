@@ -1,14 +1,14 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
-import { getFrequentMeals, loadHiddenFrequentMeals, saveHiddenFrequentMeals, type FrequentMeal } from '@/lib/frequentMeals';
+import { findDuplicatePin, pinFromMeal } from '@/lib/pinnedMeals';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
-import type { MealType, MealEntry, FoodItem } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, History } from 'lucide-react';
+import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
@@ -45,7 +45,7 @@ interface LogModalProps {
 }
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
-  const { settings, meals, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights } = useStore();
+  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights, pinned, pinMeal, unpinMeal, restorePin } = useStore();
   const { requestUndo } = useUndoToast();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
@@ -62,6 +62,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const [rateLimitSecs, setRateLimitSecs] = useState<number | null>(null);
   const [result, setResult] = useState<ParsedMeal | null>(null);
   const [weightVal, setWeightVal] = useState('');
+  // Set when the result came from a pin, so "Pin this meal" isn't offered again.
+  const [fromPin, setFromPin] = useState(false);
+  const [pinOnSave, setPinOnSave] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Edit-mode fields
@@ -110,7 +113,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     setText(''); setImagePreviews([]); setImageB64s([]);
     setMealType('auto'); setError(null); setResult(null);
     setFoodInput('text'); setWeightVal(''); setRateLimitSecs(null);
-    setEditItems([]);
+    setEditItems([]); setFromPin(false); setPinOnSave(false);
   };
 
   const close = () => { reset(); onClose(); };
@@ -145,6 +148,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     try {
       const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64s.length > 0 ? imageB64s : undefined);
       if (mealType !== 'auto') parsed.mealType = mealType;
+      setFromPin(false);
       setResult(parsed);
     } catch (e) {
       if (e instanceof RateLimitError) {
@@ -161,6 +165,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const onSave = () => {
     if (!result) return;
+    if (pinOnSave) pinMeal(pinFromMeal(result));
     addMeal({
       date: targetDate || toKey(new Date()),
       mealType: result.mealType,
@@ -277,38 +282,31 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const editTotals = sumItems(editItems);
 
-  const [hiddenFrequent, setHiddenFrequent] = useState(loadHiddenFrequentMeals);
-  const frequentMeals = useMemo(() => getFrequentMeals(meals, { hidden: hiddenFrequent }), [meals, hiddenFrequent]);
-
-  const updateHiddenFrequent = (next: Set<string>) => {
-    setHiddenFrequent(next);
-    saveHiddenFrequentMeals(next);
+  // Swiping a pin away unpins it everywhere; Undo puts it back.
+  const onUnpin = (pin: PinnedMeal) => {
+    unpinMeal(pin.id);
+    requestUndo('Meal unpinned', () => restorePin(pin));
   };
 
-  // Swiping a frequent meal away hides it (and its merged variants) on this
-  // device; the next most frequent meal moves up into its place.
-  const onHideFrequent = (fm: FrequentMeal) => {
-    const previous = hiddenFrequent;
-    updateHiddenFrequent(new Set([...previous, ...fm.memberKeys]));
-    requestUndo('Removed from frequent meals', () => updateHiddenFrequent(previous));
-  };
-
-  // Re-logs a past meal straight from history — no Gemini call. It lands in
-  // the normal result view so it can still be reviewed (or redone) before saving.
-  const onPickFrequent = (fm: FrequentMeal) => {
-    const t = fm.template;
+  // Re-logs a pinned meal — no Gemini call. It lands in the normal result
+  // view so it can still be reviewed (or redone) before saving.
+  const onPickPinned = (pin: PinnedMeal) => {
     setError(null);
+    setFromPin(true);
+    setPinOnSave(false);
     setResult({
-      mealType: mealType === 'auto' ? t.mealType : mealType,
-      items: t.items.map((i) => ({ ...i })),
-      calories: t.calories,
-      protein: t.protein,
-      carbs: t.carbs,
-      fat: t.fat,
-      fiber: t.fiber,
-      reasoning: t.reasoning,
+      mealType: mealType === 'auto' ? pin.mealType : mealType,
+      items: pin.items.map((i) => ({ ...i })),
+      calories: pin.calories,
+      protein: pin.protein,
+      carbs: pin.carbs,
+      fat: pin.fat,
+      fiber: pin.fiber,
+      reasoning: '',
     });
   };
+
+  const resultAlreadyPinned = !!result && !!findDuplicatePin(pinned, result);
 
   return (
     <Modal open={open} onClose={close} title={title}>
@@ -556,6 +554,30 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <p className="text-[11px] text-gray-400 italic bg-gray-50 dark:bg-gray-800 rounded-xl p-3 mb-4">{result.reasoning}</p>
             )}
 
+            {!fromPin && (
+              resultAlreadyPinned ? (
+                <p className="flex items-center gap-1.5 text-xs text-gray-400 mb-3">
+                  <Pin size={13} className="text-emerald-600" /> Already in your pinned meals
+                </p>
+              ) : (
+                <button
+                  onClick={() => setPinOnSave((v) => !v)}
+                  aria-pressed={pinOnSave}
+                  className={`w-full flex items-center gap-2 rounded-xl px-3 py-2.5 mb-3 text-xs font-semibold border transition-colors ${
+                    pinOnSave
+                      ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+                      : 'bg-white dark:bg-gray-900 border-gray-100 dark:border-gray-800 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  <Pin size={14} className={pinOnSave ? 'fill-current' : ''} />
+                  <span className="flex-1 text-left">Pin this meal for one-tap logging</span>
+                  <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${pinOnSave ? 'border-emerald-600 bg-emerald-600' : 'border-gray-300 dark:border-gray-600'}`}>
+                    {pinOnSave && <Check size={10} className="text-white" strokeWidth={3} />}
+                  </span>
+                </button>
+              )
+            )}
+
             <div className="flex gap-2">
               <button onClick={() => setResult(null)} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm">
                 Redo
@@ -568,30 +590,35 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         ) : (
           /* ---- Input view ---- */
           <div>
-            {frequentMeals.length > 0 && (
-              <div className="mb-4">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <History size={13} className="text-gray-400" />
-                  <p className="text-xs font-semibold text-gray-400">Frequent meals · no AI needed · swipe to remove</p>
-                </div>
-                <div className="space-y-1.5">
-                  {frequentMeals.map((fm) => (
-                    <div key={fm.key} className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
-                      <SwipeToDelete onDelete={() => onHideFrequent(fm)} label="Remove from frequent meals">
+            <div className="mb-4">
+              <div className="flex items-center gap-1.5 mb-2">
+                <Pin size={13} className="text-gray-400" />
+                <p className="text-xs font-semibold text-gray-400">
+                  Pinned meals{pinned.length > 0 ? ' · no AI needed · swipe to unpin' : ''}
+                </p>
+              </div>
+              {pinned.length === 0 ? (
+                <p className="text-xs text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+                  Pin a meal you eat often (tap the pin on any logged meal, or after an estimate) to re-log it here in one tap.
+                </p>
+              ) : (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto no-scrollbar">
+                  {pinned.map((pin) => (
+                    <div key={pin.id} className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
+                      <SwipeToDelete onDelete={() => onUnpin(pin)} label="Unpin meal">
                         <button
-                          onClick={() => onPickFrequent(fm)}
+                          onClick={() => onPickPinned(pin)}
                           className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
                         >
-                          <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{fm.label}</span>
-                          <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(fm.template.calories)} kcal</span>
-                          <span className="text-[10px] text-gray-400 flex-shrink-0">{fm.count}×</span>
+                          <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{pin.name}</span>
+                          <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(pin.calories)} kcal</span>
                         </button>
                       </SwipeToDelete>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Input type toggle */}
             <div className="flex gap-2 mb-3">

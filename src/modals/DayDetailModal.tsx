@@ -5,6 +5,7 @@ import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { PinMealButton } from '@/components/PinMealButton';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
@@ -142,6 +143,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                                     {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
                                   </p>
                                 </div>
+                                <PinMealButton meal={m} />
                                 <button onClick={() => setEditing(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
                                   <Pencil size={14} />
                                 </button>

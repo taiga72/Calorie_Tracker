@@ -40,3 +40,14 @@
   from { transform: translateX(-28px); opacity: 0.4; }
   to { transform: translateX(0); opacity: 1; }
 }
+
+@keyframes popIn {
+  0% { transform: scale(.4); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}

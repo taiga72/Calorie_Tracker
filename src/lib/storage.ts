@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
-import type { MealEntry, WeightEntry, Settings, Profile, MealType } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal } from '@/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -152,6 +152,58 @@ function profileToRow(userId: string, p: Profile) {
   return { user_id: userId, name: p.name, avatar: p.avatar ?? null };
 }
 
+interface PinnedRow {
+  id: string;
+  name: string;
+  meal_type: string;
+  items: PinnedMeal['items'];
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+  created_at: number;
+}
+
+function rowToPinned(row: PinnedRow): PinnedMeal {
+  return {
+    id: row.id,
+    name: row.name,
+    mealType: row.meal_type as MealType,
+    items: row.items ?? [],
+    calories: row.calories,
+    protein: row.protein,
+    carbs: row.carbs,
+    fat: row.fat,
+    fiber: row.fiber,
+    createdAt: row.created_at,
+  };
+}
+
+function pinnedToRow(userId: string, p: PinnedMeal) {
+  return {
+    id: p.id,
+    user_id: userId,
+    name: p.name,
+    meal_type: p.mealType,
+    items: p.items,
+    calories: p.calories,
+    protein: p.protein,
+    carbs: p.carbs,
+    fat: p.fat,
+    fiber: p.fiber,
+    created_at: p.createdAt,
+  };
+}
+
+// The pinned_meals table was added after launch. Until the updated
+// supabase/schema.sql has been run, pins stay on this device instead of
+// failing every load and save.
+function isMissingTable(error: unknown): boolean {
+  const code = (error as { code?: string } | null)?.code;
+  return code === 'PGRST205' || code === '42P01';
+}
+
 // Every Supabase call here is a single shot over the network with no
 // built-in retry, so a brief mobile connectivity blip (switching between
 // wifi/cellular, waking from sleep) fails the whole request outright. A
@@ -213,7 +265,11 @@ export const storage = {
   },
 
   insertMeal: async (userId: string, meal: MealEntry): Promise<boolean> => {
-    const { error } = await withRetry(() => supabase.from('meals').insert(mealToRow(userId, meal)));
+    // An upsert, so replaying a queued insert that already landed (the
+    // response was lost when the connection dropped) doesn't fail.
+    const { error } = await withRetry(() =>
+      supabase.from('meals').upsert(mealToRow(userId, meal), { onConflict: 'id' })
+    );
     if (error) console.error('Failed to save meal', error);
     return !error;
   },
@@ -295,6 +351,37 @@ export const storage = {
     return !error;
   },
 
+  /** Returns null when the pinned_meals table hasn't been created yet. */
+  getPinnedMeals: async (userId: string): Promise<PinnedMeal[] | null> => {
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from('pinned_meals')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+    );
+    if (error) {
+      if (isMissingTable(error)) return null;
+      console.error('Failed to load pinned meals', error);
+      throw error;
+    }
+    return ((data as PinnedRow[] | null) ?? []).map(rowToPinned);
+  },
+
+  upsertPinnedMeal: async (userId: string, pin: PinnedMeal): Promise<boolean> => {
+    const { error } = await withRetry(() =>
+      supabase.from('pinned_meals').upsert(pinnedToRow(userId, pin), { onConflict: 'id' })
+    );
+    if (error && !isMissingTable(error)) console.error('Failed to save pinned meal', error);
+    return !error || isMissingTable(error);
+  },
+
+  deletePinnedMeal: async (userId: string, id: string): Promise<boolean> => {
+    const { error } = await withRetry(() => supabase.from('pinned_meals').delete().eq('user_id', userId).eq('id', id));
+    if (error && !isMissingTable(error)) console.error('Failed to delete pinned meal', error);
+    return !error || isMissingTable(error);
+  },
+
   importBackup: async (userId: string, payload: BackupPayload): Promise<boolean> => {
     // Replace all of this user's rows with the backup's contents.
     let ok = true;
@@ -343,6 +430,8 @@ export const storage = {
     if (r3.error) { console.error('Failed to clear settings', r3.error); ok = false; }
     const r4 = await withRetry(() => supabase.from('profiles').delete().eq('user_id', userId));
     if (r4.error) { console.error('Failed to clear profile', r4.error); ok = false; }
+    const r5 = await withRetry(() => supabase.from('pinned_meals').delete().eq('user_id', userId));
+    if (r5.error && !isMissingTable(r5.error)) { console.error('Failed to clear pinned meals', r5.error); ok = false; }
     return ok;
   },
 };

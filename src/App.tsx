@@ -5,6 +5,10 @@ import { AuthScreen } from '@/components/AuthScreen';
 import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import { ThemeProvider } from '@/lib/theme';
+import { SplashProvider, SplashReady } from '@/components/SplashScreen';
+import { useSplashReady } from '@/lib/splash';
+import { ReminderBanner } from '@/components/Reminders';
+import { useReminders } from '@/lib/useReminders';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
@@ -16,33 +20,35 @@ import { StatsTab } from '@/tabs/StatsTab';
 import { CalendarTab } from '@/tabs/CalendarTab';
 import { SettingsTab } from '@/tabs/SettingsTab';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
-import { Loader2, AlertTriangle, X } from 'lucide-react';
+import { Loader2, AlertTriangle, X, CloudOff, RefreshCw } from 'lucide-react';
 import type { TabKey } from '@/types';
 
 function App() {
   return (
     <ThemeProvider>
-      {isSupabaseConfigured ? (
-        <AuthProvider>
-          <AuthGate />
-        </AuthProvider>
-      ) : (
-        <SupabaseSetupScreen />
-      )}
+      <SplashProvider>
+        {isSupabaseConfigured ? (
+          <AuthProvider>
+            <AuthGate />
+          </AuthProvider>
+        ) : (
+          <>
+            <SplashReady />
+            <SupabaseSetupScreen />
+          </>
+        )}
+      </SplashProvider>
     </ThemeProvider>
   );
 }
 
 function AuthGate() {
   const { user, loading } = useAuth();
+  // The splash covers the auth check; once signed in, AppInner keeps it up
+  // until the data has loaded.
+  useSplashReady(!loading && !user);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center">
-        <Loader2 size={28} className="text-emerald-600 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return null;
 
   if (!user) {
     return <AuthScreen />;
@@ -60,10 +66,18 @@ function AuthGate() {
 function AppInner() {
   const [tab, setTab] = useState<TabKey>('home');
   const [logOpen, setLogOpen] = useState(false);
+  const [logMode, setLogMode] = useState<'food' | 'weight'>('food');
   const [coachOpen, setCoachOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const { meals, profile, loading, syncError, dismissSyncError, refresh, refreshing } = useStore();
+  const { meals, profile, loading, syncError, dismissSyncError, refresh, refreshing, online, pendingCount } = useStore();
+  useSplashReady(!loading);
+  const reminder = useReminders(!loading);
+
+  const openLog = (mode: 'food' | 'weight') => {
+    setLogMode(mode);
+    setLogOpen(true);
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -74,13 +88,7 @@ function AppInner() {
     }
   }, [meals, loading]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center">
-        <Loader2 size={28} className="text-emerald-600 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return null;
 
   return (
     <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] text-gray-900 dark:text-gray-100 max-w-md mx-auto">
@@ -101,6 +109,24 @@ function AppInner() {
           </button>
         </div>
       )}
+      {(!online || pendingCount > 0) && (
+        <div className="sticky top-0 z-40 flex justify-center pt-2 -mb-9 pointer-events-none">
+          <span role="status" className="pointer-events-auto inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900 backdrop-blur animate-[slideDown_.25s_ease-out]">
+            {!online ? (
+              <><CloudOff size={12} /> Offline{pendingCount > 0 ? ` · ${pendingCount} change${pendingCount === 1 ? '' : 's'} saved on this device` : ''}</>
+            ) : (
+              <><RefreshCw size={12} className="animate-spin" /> Syncing {pendingCount} change{pendingCount === 1 ? '' : 's'}…</>
+            )}
+          </span>
+        </div>
+      )}
+      {reminder.active && (
+        <ReminderBanner
+          id={reminder.active}
+          onLog={() => { openLog(reminder.active === 'weighIn' ? 'weight' : 'food'); reminder.dismiss(); }}
+          onDismiss={reminder.dismiss}
+        />
+      )}
       <main className="pb-28">
         {tab === 'home' && <HomeTab />}
         {tab === 'stats' && <StatsTab />}
@@ -108,9 +134,9 @@ function AppInner() {
         {tab === 'settings' && <SettingsTab />}
       </main>
 
-      <FAB onClick={() => setLogOpen(true)} onCoachClick={() => setCoachOpen(true)} />
+      <FAB onClick={() => openLog('food')} onCoachClick={() => setCoachOpen(true)} />
       <BottomNav active={tab} onChange={setTab} />
-      <LogModal open={logOpen} onClose={() => setLogOpen(false)} />
+      <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
       <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />
       <StreakModal
         open={streakOpen}

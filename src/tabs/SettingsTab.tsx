@@ -10,6 +10,7 @@ import type { BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
+import { RemindersSection } from '@/components/RemindersSection';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
@@ -19,7 +20,7 @@ import {
 export function SettingsTab() {
   const {
     settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, exportBackup,
-    lastSyncedAt, refreshing, refresh,
+    lastSyncedAt, refreshing, refresh, online, pendingCount, pinsSyncEnabled,
   } = useStore();
   const { user, signOut } = useAuth();
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
@@ -471,6 +472,8 @@ export function SettingsTab() {
         )}
       </div>
 
+      <RemindersSection />
+
       {/* Backup & Export */}
       <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
         <div className="flex items-center gap-2 mb-3">
@@ -534,6 +537,19 @@ export function SettingsTab() {
         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
         {refreshing ? 'Syncing…' : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)} — tap to sync now` : 'Tap to sync now'}
       </button>
+      {(!online || pendingCount > 0) && (
+        <p className="text-center text-[11px] text-amber-600 dark:text-amber-400 -mt-1">
+          {!online ? 'Offline — ' : ''}
+          {pendingCount > 0
+            ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} saved on this device, waiting to sync`
+            : 'changes will be saved on this device and synced later'}
+        </p>
+      )}
+      {!pinsSyncEnabled && (
+        <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
+          Pinned meals are only on this device. Re-run supabase/schema.sql in Supabase to sync them across devices.
+        </p>
+      )}
 
       <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
 

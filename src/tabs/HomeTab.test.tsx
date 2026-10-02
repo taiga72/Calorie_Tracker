@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { toKey, addDays } from '@/lib/dateUtils';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
-import type { DaySummary, Profile, Settings, WeightEntry } from '@/types';
+import type { DaySummary, MealEntry, PinnedMeal, Profile, Settings, WeightEntry } from '@/types';
 
 const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -18,7 +18,14 @@ const emptyDay = (date: string): DaySummary => ({
 });
 
 let weights: WeightEntry[];
+let pinned: PinnedMeal[];
 const getDay = vi.fn((key: string) => emptyDay(key));
+const pinMeal = vi.fn((m: Omit<PinnedMeal, 'id' | 'createdAt'>) => {
+  const pin = { ...m, id: 'p1', createdAt: 1 };
+  pinned = [pin];
+  return { pin, alreadyPinned: false };
+});
+const unpinMeal = vi.fn();
 
 vi.mock('@/store', () => ({
   useStore: () => ({
@@ -29,6 +36,10 @@ vi.mock('@/store', () => ({
     deleteMeal: vi.fn(),
     profile: DEFAULT_PROFILE,
     weights,
+    pinned,
+    pinMeal,
+    unpinMeal,
+    restorePin: vi.fn(),
     refresh: vi.fn(),
     refreshing: false,
   }),
@@ -42,6 +53,8 @@ function renderHomeTab() {
 
 beforeEach(() => {
   weights = [];
+  pinned = [];
+  vi.clearAllMocks();
   getDay.mockImplementation((key: string) => emptyDay(key));
 });
 
@@ -101,5 +114,34 @@ describe('HomeTab layout', () => {
     renderHomeTab();
     expect(screen.queryByLabelText('Refresh insight')).not.toBeInTheDocument();
     expect(screen.queryByText('Total today')).not.toBeInTheDocument();
+  });
+});
+
+describe('HomeTab pinning a logged meal', () => {
+  const meal: MealEntry = {
+    id: 'm1', date: toKey(new Date()), mealType: 'Breakfast',
+    items: [{ name: 'Oat bowl', calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8 }],
+    calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8, reasoning: '', createdAt: 1,
+  };
+
+  beforeEach(() => {
+    getDay.mockImplementation((key: string) => ({ ...emptyDay(key), meals: [meal], totalCalories: 350 }));
+  });
+
+  it('pins a meal from its row, with undo', () => {
+    renderHomeTab();
+    fireEvent.click(screen.getByLabelText('Pin meal'));
+
+    expect(pinMeal).toHaveBeenCalledWith(expect.objectContaining({ name: 'Oat bowl', calories: 350 }));
+    fireEvent.click(screen.getByText('Undo'));
+    expect(unpinMeal).toHaveBeenCalledWith('p1');
+  });
+
+  it('shows an already-pinned meal as pinned and unpins it on tap', () => {
+    pinned = [{ id: 'p9', name: 'Oat bowl', mealType: 'Breakfast', items: meal.items, calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8, createdAt: 1 }];
+    renderHomeTab();
+
+    fireEvent.click(screen.getByLabelText('Unpin meal'));
+    expect(unpinMeal).toHaveBeenCalledWith('p9');
   });
 });

@@ -1,7 +1,8 @@
 # Supabase setup
 
 1. Create a free project at https://supabase.com (or use an existing one).
-2. In the Supabase dashboard, go to **SQL Editor -> New query**, paste the contents of `schema.sql` in this folder, and run it. This creates the `meals`, `weights`, `settings`, and `profiles` tables with row-level security so each signed-in user can only see their own data.
+2. In the Supabase dashboard, go to **SQL Editor -> New query**, paste the contents of `schema.sql` in this folder, and run it. This creates the `meals`, `weights`, `settings`, `profiles`, and `pinned_meals` tables with row-level security so each signed-in user can only see their own data.
+   - **Already set up before pinned meals existed?** Run `schema.sql` again — it's safe to re-run and only adds what's missing. Until then, pinned meals are kept on each device instead of syncing.
 3. Go to **Project Settings -> API** and copy the **Project URL** and the **anon public** key.
 4. In the app's root, copy `.env.example` to `.env` and fill in:
    ```

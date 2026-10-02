@@ -149,14 +149,18 @@ describe('getMeals', () => {
 });
 
 describe('insertMeal / updateMeal / deleteMeal', () => {
-  it('inserts a row mapped to snake_case for the given user', async () => {
+  it('writes a row mapped to snake_case for the given user, idempotently by id', async () => {
     const { from } = makeFrom({ error: null });
     vi.mocked(supabase.from).mockReturnValue(from as never);
 
     const ok = await storage.insertMeal(USER_ID, meal('m1'));
 
     expect(ok).toBe(true);
-    expect(from.insert).toHaveBeenCalledWith(expect.objectContaining({ id: 'm1', user_id: USER_ID, meal_type: 'Breakfast' }));
+    // An upsert, so replaying a queued offline insert that already landed can't fail.
+    expect(from.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'm1', user_id: USER_ID, meal_type: 'Breakfast' }),
+      { onConflict: 'id' },
+    );
   });
 
   it('updates only the provided fields, scoped by user and meal id', async () => {
@@ -383,7 +387,7 @@ describe('importBackup', () => {
 });
 
 describe('clearAll', () => {
-  it('deletes rows from all four tables for the user, returning true on success', async () => {
+  it('deletes rows from every table for the user, returning true on success', async () => {
     const { from } = makeFrom({ error: null });
     vi.mocked(supabase.from).mockReturnValue(from as never);
 
@@ -394,7 +398,8 @@ describe('clearAll', () => {
     expect(supabase.from).toHaveBeenCalledWith('weights');
     expect(supabase.from).toHaveBeenCalledWith('settings');
     expect(supabase.from).toHaveBeenCalledWith('profiles');
-    expect(from.delete).toHaveBeenCalledTimes(4);
+    expect(supabase.from).toHaveBeenCalledWith('pinned_meals');
+    expect(from.delete).toHaveBeenCalledTimes(5);
     expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
   });
 
@@ -407,5 +412,44 @@ describe('clearAll', () => {
 
     expect(ok).toBe(false);
     spy.mockRestore();
+  });
+});
+
+describe('pinned meals', () => {
+  const pin = {
+    id: 'p1', name: 'Oat bowl', mealType: 'Breakfast' as const, items: [],
+    calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8, createdAt: 5,
+  };
+
+  it('loads pins newest first, mapped from snake_case', async () => {
+    const { from } = makeFrom({
+      data: [{ id: 'p1', name: 'Oat bowl', meal_type: 'Breakfast', items: [], calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8, created_at: 5 }],
+      error: null,
+    });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    expect(await storage.getPinnedMeals(USER_ID)).toEqual([pin]);
+    expect(supabase.from).toHaveBeenCalledWith('pinned_meals');
+    expect(from.node.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('returns null (device-only pins) when the table has not been created yet', async () => {
+    const { from } = makeFrom({ error: { code: 'PGRST205', message: 'missing' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    expect(await runWithFakeTimers(() => storage.getPinnedMeals(USER_ID))).toBeNull();
+    expect(await runWithFakeTimers(() => storage.upsertPinnedMeal(USER_ID, pin))).toBe(true);
+    expect(await runWithFakeTimers(() => storage.deletePinnedMeal(USER_ID, 'p1'))).toBe(true);
+  });
+
+  it('upserts by id and deletes scoped by user', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    expect(await storage.upsertPinnedMeal(USER_ID, pin)).toBe(true);
+    expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1', user_id: USER_ID, meal_type: 'Breakfast' }), { onConflict: 'id' });
+
+    expect(await storage.deletePinnedMeal(USER_ID, 'p1')).toBe(true);
+    expect(from.node.eq).toHaveBeenCalledWith('id', 'p1');
   });
 });
