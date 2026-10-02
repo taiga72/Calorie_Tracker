@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal } from '@/types';
-import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload } from '@/lib/storage';
-import { toKey } from '@/lib/dateUtils';
+import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type MealPhotos } from '@/lib/storage';
+import { addDays, toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import {
@@ -35,6 +35,13 @@ interface StoreValue {
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
   exportBackup: () => BackupPayload;
+  /**
+   * The full backup, photos included: fetches any photos not loaded yet.
+   * `missingPhotos` is true when some couldn't be fetched (e.g. offline).
+   */
+  prepareExport: () => Promise<{ payload: BackupPayload; missingPhotos: boolean }>;
+  /** Loads photos for these meals if they haven't been yet (e.g. opening an older day). */
+  loadPhotos: (mealIds: string[]) => Promise<boolean>;
   getDay: (dateKey: string) => DaySummary;
   syncError: string | null;
   dismissSyncError: () => void;
@@ -63,6 +70,9 @@ const RETRY_INTERVAL_MS = 15_000;
 // Returning to the app re-syncs, but not on every quick app switch.
 const FOREGROUND_SYNC_MIN_GAP_MS = 30_000;
 const SNAPSHOT_DEBOUNCE_MS = 800;
+// Photos for meals this recent are fetched in the background after each
+// sync; older ones only when a day is opened (or for a backup export).
+const RECENT_PHOTO_DAYS = 30;
 
 function runOp(userId: string, op: OutboxOp): Promise<boolean> {
   switch (op.kind) {
@@ -79,8 +89,14 @@ function runOp(userId: string, op: OutboxOp): Promise<boolean> {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, status: authStatus } = useAuth();
   const userId = user?.id;
+  // Until the session is confirmed, show the cache but don't talk to the
+  // server: an unconfirmed (possibly signed-out) session would load an empty
+  // account over the cache, and queued writes would be rejected.
+  const canSync = authStatus === 'verified';
+  const canSyncRef = useRef(canSync);
+  canSyncRef.current = canSync;
 
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [weights, setWeights] = useState<WeightEntry[]>([]);
@@ -104,6 +120,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const current = useRef<Snapshot>({ meals, weights, settings, profile, pinned });
   current.current = { meals, weights, settings, profile, pinned };
 
+  // Photos by meal id, kept apart from the meal list so a sync (which loads
+  // meals without photos) never re-downloads them. A null entry means the
+  // meal was checked and has none.
+  const photos = useRef(new Map<string, MealPhotos | null>());
+  const photosInFlight = useRef(new Set<string>());
+
+  const rememberPhotos = useCallback((m: Pick<MealEntry, 'id' | 'imageData' | 'imageDatas'>) => {
+    if (m.imageData || m.imageDatas?.length) photos.current.set(m.id, { id: m.id, imageData: m.imageData, imageDatas: m.imageDatas });
+  }, []);
+
+  const withPhotos = useCallback((list: MealEntry[]): MealEntry[] => list.map((m) => {
+    const p = photos.current.get(m.id);
+    return p ? { ...m, imageData: p.imageData, imageDatas: p.imageDatas } : m;
+  }), []);
+
+  const fetchPhotos = useCallback(async (uid: string, ids: string[]): Promise<boolean> => {
+    const missing = ids.filter((id) => !photos.current.has(id) && !photosInFlight.current.has(id));
+    if (missing.length === 0) return true;
+    missing.forEach((id) => photosInFlight.current.add(id));
+    try {
+      const found = await storage.getMealPhotos(uid, missing);
+      missing.forEach((id) => { if (!photos.current.has(id)) photos.current.set(id, null); });
+      found.forEach((p) => photos.current.set(p.id, p));
+      if (found.length > 0) {
+        current.current = { ...current.current, meals: withPhotos(current.current.meals) };
+        setMeals((prev) => withPhotos(prev));
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      missing.forEach((id) => photosInFlight.current.delete(id));
+    }
+  }, [withPhotos]);
+
   const persistQueue = useCallback((uid: string, next: QueuedOp[]) => {
     queue.current = next;
     setPendingCount(next.length);
@@ -125,7 +176,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // for the retry timer.
       try {
         let hadFailure = false;
-        while (queue.current.length > 0 && isOnline()) {
+        while (queue.current.length > 0 && isOnline() && canSyncRef.current) {
           const item = queue.current[0];
           const ok = await runOp(uid, item.op);
           if (ok) {
@@ -187,9 +238,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         storage.getPinnedMeals(uid),
       ]);
       const base = current.current;
+      base.meals.forEach(rememberPhotos);
       const failed: string[] = [];
       const next: Snapshot = { ...base };
-      if (m.status === 'fulfilled') next.meals = m.value; else failed.push('meals');
+      if (m.status === 'fulfilled') next.meals = withPhotos(m.value); else failed.push('meals');
       if (w.status === 'fulfilled') next.weights = w.value; else failed.push('weight history');
       if (s.status === 'fulfilled') next.settings = s.value; else failed.push('settings');
       if (p.status === 'fulfilled') next.profile = p.value; else failed.push('profile');
@@ -200,6 +252,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         failed.push('pinned meals');
       }
       applySnapshot(applyPending(next, queue.current));
+      // Thumbnails for recent meals arrive shortly after, without holding up
+      // the data itself.
+      const recentFrom = toKey(addDays(new Date(), -RECENT_PHOTO_DAYS));
+      void fetchPhotos(uid, next.meals.filter((meal) => meal.date >= recentFrom).map((meal) => meal.id));
       if (failed.length === 0) {
         setSyncError((prev) => (prev?.startsWith("Couldn't load") ? null : prev));
         setLastSyncedAt(Date.now());
@@ -211,32 +267,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })();
     syncInFlight.current = run;
     return run.finally(() => { syncInFlight.current = null; });
-  }, [flush, applySnapshot]);
+  }, [flush, applySnapshot, rememberPhotos, withPhotos, fetchPhotos]);
 
   // StoreProvider is only mounted once a user is signed in (see App.tsx), but
   // guard against a transient render before that so hooks stay unconditional.
   useEffect(() => {
     if (!userId) return;
-    let active = true;
     queue.current = loadOutbox(userId);
     setPendingCount(queue.current.length);
     // The last known state opens the app instantly (and offline); the server
     // copy replaces it as soon as it arrives.
     const cached = loadSnapshot(userId);
-    if (cached) {
-      applySnapshot(applyPending(cached, queue.current));
-      setLoading(false);
-      setSyncing(true);
-    } else {
-      setLoading(true);
-    }
+    if (cached) applySnapshot(applyPending(cached, queue.current));
+    setLoading(!cached);
+  }, [userId, applySnapshot]);
+
+  useEffect(() => {
+    if (!userId || !canSync) return;
+    let active = true;
+    setSyncing(true);
     loadAll(userId).then(() => {
       if (!active) return;
       setLoading(false);
       setSyncing(false);
     });
     return () => { active = false; };
-  }, [userId, loadAll, applySnapshot]);
+  }, [userId, canSync, loadAll]);
+
+  // No connection to confirm the session: carry on with what's cached.
+  useEffect(() => {
+    if (authStatus === 'offline') setLoading(false);
+  }, [authStatus]);
 
   // Cache what's on screen for the next (possibly offline) launch.
   useEffect(() => {
@@ -248,7 +309,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Auto-sync: when the app comes back to the foreground or the connection
   // returns, push queued changes and pull anything changed on other devices.
   useEffect(() => {
-    if (!userId) return;
+    if (!userId || !canSync) return;
     const backgroundSync = () => {
       setSyncing(true);
       void loadAll(userId).finally(() => setSyncing(false));
@@ -268,19 +329,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('online', onOnline);
       window.removeEventListener('offline', onOffline);
     };
-  }, [userId, loadAll]);
+  }, [userId, canSync, loadAll]);
 
   // While changes are waiting and we seem to be online, keep retrying.
   useEffect(() => {
-    if (!userId || pendingCount === 0 || !online) return;
+    if (!userId || !canSync || pendingCount === 0 || !online) return;
     const id = setInterval(() => { void flush(userId); }, RETRY_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [userId, pendingCount, online, flush]);
+  }, [userId, canSync, pendingCount, online, flush]);
+
+  const loadPhotos = useCallback<StoreValue['loadPhotos']>(
+    (mealIds) => (userId ? fetchPhotos(userId, mealIds) : Promise.resolve(false)),
+    [userId, fetchPhotos],
+  );
 
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       if (!userId) return;
       const entry: MealEntry = { ...m, id: makeId(), createdAt: Date.now() };
+      rememberPhotos(entry);
       setMeals((prev) => [entry, ...prev]);
       commit({ kind: 'insertMeal', meal: entry });
     };
@@ -293,6 +360,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const updateMeal: StoreValue['updateMeal'] = (id, patch) => {
       if (!userId) return;
+      if (patch.imageData !== undefined || patch.imageDatas !== undefined) {
+        rememberPhotos({ id, imageData: patch.imageData, imageDatas: patch.imageDatas });
+      }
       setMeals((prev) => prev.map((m) => (m.id === id ? { ...m, ...patch } : m)));
       commit({ kind: 'updateMeal', id, patch });
     };
@@ -302,6 +372,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const clearAll: StoreValue['clearAll'] = () => {
       if (!userId) return;
       persistQueue(userId, []);
+      photos.current.clear();
       setMeals([]);
       setWeights([]);
       setSettings(DEFAULT_SETTINGS);
@@ -317,6 +388,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       persistQueue(userId, queue.current.filter((q) => q.op.kind === 'upsertPinned' || q.op.kind === 'deletePinned'));
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
       const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
+      photos.current.clear();
+      (payload.meals ?? []).forEach(rememberPhotos);
       setMeals(payload.meals ?? []);
       setWeights(payload.weights ?? []);
       setSettings(nextSettings);
@@ -334,6 +407,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       settings,
       profile,
     });
+
+    const prepareExport: StoreValue['prepareExport'] = async () => {
+      const ok = await loadPhotos(current.current.meals.map((m) => m.id));
+      return {
+        payload: { ...exportBackup(), meals: current.current.meals },
+        missingPhotos: !ok,
+      };
+    };
 
     const putWeight = (displayValue: number, dateKey: string) => {
       if (!userId) return;
@@ -424,11 +505,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       logWeight, logWeightForDate, deleteWeight,
       updateSettings, updateProfile,
       pinMeal, unpinMeal, restorePin,
-      clearAll, importBackup, exportBackup, getDay,
+      clearAll, importBackup, exportBackup, prepareExport, loadPhotos, getDay,
       syncError, dismissSyncError,
       refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue]);
+  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

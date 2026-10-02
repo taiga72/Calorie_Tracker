@@ -9,18 +9,22 @@ vi.mock('@/lib/supabaseClient', () => ({
 const { storage } = await import('@/lib/storage');
 const { supabase } = await import('@/lib/supabaseClient');
 
-type Result = { data?: unknown; error?: unknown };
+type Result = { data?: unknown; error?: unknown; status?: number };
 
 /** A chainable node that is itself thenable, so `await x.eq(...).eq(...)` resolves. */
 function chainable(result: Result) {
   const node: {
     then: (resolve: (v: Result) => void, reject?: (e: unknown) => void) => Promise<unknown>;
     eq: ReturnType<typeof vi.fn>;
+    in: ReturnType<typeof vi.fn>;
+    or: ReturnType<typeof vi.fn>;
     order: ReturnType<typeof vi.fn>;
     maybeSingle: ReturnType<typeof vi.fn>;
   } = {
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
     eq: vi.fn(() => node),
+    in: vi.fn(() => node),
+    or: vi.fn(() => node),
     order: vi.fn(() => Promise.resolve(result)),
     maybeSingle: vi.fn(() => Promise.resolve(result)),
   };
@@ -114,8 +118,44 @@ describe('retrying transient failures', () => {
   });
 });
 
+describe('not retrying permanent errors', () => {
+  it('gives up immediately on a 4xx, which would fail the same way again', async () => {
+    const { from } = makeFrom({ error: { code: 'PGRST205', message: 'missing' }, status: 404 });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    expect(await storage.getPinnedMeals(USER_ID)).toBeNull();
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+  });
+
+  it('still retries server errors', async () => {
+    const { from } = makeFrom({ error: { message: 'unavailable' }, status: 503 });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await runWithFakeTimers(() => storage.upsertWeight(USER_ID, weight));
+    expect(supabase.from).toHaveBeenCalledTimes(3);
+    spy.mockRestore();
+  });
+});
+
+describe('getMealPhotos', () => {
+  it('fetches only the photo columns for the given meals, in batches', async () => {
+    const { from } = makeFrom({ data: [{ id: 'm1', image_data: null, image_datas: ['data:x'] }], error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    const ids = Array.from({ length: 45 }, (_, i) => `m${i}`);
+
+    const photos = await storage.getMealPhotos(USER_ID, ids);
+
+    expect(from.select).toHaveBeenCalledWith('id,image_data,image_datas');
+    expect(from.node.in).toHaveBeenCalledTimes(2);
+    expect(from.node.in).toHaveBeenNthCalledWith(1, 'id', ids.slice(0, 40));
+    expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
+    expect(photos[0]).toEqual({ id: 'm1', imageData: undefined, imageDatas: ['data:x'] });
+  });
+});
+
 describe('getMeals', () => {
-  it('queries the meals table filtered by user and mapped from snake_case rows', async () => {
+  it('queries the meals table (without the heavy photo columns) filtered by user and mapped from snake_case rows', async () => {
     const { from } = makeFrom({
       data: [{
         id: 'm1', date: '2026-01-01', meal_type: 'Lunch', items: [], calories: 300,
@@ -128,7 +168,7 @@ describe('getMeals', () => {
     const result = await storage.getMeals(USER_ID);
 
     expect(supabase.from).toHaveBeenCalledWith('meals');
-    expect(from.select).toHaveBeenCalledWith('*');
+    expect(from.select).toHaveBeenCalledWith('id,date,meal_type,items,calories,protein,carbs,fat,fiber,reasoning,created_at');
     expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
     expect(from.node.order).toHaveBeenCalledWith('created_at', { ascending: false });
     expect(result).toEqual([{

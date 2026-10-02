@@ -2,9 +2,18 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { isAuthRetryableFetchError, type Session, type User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
 
+/**
+ * - pending: not confirmed yet, but this device's last user is shown from
+ *   the offline cache so the app opens immediately
+ * - verified: a real session — safe to sync
+ * - offline: the session couldn't be refreshed for lack of a connection
+ */
+export type AuthStatus = 'pending' | 'verified' | 'offline';
+
 interface AuthValue {
   session: Session | null;
   user: User | null;
+  status: AuthStatus;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
@@ -24,16 +33,7 @@ function rememberUser(user: User | null) {
   }
 }
 
-/**
- * Opening the app with no connection after the access token expired can't
- * refresh the session, so Supabase reports none — even though the user never
- * signed out. Falling back to the last signed-in user lets the app open from
- * its offline cache (and queue changes); Supabase restores the real session
- * by itself once the connection is back.
- */
-function lastUserIfOffline(error: unknown): User | null {
-  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-  if (!offline && !isAuthRetryableFetchError(error)) return null;
+function readLastUser(): User | null {
   try {
     const raw = localStorage.getItem(LAST_USER_KEY);
     return raw ? (JSON.parse(raw) as User) : null;
@@ -42,28 +42,52 @@ function lastUserIfOffline(error: unknown): User | null {
   }
 }
 
+/**
+ * Opening the app with no connection after the access token expired can't
+ * refresh the session, so Supabase reports none — even though the user never
+ * signed out. Supabase restores the real session by itself once the
+ * connection is back.
+ */
+function isOfflineFailure(error: unknown): boolean {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  return offline || isAuthRetryableFetchError(error);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [offlineUser, setOfflineUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Checking the session can mean a token refresh over the network — slow on
+  // a weak connection. Meanwhile the last user on this device is assumed, so
+  // the app opens from its cache right away (it won't sync until verified).
+  const [provisionalUser, setProvisionalUser] = useState<User | null>(readLastUser);
+  const [status, setStatus] = useState<AuthStatus>('pending');
+  const [loading, setLoading] = useState(() => readLastUser() === null);
 
   useEffect(() => {
     let active = true;
     supabase.auth.getSession().then(({ data, error }) => {
       if (!active) return;
       setSession(data.session);
-      if (data.session) rememberUser(data.session.user);
-      else setOfflineUser(lastUserIfOffline(error));
+      if (data.session) {
+        rememberUser(data.session.user);
+        setStatus('verified');
+      } else if (isOfflineFailure(error) && readLastUser()) {
+        setStatus('offline');
+      } else {
+        // Genuinely signed out (or the session was revoked): sign-in screen.
+        setProvisionalUser(null);
+      }
       setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
       if (newSession) {
         rememberUser(newSession.user);
-        setOfflineUser(null);
+        setProvisionalUser(null);
+        setStatus('verified');
       } else if (event === 'SIGNED_OUT') {
         rememberUser(null);
-        setOfflineUser(null);
+        setProvisionalUser(null);
+        setStatus('pending');
       }
     });
     return () => {
@@ -84,12 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut: AuthValue['signOut'] = async () => {
     rememberUser(null);
-    setOfflineUser(null);
+    setProvisionalUser(null);
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? offlineUser, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? provisionalUser, status, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

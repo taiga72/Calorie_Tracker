@@ -42,6 +42,7 @@ vi.mock('@/store', () => ({
     pinMeal: vi.fn(),
     unpinMeal: vi.fn(),
     restorePin: vi.fn(),
+    loadPhotos: vi.fn(async () => true),
     refresh: vi.fn(),
     refreshing: false,
   }),

@@ -56,22 +56,11 @@ describe('outbox storage', () => {
 });
 
 describe('snapshot storage', () => {
-  it('round-trips the last known state', () => {
-    const snap = { ...empty, meals: [meal('a', 100, 'data:photo')] };
-    saveSnapshot('u1', snap);
-    expect(loadSnapshot('u1')).toEqual(snap);
-  });
-
-  it('falls back to a copy without photos when the full one does not fit', () => {
-    const real = Storage.prototype.setItem;
-    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, k: string, v: string) {
-      if (v.includes('data:photo')) throw new Error('quota');
-      real.call(this, k, v);
-    });
+  it('round-trips the last known state, leaving out photos (loaded separately)', () => {
     saveSnapshot('u1', { ...empty, meals: [meal('a', 100, 'data:photo')] });
-    spy.mockRestore();
     const loaded = loadSnapshot('u1')!;
-    expect(loaded.meals[0].id).toBe('a');
+    expect(loaded.meals.map((m) => m.id)).toEqual(['a']);
     expect(loaded.meals[0].imageDatas).toBeUndefined();
+    expect(loaded.settings).toEqual(settings);
   });
 });

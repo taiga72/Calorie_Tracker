@@ -69,17 +69,11 @@ export function loadSnapshot(userId: string): Snapshot | null {
 
 /**
  * Caches the last known state so the app opens instantly — and works with no
- * connection. Meal photos can push this past the storage quota, so if the
- * full copy doesn't fit, a copy without photos is kept instead (edits never
- * send absent photos, so this can't erase them on the server).
+ * connection. Meal photos are left out: they're most of the data (writing
+ * them on every change was slow and overflowed storage) and are loaded
+ * separately. Edits never send absent photos, so this can't erase them.
  */
 export function saveSnapshot(userId: string, snap: Snapshot): void {
-  try {
-    localStorage.setItem(snapshotKey(userId), JSON.stringify(snap));
-    return;
-  } catch {
-    // fall through to the photo-less copy
-  }
   try {
     const meals = snap.meals.map(({ imageData: _a, imageDatas: _b, ...rest }) => rest);
     localStorage.setItem(snapshotKey(userId), JSON.stringify({ ...snap, meals }));

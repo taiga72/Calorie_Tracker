@@ -3,7 +3,7 @@ import { SplashContext, useSplashReady } from '@/lib/splash';
 
 // Long enough for the logo animation to read as intentional rather than a
 // flash; counted from page load, so a slow network adds no extra wait.
-const MIN_VISIBLE_MS = 700;
+const MIN_VISIBLE_MS = 400;
 const FADE_MS = 350;
 
 /**
