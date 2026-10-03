@@ -6,6 +6,11 @@
   html {
     -webkit-tap-highlight-color: transparent;
   }
+  /* The app does its own pull-to-refresh; the browser's rubber-band bounce
+     at the top of the page would just show an empty gap instead. */
+  html, body {
+    overscroll-behavior-y: none;
+  }
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Helvetica Neue', Arial, sans-serif;
     background-color: #F4F5F6;
@@ -50,4 +55,15 @@
 @keyframes slideDown {
   from { transform: translateY(-16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Turning to the next/previous day in the day sheet. */
+@keyframes dayTurnFromRight {
+  from { transform: translateX(110%); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes dayTurnFromLeft {
+  from { transform: translateX(-110%); opacity: .4; }
+  to { transform: translateX(0); opacity: 1; }
 }

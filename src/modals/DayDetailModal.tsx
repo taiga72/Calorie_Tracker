@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store';
 import { addDays, fromKey, formatHeaderDate, isToday, relativeDayLabel, toKey } from '@/lib/dateUtils';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
@@ -13,6 +13,11 @@ import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun
 import type { MealEntry } from '@/types';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+const TURN_OUT_MS = 170;
+
+function prefersReducedMotion(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 /** "Wed 7" — compact label for the previous/next day buttons. */
 function formatDayShort(key: string): string {
@@ -36,11 +41,19 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
   const open = dateKey !== null;
-  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
+  // Turning to another day, like a page: the day follows the finger, slides
+  // fully off on release, and the next one slides in from the other edge.
+  const [turn, setTurn] = useState<{ phase: 'out' | 'in'; dir: 1 | -1 } | null>(null);
+  const turnTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (turnTimer.current) clearTimeout(turnTimer.current); }, []);
   const go = (delta: 1 | -1) => {
-    if (!onNavigate) return;
-    setSlideFrom(delta > 0 ? 'right' : 'left');
-    onNavigate(delta);
+    if (!onNavigate || turn?.phase === 'out') return;
+    if (prefersReducedMotion()) { onNavigate(delta); return; }
+    setTurn({ phase: 'out', dir: delta });
+    turnTimer.current = setTimeout(() => {
+      onNavigate(delta);
+      setTurn({ phase: 'in', dir: delta });
+    }, TURN_OUT_MS);
   };
   // Swipe left for the next day, right for the previous one. Meal rows keep
   // their own swipe-to-delete.
@@ -49,7 +62,14 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
     onSwipeRight: () => go(-1),
     ignoreSelector: '[data-swipe-row]',
   });
-  useEffect(() => { if (!open) setSlideFrom(null); }, [open]);
+  useEffect(() => { if (!open) setTurn(null); }, [open]);
+  const pageStyle = turn?.phase === 'out'
+    ? { transform: `translateX(${turn.dir > 0 ? '-110%' : '110%'})`, opacity: 0.4, transition: `transform ${TURN_OUT_MS}ms ease-in, opacity ${TURN_OUT_MS}ms ease-in` }
+    : turn?.phase === 'in'
+      ? { transition: 'none' }
+      : dragX
+        ? { transform: `translateX(${dragX}px)`, opacity: 1 - Math.min(Math.abs(dragX) / 500, 0.4), transition: 'none' }
+        : { transition: 'transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s' };
   const day = dateKey ? getDay(dateKey) : null;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
@@ -74,11 +94,12 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
           <div
             {...(onNavigate ? swipeHandlers : {})}
             className="touch-pan-y"
-            style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform .2s ease' }}
+            style={pageStyle}
           >
           <div
             key={dateKey}
-            className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
+            onAnimationEnd={() => setTurn((t) => (t?.phase === 'in' ? null : t))}
+            className={`motion-reduce:animate-none ${turn?.phase === 'in' ? (turn.dir > 0 ? 'animate-[dayTurnFromRight_.26s_cubic-bezier(.2,.8,.2,1)]' : 'animate-[dayTurnFromLeft_.26s_cubic-bezier(.2,.8,.2,1)]') : ''}`}
           >
             {onNavigate ? (
               <div className="flex items-center justify-between -mt-1 mb-3">

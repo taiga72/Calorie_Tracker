@@ -112,3 +112,43 @@ describe('PullToRefresh visuals', () => {
     expect(screen.getByText(/Couldn't sync/)).toBeInTheDocument();
   });
 });
+
+describe('PullToRefresh on touch screens', () => {
+  const touch = (x: number, y: number) => ({ touches: [{ clientX: x, clientY: y }] });
+
+  it('refreshes on a touch pull, holding off the browser’s own scrolling while pulling', () => {
+    const onRefresh = vi.fn();
+    const { container } = render(<PullToRefresh onRefresh={onRefresh} refreshing={false}><p>content</p></PullToRefresh>);
+    const root = container.firstElementChild!;
+
+    fireEvent.touchStart(root, touch(0, 0));
+    const notPrevented = fireEvent.touchMove(root, touch(0, 200));
+    expect(notPrevented).toBe(false); // preventDefault was called
+    expect(screen.getByText('Release to sync')).toBeInTheDocument();
+    fireEvent.touchEnd(root, { touches: [] });
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves normal scrolling up the page alone', () => {
+    const onRefresh = vi.fn();
+    const { container } = render(<PullToRefresh onRefresh={onRefresh} refreshing={false}><p>content</p></PullToRefresh>);
+    const root = container.firstElementChild!;
+
+    fireEvent.touchStart(root, touch(0, 300));
+    expect(fireEvent.touchMove(root, touch(0, 100))).toBe(true); // not prevented
+    fireEvent.touchEnd(root, { touches: [] });
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('ignores touch pointer events (handled as touches instead), so a pull is not counted twice', () => {
+    const onRefresh = vi.fn();
+    const { container } = render(<PullToRefresh onRefresh={onRefresh} refreshing={false}><p>content</p></PullToRefresh>);
+    const root = container.firstElementChild!;
+
+    fireEvent.pointerDown(root, { clientX: 0, clientY: 0, pointerType: 'touch' });
+    fireEvent.pointerMove(root, { clientX: 0, clientY: 200, pointerType: 'touch' });
+    fireEvent.pointerUp(root, { clientX: 0, clientY: 200, pointerType: 'touch' });
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+});

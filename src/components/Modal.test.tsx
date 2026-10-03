@@ -101,3 +101,73 @@ describe('Modal', () => {
     expect(overlay.className).toContain('z-[60]');
   });
 });
+
+describe('Modal swipe down to close (touch)', () => {
+  const t = (y: number, x = 0) => ({ touches: [{ clientX: x, clientY: y }] });
+
+  function sheetOf(container: HTMLElement) {
+    return container.querySelector('.overflow-y-auto') as HTMLElement;
+  }
+
+  it('closes when the sheet is dragged down from anywhere', () => {
+    const onClose = vi.fn();
+    const { container } = render(<Modal open onClose={onClose} title="Quick log"><p>body text</p></Modal>);
+    const body = screen.getByText('body text');
+
+    fireEvent.touchStart(body, t(100));
+    expect(fireEvent.touchMove(body, t(260))).toBe(false); // claimed from the browser's scroll
+    expect(sheetOf(container).style.transform).toBe('translateY(160px)');
+    fireEvent.touchEnd(body, { touches: [] });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('snaps back on a short, slow drag', () => {
+    const onClose = vi.fn();
+    render(<Modal open onClose={onClose}><p>body text</p></Modal>);
+    const body = screen.getByText('body text');
+    vi.useFakeTimers();
+    fireEvent.touchStart(body, t(100));
+    vi.advanceTimersByTime(500);
+    fireEvent.touchMove(body, t(150));
+    fireEvent.touchEnd(body, { touches: [] });
+    vi.useRealTimers();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('a quick flick closes even if it is short', () => {
+    const onClose = vi.fn();
+    render(<Modal open onClose={onClose}><p>body text</p></Modal>);
+    const body = screen.getByText('body text');
+    fireEvent.touchStart(body, t(100));
+    fireEvent.touchMove(body, t(160));
+    fireEvent.touchEnd(body, { touches: [] });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('scrolls normally (does not close) when the sheet is scrolled down', () => {
+    const onClose = vi.fn();
+    const { container } = render(<Modal open onClose={onClose}><p>body text</p></Modal>);
+    sheetOf(container).scrollTop = 120;
+    const body = screen.getByText('body text');
+    fireEvent.touchStart(body, t(100));
+    expect(fireEvent.touchMove(body, t(300))).toBe(true); // left to the browser
+    fireEvent.touchEnd(body, { touches: [] });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('ignores drags that start in a text field or are mostly sideways', () => {
+    const onClose = vi.fn();
+    render(<Modal open onClose={onClose}><textarea aria-label="desc" /><p>body text</p></Modal>);
+    const field = screen.getByLabelText('desc');
+    fireEvent.touchStart(field, t(100));
+    fireEvent.touchMove(field, t(300));
+    fireEvent.touchEnd(field, { touches: [] });
+
+    const body = screen.getByText('body text');
+    fireEvent.touchStart(body, t(100, 0));
+    fireEvent.touchMove(body, t(140, 200));
+    fireEvent.touchEnd(body, { touches: [] });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
