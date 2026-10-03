@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { rangeKeys, formatShortDate, toKey } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
-import { CalorieLineChart } from '@/components/CalorieLineChart';
+import { TrendChart } from '@/components/TrendChart';
+import { dayIndex, fitDomain, smoothingFor, trendLine, SMOOTHING_LABEL } from '@/lib/trends';
 import { MacroBar } from '@/components/MacroBar';
 import { GoalForecastCard, AdaptiveTargetCard } from '@/components/GoalInsights';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
@@ -30,47 +31,62 @@ export function StatsTab() {
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
   const days = RANGES.find((r) => r.key === range)!.days;
 
-  const series = useMemo(() => {
-    const keys = rangeKeys(new Date(), Math.min(days, 60));
-    return keys.map((k) => {
-      const d = getDay(k);
-      return { label: formatShortDate(k), value: d.totalCalories, date: k, day: d };
-    });
-  }, [days, getDay]);
+  const todayKey = toKey(new Date());
+  const keys = useMemo(() => rangeKeys(new Date(), days), [days]);
+  const smoothing = smoothingFor(days);
+  const unit = settings.weightUnit;
 
-  const avgCal = series.length ? Math.round(series.reduce((a, b) => a + b.value, 0) / series.length) : 0;
-  const loggedDays = series.filter((s) => s.value > 0).length;
-  const maxDay = series.reduce((a, b) => (b.value > a.value ? b : a), series[0] ?? { value: 0, date: '' });
+  // Calories: only finished, logged days count. An unlogged day is a gap
+  // (not a 0 kcal day), and today — still in progress — is shown on its own.
+  const loggedDayList = useMemo(
+    () => keys.filter((k) => k !== todayKey).map((k) => getDay(k)).filter((d) => d.meals.length > 0),
+    [keys, todayKey, getDay],
+  );
+  const calRaw = useMemo(() => loggedDayList.map((d) => ({ date: d.date, value: d.totalCalories })), [loggedDayList]);
+  const calLine = useMemo(() => trendLine(calRaw, smoothing), [calRaw, smoothing]);
+  const todaySoFar = getDay(todayKey);
+  const calPending = todaySoFar.meals.length > 0 ? { date: todayKey, value: todaySoFar.totalCalories } : null;
+  const calDomain = useMemo(
+    () => fitDomain(calRaw.map((p) => p.value), { minSpan: 600, include: [settings.calorieGoal] }),
+    [calRaw, settings.calorieGoal],
+  );
 
-  // macros aggregated over the range
-  const totals = useMemo(() => {
-    return series.reduce(
-      (acc, s) => ({
-        protein: acc.protein + s.day.totalProtein,
-        carbs: acc.carbs + s.day.totalCarbs,
-        fat: acc.fat + s.day.totalFat,
-        calories: acc.calories + s.day.totalCalories,
-      }),
-      { protein: 0, carbs: 0, fat: 0, calories: 0 }
-    );
-  }, [series]);
+  const loggedDays = loggedDayList.length;
+  const avgCal = loggedDays ? Math.round(calRaw.reduce((a, b) => a + b.value, 0) / loggedDays) : 0;
+  const highest = calRaw.reduce((a, b) => Math.max(a, b.value), 0);
+  const daysWithinGoal = calRaw.filter((p) => p.value <= settings.calorieGoal).length;
 
-  const weightSeries = useMemo(() => {
-    return weights.filter((w) => {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - days);
-      return w.date >= toKey(cutoff);
-    }).sort((a, b) => a.date.localeCompare(b.date));
-  }, [weights, days]);
+  // Macros averaged over the same logged days.
+  const totals = useMemo(() => loggedDayList.reduce(
+    (acc, d) => ({ protein: acc.protein + d.totalProtein, carbs: acc.carbs + d.totalCarbs, fat: acc.fat + d.totalFat }),
+    { protein: 0, carbs: 0, fat: 0 },
+  ), [loggedDayList]);
 
-  const latestWeight = weightSeries[weightSeries.length - 1];
-  const firstWeight = weightSeries[0];
-  const weightDelta = latestWeight && firstWeight ? latestWeight.weight - firstWeight.weight : 0;
-
-  const weightChartData = useMemo(() => weightSeries.map((w) => ({
-    label: formatShortDate(w.date),
-    value: Number(kgToUnit(w.weight, settings.weightUnit).toFixed(1)),
-  })), [weightSeries, settings.weightUnit]);
+  // Weight: weigh-ins as dots, a smoothed trend through them, and an axis
+  // fitted to the data (from 0 kg, every line looked flat).
+  const wRaw = useMemo(() => weights
+    .filter((w) => w.date >= keys[0] && w.date <= todayKey)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((w) => ({ date: w.date, value: kgToUnit(w.weight, unit) })), [weights, keys, todayKey, unit]);
+  const wLine = useMemo(() => {
+    const line = trendLine(wRaw, smoothing);
+    // A trend needs a couple of weigh-ins; until then, just join the dots.
+    return line.length >= 2 ? line : wRaw;
+  }, [wRaw, smoothing]);
+  const goalInUnit = kgToUnit(settings.goalWeight, unit);
+  const wValues = wRaw.map((p) => p.value);
+  const goalNearby = wValues.length > 0 && goalInUnit >= Math.min(...wValues) - (unit === 'kg' ? 3 : 6) && goalInUnit <= Math.max(...wValues) + (unit === 'kg' ? 3 : 6);
+  const wDomain = useMemo(
+    () => fitDomain(wValues, { minSpan: unit === 'kg' ? 2 : 4, include: goalNearby ? [goalInUnit] : [] }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [wRaw, unit, goalNearby, goalInUnit],
+  );
+  const wFirst = wLine[0];
+  const wLast = wLine[wLine.length - 1];
+  const wChange = wFirst && wLast ? wLast.value - wFirst.value : 0;
+  const wWeeks = wFirst && wLast ? (dayIndex(wLast.date) - dayIndex(wFirst.date)) / 7 : 0;
+  const latestWeigh = wRaw[wRaw.length - 1];
+  const lineLabel = SMOOTHING_LABEL[smoothing];
 
   const goToPage = (next: Page) => {
     if (next === page) return;
@@ -80,6 +96,8 @@ export function StatsTab() {
   const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
     onSwipeLeft: () => goToPage('goals'),
     onSwipeRight: () => goToPage('trends'),
+    // Dragging across a chart reads its values instead.
+    ignoreSelector: '[data-chart]',
   });
   // A little resistance at either end, like the calendar.
   const edgeDrag = (page === 'trends' && dragX > 0) || (page === 'goals' && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
@@ -151,14 +169,35 @@ export function StatsTab() {
             <Flame size={16} className="text-orange-500" />
             <h2 className="text-sm font-bold text-gray-900 dark:text-white">Calories trend</h2>
           </div>
-          <span className="text-[11px] text-gray-400">{loggedDays} logged days</span>
+          <span className="text-[11px] text-gray-400">{loggedDays} of {keys.length - 1 || 1} days logged</span>
         </div>
-        <p className="text-xs text-gray-400 mb-3">Daily average over time</p>
-        <CalorieLineChart data={series} goal={settings.calorieGoal} />
+        <p className="text-xs text-gray-400 mb-3">
+          {smoothing === 'none' ? 'Each logged day' : `Dots are days · line is the ${lineLabel.toLowerCase()}`}
+        </p>
+        {calRaw.length === 0 && !calPending ? (
+          <p className="text-sm text-gray-400 py-6 text-center">No meals logged in this range.</p>
+        ) : (
+          <TrendChart
+            start={keys[0]}
+            end={todayKey}
+            raw={calRaw}
+            line={calLine}
+            rawIsLine={smoothing === 'none'}
+            pending={calPending}
+            pendingLabel="Today so far"
+            reference={{ value: settings.calorieGoal, label: 'Goal' }}
+            domain={calDomain}
+            color="#F97316"
+            format={(v) => Math.round(v).toLocaleString()}
+            rawLabel="kcal that day"
+            lineLabel={lineLabel}
+            ariaLabel={`Calories, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
+          />
+        )}
         <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Avg/day" value={`${avgCal}`} unit="kcal" tone="orange" />
-          <Stat label="Best day" value={`${maxDay.value}`} unit="kcal" tone="gray" />
-          <Stat label="Logged" value={`${loggedDays}`} unit="days" tone="gray" />
+          <Stat label="Avg/day" value={avgCal ? avgCal.toLocaleString() : '—'} unit="kcal" tone="orange" />
+          <Stat label="Within goal" value={`${daysWithinGoal}/${loggedDays}`} unit="days" tone="gray" />
+          <Stat label="Highest" value={highest ? highest.toLocaleString() : '—'} unit="kcal" tone="gray" />
         </div>
       </div>
 
@@ -187,21 +226,46 @@ export function StatsTab() {
           <Scale size={16} className="text-blue-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Weight trend</h2>
         </div>
-        <p className="text-xs text-gray-400 mb-3">Change over the selected range</p>
-        {weightSeries.length > 0 ? (
+        <p className="text-xs text-gray-400 mb-3">
+          {smoothing === 'none' ? 'Each weigh-in' : `Dots are weigh-ins · line is the ${lineLabel.toLowerCase()}`}
+        </p>
+        {wRaw.length > 0 ? (
           <>
-            <CalorieLineChart data={weightChartData} color="#3B82F6" height={140} />
+            <TrendChart
+              start={keys[0]}
+              end={todayKey}
+              raw={wRaw}
+              line={wLine}
+              rawIsLine={wLine === wRaw || smoothing === 'none'}
+              reference={goalNearby ? { value: goalInUnit, label: 'Goal' } : undefined}
+              domain={wDomain}
+              color="#3B82F6"
+              format={(v) => v.toFixed(1)}
+              rawLabel={`${unit} weigh-in`}
+              lineLabel={lineLabel}
+                height={160}
+              ariaLabel={`Weight in ${unit}, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
+            />
             <div className="flex items-end justify-between mt-4 pt-3 border-t border-gray-50 dark:border-gray-800">
               <div>
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {latestWeight ? kgToUnit(latestWeight.weight, settings.weightUnit).toFixed(1) : '—'}
-                </span>
-                <span className="text-sm text-gray-400 ml-1">{settings.weightUnit}</span>
+                <span className="text-2xl font-bold text-gray-900 dark:text-white">{latestWeigh ? latestWeigh.value.toFixed(1) : '—'}</span>
+                <span className="text-sm text-gray-400 ml-1">{unit}</span>
+                <p className="text-[10px] text-gray-400">latest weigh-in</p>
               </div>
-              <div className={`text-sm font-semibold ${weightDelta <= 0 ? 'text-emerald-600' : 'text-orange-500'}`}>
-                {weightDelta > 0 ? '+' : ''}{kgToUnit(weightDelta, settings.weightUnit).toFixed(1)} {settings.weightUnit}
-              </div>
+              {wLine.length >= 2 && (
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${Math.sign(wChange) === Math.sign(settings.weeklyWeightTarget) || Math.abs(wChange) < 0.05 ? 'text-emerald-600' : 'text-orange-500'}`}>
+                    {wChange > 0 ? '+' : wChange < 0 ? '−' : ''}{Math.abs(wChange).toFixed(1)} {unit}
+                  </p>
+                  <p className="text-[10px] text-gray-400">
+                    trend over range{wWeeks >= 1.5 ? ` · ${wChange > 0 ? '+' : wChange < 0 ? '−' : ''}${Math.abs(wChange / wWeeks).toFixed(2)} ${unit}/wk` : ''}
+                  </p>
+                </div>
+              )}
             </div>
+            {!goalNearby && (
+              <p className="text-[10px] text-gray-400 mt-2">Goal {goalInUnit.toFixed(1)} {unit} is off this chart's scale.</p>
+            )}
           </>
         ) : (
           <p className="text-sm text-gray-400">No weight entries in this range.</p>
