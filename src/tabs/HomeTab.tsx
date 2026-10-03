@@ -11,7 +11,7 @@ import { PinMealButton } from '@/components/PinMealButton';
 import { useGoalForecast } from '@/lib/useGoalForecast';
 import { formatForecastDate } from '@/lib/forecast';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
-import { lastWeek, showRecapOnHome } from '@/lib/weeklyRecap';
+import { recapPeriod, showRecapOnHome } from '@/lib/weeklyRecap';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
@@ -37,8 +37,8 @@ export function HomeTab() {
   // should actually show (see "why is the app not showing the saved weight").
   const latestWeight = weights.length > 0 ? weights[weights.length - 1] : undefined;
   const forecast = useGoalForecast();
-  // Monday–Wednesday, until dismissed; it lives on Stats the rest of the week.
-  const [recapVisible, setRecapVisible] = useState(() => showRecapOnHome(new Date(), lastWeek(new Date()).start));
+  // The end-of-week brief, Friday to Sunday until dismissed; it's always on Stats.
+  const [recapVisible, setRecapVisible] = useState(() => showRecapOnHome(new Date(), recapPeriod(new Date()).start));
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';

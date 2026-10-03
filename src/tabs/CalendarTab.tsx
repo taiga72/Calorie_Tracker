@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import {
   toKey, fromKey, formatMonthYear, weekdayShort,
-  daysInMonth, firstWeekdayOfMonth, addMonths, isToday,
+  daysInMonth, firstWeekdayOfMonth, addMonths, addDays, isToday,
 } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -19,6 +19,17 @@ export function CalendarTab() {
   const changeMonth = (delta: 1 | -1) => {
     setSlideFrom(delta > 0 ? 'right' : 'left');
     setCursor((c) => addMonths(c, delta));
+  };
+
+  // Swiping days in the open day sheet; the month behind it follows along so
+  // closing the sheet lands on the right month.
+  const navigateDay = (delta: 1 | -1) => {
+    if (!selected) return;
+    const next = addDays(fromKey(selected), delta);
+    setSelected(toKey(next));
+    if (next.getMonth() !== cursor.getMonth() || next.getFullYear() !== cursor.getFullYear()) {
+      setCursor(new Date(next.getFullYear(), next.getMonth(), 1));
+    }
   };
 
   const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
@@ -139,7 +150,7 @@ export function CalendarTab() {
       </div>
       </div>
 
-      <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} />
+      <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} onNavigate={navigateDay} />
     </div>
     </PullToRefresh>
   );

@@ -6,7 +6,14 @@ import { CalorieLineChart } from '@/components/CalorieLineChart';
 import { MacroBar } from '@/components/MacroBar';
 import { GoalForecastCard, AdaptiveTargetCard } from '@/components/GoalInsights';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
+
+type Page = 'trends' | 'goals';
+const PAGES: { key: Page; label: string }[] = [
+  { key: 'trends', label: 'Trends' },
+  { key: 'goals', label: 'Goals' },
+];
 
 type Range = '7d' | '30d' | '3m' | '1y';
 const RANGES: { key: Range; label: string; days: number }[] = [
@@ -19,6 +26,8 @@ const RANGES: { key: Range; label: string; days: number }[] = [
 export function StatsTab() {
   const { getDay, weights, settings } = useStore();
   const [range, setRange] = useState<Range>('7d');
+  const [page, setPage] = useState<Page>('trends');
+  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
   const days = RANGES.find((r) => r.key === range)!.days;
 
   const series = useMemo(() => {
@@ -63,12 +72,64 @@ export function StatsTab() {
     value: Number(kgToUnit(w.weight, settings.weightUnit).toFixed(1)),
   })), [weightSeries, settings.weightUnit]);
 
+  const goToPage = (next: Page) => {
+    if (next === page) return;
+    setSlideFrom(next === 'goals' ? 'right' : 'left');
+    setPage(next);
+  };
+  const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
+    onSwipeLeft: () => goToPage('goals'),
+    onSwipeRight: () => goToPage('trends'),
+  });
+  // A little resistance at either end, like the calendar.
+  const edgeDrag = (page === 'trends' && dragX > 0) || (page === 'goals' && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
+
   return (
     <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">Your trends</p>
+      <p className="text-sm text-gray-400 font-medium">{page === 'trends' ? 'Your trends' : 'Where you\'re headed'}</p>
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Statistics</h1>
 
-      {/* Range selector */}
+      {/* Page switcher (also swipeable) */}
+      <div role="tablist" aria-label="Statistics pages" className="relative grid grid-cols-2 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+        <span
+          aria-hidden
+          className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-gray-900 dark:bg-emerald-600 transition-transform duration-300 ease-out"
+          style={{ transform: page === 'goals' ? 'translateX(100%)' : undefined }}
+        />
+        {PAGES.map((p) => (
+          <button
+            key={p.key}
+            role="tab"
+            aria-selected={page === p.key}
+            onClick={() => goToPage(p.key)}
+            className={`relative z-10 py-2 rounded-full text-xs font-semibold transition-colors ${page === p.key ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div
+        {...swipeHandlers}
+        className="touch-pan-y min-h-[60vh]"
+        style={{ transform: dragX ? `translateX(${edgeDrag}px)` : undefined, transition: dragX ? 'none' : 'transform .2s ease' }}
+      >
+      <div
+        key={page}
+        className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
+      >
+      {page === 'goals' ? (
+        <div className="space-y-4 mt-5">
+          <GoalForecastCard />
+          <AdaptiveTargetCard />
+        </div>
+      ) : (
+      <>
+      <div className="mt-5">
+        <WeeklyRecapCard />
+      </div>
+
+      {/* Range selector (for the charts below) */}
       <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar -mx-1 px-1">
         {RANGES.map((r) => (
           <button
@@ -81,13 +142,6 @@ export function StatsTab() {
             {r.label}
           </button>
         ))}
-      </div>
-
-      {/* Goal insights (independent of the selected range) */}
-      <div className="space-y-4 mt-5">
-        <WeeklyRecapCard />
-        <GoalForecastCard />
-        <AdaptiveTargetCard />
       </div>
 
       {/* Calories trend */}
@@ -152,6 +206,10 @@ export function StatsTab() {
         ) : (
           <p className="text-sm text-gray-400">No weight entries in this range.</p>
         )}
+      </div>
+      </>
+      )}
+      </div>
       </div>
     </div>
   );

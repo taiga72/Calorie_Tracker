@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { computeWeeklyRecap, cachedRecapSummary, cacheRecapSummary, dismissRecap } from '@/lib/weeklyRecap';
-import { getWeeklySummary } from '@/lib/geminiCoach';
+import { cleanCoachText, getWeeklySummary } from '@/lib/geminiCoach';
 import { formatShortDate } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
 import { CalendarCheck, Sparkles, X } from 'lucide-react';
@@ -11,7 +11,11 @@ interface WeeklyRecapCardProps {
   onDismiss?: () => void;
 }
 
-/** Last week at a glance, with a short AI coach note (generated once a week). */
+/**
+ * The week at a glance. From Friday it covers this week so far and adds a
+ * short AI coach note — the end-of-week brief, written once and cached.
+ * Monday to Thursday it shows last week, with that Friday's brief if any.
+ */
 export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
   const { meals, weights, settings } = useStore();
   const recap = useMemo(() => computeWeeklyRecap(meals, weights, settings), [meals, weights, settings]);
@@ -19,10 +23,15 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
   const [summary, setSummary] = useState<string | null>(() => (weekStart ? cachedRecapSummary(weekStart) : null));
   const [summaryState, setSummaryState] = useState<'idle' | 'loading' | 'failed'>('idle');
 
+  const mode = recap?.mode;
+
   useEffect(() => {
     if (!recap || !weekStart) return;
     const cached = cachedRecapSummary(weekStart);
-    if (cached) { setSummary(cached); return; }
+    setSummary(cached);
+    // The brief is written from Friday; earlier in the week only last
+    // Friday's (if any) is shown.
+    if (cached || recap.mode !== 'this-week') return;
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     let active = true;
     setSummaryState('loading');
@@ -33,9 +42,9 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
       })
       .catch(() => { if (active) setSummaryState('failed'); });
     return () => { active = false; };
-    // One request per week: only re-run when the week changes.
+    // One request per week: only re-run when the week (or mode) changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart]);
+  }, [weekStart, mode]);
 
   if (!recap) return null;
   const unit = settings.weightUnit;
@@ -45,8 +54,10 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
     <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800">
       <div className="flex items-center gap-2 mb-3">
         <CalendarCheck size={16} className="text-emerald-600" />
-        <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your week</h2>
-        <span className="text-[11px] text-gray-400">{formatShortDate(recap.weekStart)} – {formatShortDate(recap.weekEnd)}</span>
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white">{recap.mode === 'this-week' ? 'End-of-week brief' : 'Last week'}</h2>
+        <span className="text-[11px] text-gray-400">
+          {formatShortDate(recap.weekStart)} – {recap.mode === 'this-week' ? 'today' : formatShortDate(recap.weekEnd)}
+        </span>
         {onDismiss && (
           <button
             onClick={() => { dismissRecap(recap.weekStart); onDismiss(); }}
@@ -62,12 +73,12 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
         <Tile
           label="Avg calories"
           value={`${recap.avgCalories.toLocaleString()} kcal`}
-          sub={recap.avgCaloriesDelta === null ? `goal ${settings.calorieGoal.toLocaleString()}` : `${recap.avgCaloriesDelta > 0 ? '▲' : recap.avgCaloriesDelta < 0 ? '▼' : '='} ${Math.abs(recap.avgCaloriesDelta).toLocaleString()} vs week before`}
+          sub={recap.avgCaloriesDelta === null ? `goal ${settings.calorieGoal.toLocaleString()}` : `${recap.avgCaloriesDelta > 0 ? '▲' : recap.avgCaloriesDelta < 0 ? '▼' : '='} ${Math.abs(recap.avgCaloriesDelta).toLocaleString()} vs ${recap.mode === 'this-week' ? 'last week' : 'week before'}`}
         />
         <Tile
           label="Within goal"
           value={`${recap.daysOnTarget} of ${recap.loggedDays} days`}
-          sub={`${recap.loggedDays}/7 days logged`}
+          sub={`${recap.loggedDays}/${recap.periodDays} days logged`}
           tone={recap.daysOnTarget >= Math.ceil(recap.loggedDays * 0.7) ? 'good' : undefined}
         />
         <Tile
@@ -97,10 +108,10 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
       {(summary || summaryState === 'loading') && (
         <div className="mt-3 bg-emerald-50/70 dark:bg-emerald-950/50 border border-emerald-100 dark:border-emerald-900 rounded-2xl p-3">
           <p className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 tracking-wider mb-1">
-            <Sparkles size={11} /> COACH NOTE
+            <Sparkles size={11} /> FRIDAY BRIEF
           </p>
           {summary ? (
-            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{summary}</p>
+            <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{cleanCoachText(summary)}</p>
           ) : (
             <div className="space-y-1.5 py-0.5" aria-label="Writing your coach note">
               <div className="h-2.5 rounded bg-emerald-100 dark:bg-emerald-900 animate-pulse" />

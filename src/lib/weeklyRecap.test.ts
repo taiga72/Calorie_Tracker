@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { computeWeeklyRecap, lastWeek, startOfIsoWeek, showRecapOnHome, dismissRecap, cacheRecapSummary, cachedRecapSummary } from '@/lib/weeklyRecap';
+import { computeWeeklyRecap, lastWeek, recapPeriod, startOfIsoWeek, showRecapOnHome, dismissRecap, cacheRecapSummary, cachedRecapSummary } from '@/lib/weeklyRecap';
 import type { MealEntry, Settings, WeightEntry } from '@/types';
 
 const settings: Settings = {
@@ -63,17 +63,33 @@ describe('computeWeeklyRecap', () => {
   });
 });
 
-describe('showing on Home', () => {
-  it('shows Monday to Wednesday until dismissed', () => {
-    expect(showRecapOnHome(new Date(2026, 9, 5), '2026-09-28')).toBe(true); // Mon
-    expect(showRecapOnHome(new Date(2026, 9, 7), '2026-09-28')).toBe(true); // Wed
-    expect(showRecapOnHome(new Date(2026, 9, 8), '2026-09-28')).toBe(false); // Thu
-    dismissRecap('2026-09-28');
-    expect(showRecapOnHome(new Date(2026, 9, 6), '2026-09-28')).toBe(false);
-    expect(showRecapOnHome(new Date(2026, 9, 12), '2026-10-05')).toBe(true); // next week
+describe('Friday end-of-week brief', () => {
+  it('covers last full week Monday–Thursday, and this week so far from Friday', () => {
+    expect(recapPeriod(new Date(2026, 9, 8))).toEqual({ start: '2026-09-28', end: '2026-10-04', mode: 'last-week' }); // Thu
+    expect(recapPeriod(new Date(2026, 9, 9))).toEqual({ start: '2026-10-05', end: '2026-10-09', mode: 'this-week' }); // Fri
+    expect(recapPeriod(new Date(2026, 9, 11))).toEqual({ start: '2026-10-05', end: '2026-10-11', mode: 'this-week' }); // Sun
   });
 
-  it('caches one AI summary per week', () => {
+  it('on Friday, summarises Monday to today', () => {
+    const FRI = new Date(2026, 9, 9);
+    const r = computeWeeklyRecap([meal('2026-10-05', 1800), meal('2026-10-09', 2100), meal('2026-10-02', 2500)], [], settings, FRI)!;
+    expect(r.mode).toBe('this-week');
+    expect(r.periodDays).toBe(5);
+    expect(r.loggedDays).toBe(2);
+    expect(r.avgCalories).toBe(1950);
+    expect(r.avgCaloriesDelta).toBe(1950 - 2500); // vs last week
+  });
+
+  it('shows on Home Friday to Sunday until dismissed', () => {
+    expect(showRecapOnHome(new Date(2026, 9, 8), '2026-10-05')).toBe(false); // Thu
+    expect(showRecapOnHome(new Date(2026, 9, 9), '2026-10-05')).toBe(true); // Fri
+    expect(showRecapOnHome(new Date(2026, 9, 11), '2026-10-05')).toBe(true); // Sun
+    dismissRecap('2026-10-05');
+    expect(showRecapOnHome(new Date(2026, 9, 10), '2026-10-05')).toBe(false);
+    expect(showRecapOnHome(new Date(2026, 9, 16), '2026-10-12')).toBe(true); // next Friday
+  });
+
+  it('caches one brief per week', () => {
     cacheRecapSummary('2026-09-28', 'Nice week.');
     expect(cachedRecapSummary('2026-09-28')).toBe('Nice week.');
     expect(cachedRecapSummary('2026-10-05')).toBeNull();

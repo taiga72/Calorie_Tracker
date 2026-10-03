@@ -187,13 +187,31 @@ export async function getInsight(apiKey: string, ctx: CoachContext): Promise<Coa
   return { summary: String(parsed.summary), tip: String(parsed.tip) };
 }
 
-const WEEKLY_SYSTEM_PROMPT = `You are an AI nutrition coach writing a weekly recap. You get last week's numbers as JSON.
-Write 2–3 short sentences, plain text (no markdown, no lists, no emoji):
+const WEEKLY_SYSTEM_PROMPT = `You are an AI nutrition coach writing a short end-of-week brief, sent on Friday. You get this week's numbers so far (Monday to today) as JSON.
+Write 2–3 short sentences of plain text. No markdown at all: no asterisks, backticks, bold, headings, bullet points or emoji.
 - Start with what went well, citing a real number.
-- Then one specific, practical focus for this week based on the numbers (e.g. protein, days over goal, logging consistency).
+- Then one specific, practical focus for the weekend and the week ahead based on the numbers (e.g. protein, days over goal, logging consistency).
 Be warm and direct. Don't repeat every number; don't invent data.`;
 
-/** A short coach summary of last week. One call per week (cached by the caller). */
+/**
+ * Gemini often formats with markdown even when asked not to; the note is
+ * shown as plain text, so strip it rather than show stray * and ` marks.
+ */
+export function cleanCoachText(text: string): string {
+  return text
+    .replace(/```[a-z]*\n?/gi, '')
+    .replace(/`/g, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+    .replace(/(\*\*|__)(.+?)\1/g, '$2')
+    .replace(/(^|[\s(])[*_]([^*_\n]+)[*_](?=[\s.,!?;:)]|$)/g, '$1$2')
+    .replace(/[*]/g, '')
+    .replace(/[ \t]*\n+[ \t]*/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+/** A short coach summary of the week. One call per week (cached by the caller). */
 export async function getWeeklySummary(apiKey: string, recap: WeeklyRecap, settings: Settings): Promise<string> {
   const key = resolveApiKey(apiKey);
   const context = {
@@ -206,10 +224,10 @@ export async function getWeeklySummary(apiKey: string, recap: WeeklyRecap, setti
     weightChangeKg: undefined,
   };
   const body = {
-    contents: [{ role: 'user', parts: [{ text: `${WEEKLY_SYSTEM_PROMPT}\n\nLast week (JSON):\n${JSON.stringify(context)}` }] }],
+    contents: [{ role: 'user', parts: [{ text: `${WEEKLY_SYSTEM_PROMPT}\n\nThis week so far (JSON):\n${JSON.stringify(context)}` }] }],
     generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
   };
-  const text = (await callWithFallback(key, body)).trim();
+  const text = cleanCoachText(await callWithFallback(key, body));
   if (!text) throw new Error('Empty weekly summary.');
   return text;
 }
