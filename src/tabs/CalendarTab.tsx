@@ -82,24 +82,26 @@ export function CalendarTab() {
         <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
       </div>
 
-      {/* Swipe left/right anywhere on the grid to change months */}
-      <div {...swipeHandlers} className="touch-pan-y">
+      {/* Swipe left/right anywhere on the grid to change months. The grid
+          sits in a thin rounded outline; its lines are a step darker than
+          gray-100 so they read against the page background. */}
+      <div {...swipeHandlers} className="touch-pan-y mx-4 mt-4 rounded-2xl overflow-hidden border-[1.5px] border-gray-200 dark:border-gray-700">
       {/* Weekday header */}
-      <div className="grid grid-cols-7 mt-4 border-t border-gray-100 dark:border-gray-800">
+      <div className="grid grid-cols-7">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="text-center text-[11px] font-bold text-gray-400 py-2 border-b border-gray-100 dark:border-gray-800">
+          <div key={i} className="text-center text-[11px] font-bold text-gray-400 py-2 border-b border-gray-200 dark:border-gray-700">
             {weekdayShort(i)}
           </div>
         ))}
       </div>
 
-      {/* Day grid — full-bleed, tall cells, filling most of the screen like Apple Calendar */}
+      {/* Day grid — tall cells, filling most of the screen like Apple Calendar */}
       {/* Keyed by month so a month change remounts the grid: the dragged-aside
           old month is dropped instantly and the new one slides in from the
           side the swipe came from, instead of snapping back from the wrong side. */}
       <div
         key={`${year}-${month}`}
-        className={`grid grid-cols-7 auto-rows-fr min-h-[66vh] border-l border-gray-100 dark:border-gray-800 motion-reduce:animate-none ${
+        className={`grid grid-cols-7 auto-rows-fr min-h-[58vh] [&>*:nth-child(7n)]:border-r-0 [&>*:nth-last-child(-n+7)]:border-b-0 motion-reduce:animate-none ${
           slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''
         }`}
         style={{
@@ -108,7 +110,7 @@ export function CalendarTab() {
         }}
       >
         {cells.map((key, i) => {
-          if (!key) return <div key={i} className="border-r border-b border-gray-100 dark:border-gray-800" />;
+          if (!key) return <div key={i} className="border-r border-b border-gray-200 dark:border-gray-700" />;
           const day = getDay(key);
           const d = fromKey(key);
           const isCur = isToday(key);
@@ -123,7 +125,7 @@ export function CalendarTab() {
             <button
               key={key}
               onClick={() => setSelected(key)}
-              className={`flex flex-col items-start p-1.5 border-r border-b border-gray-100 dark:border-gray-800 text-left transition-colors ${cellTint || 'hover:bg-gray-50 dark:hover:bg-gray-800/60'} ${cellTint ? 'hover:brightness-95' : ''}`}
+              className={`flex flex-col items-start p-1.5 border-r border-b border-gray-200 dark:border-gray-700 text-left transition-colors ${cellTint || 'hover:bg-gray-50 dark:hover:bg-gray-800/60'} ${cellTint ? 'hover:brightness-95' : ''}`}
             >
               <span
                 className={`text-sm font-semibold w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 ${
