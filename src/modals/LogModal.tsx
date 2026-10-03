@@ -6,9 +6,13 @@ import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/
 import { toKey, fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
 import { findDuplicatePin, pinFromMeal } from '@/lib/pinnedMeals';
+import { photoToDataUrl } from '@/lib/photoStorage';
+import { useSpeechInput } from '@/lib/useSpeechInput';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { PinEditor } from '@/components/PinEditor';
+import { MealPhoto } from '@/components/MealPhoto';
 import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin } from 'lucide-react';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic } from 'lucide-react';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
@@ -45,7 +49,7 @@ interface LogModalProps {
 }
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
-  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights, pinned, pinMeal, unpinMeal, restorePin } = useStore();
+  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights, pinned, pinMeal, unpinMeal, updatePin, restorePin } = useStore();
   const { requestUndo } = useUndoToast();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
@@ -65,6 +69,19 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   // Set when the result came from a pin, so "Pin this meal" isn't offered again.
   const [fromPin, setFromPin] = useState(false);
   const [pinOnSave, setPinOnSave] = useState(false);
+  const [editingPin, setEditingPin] = useState<PinnedMeal | null>(null);
+
+  // Dictation is added after whatever was already typed.
+  const textBeforeSpeech = useRef('');
+  const speech = useSpeechInput((transcript) => {
+    const base = textBeforeSpeech.current;
+    setText(base && transcript ? `${base}${/[\s,]$/.test(base) ? '' : ', '}${transcript}` : base || transcript);
+  });
+  const onMic = () => {
+    if (speech.listening) { speech.stop(); return; }
+    textBeforeSpeech.current = text.trim();
+    speech.start();
+  };
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Edit-mode fields
@@ -90,7 +107,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       setTotalCalInput(String(editMeal.calories));
       const prevPhotos = editMeal.imageDatas ?? (editMeal.imageData ? [editMeal.imageData] : []);
       setImagePreviews(prevPhotos);
-      setImageB64s(prevPhotos.map(dataUrlToB64).filter((x): x is { data: string; mimeType: string } => x !== null));
+      // Editing works from imagePreviews (which may be stored-photo
+      // references); they're converted for Gemini only on re-estimate.
+      setImageB64s([]);
       setEditReasoning(editMeal.reasoning ?? null);
       setEditNote('');
       setResult(null);
@@ -113,10 +132,10 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     setText(''); setImagePreviews([]); setImageB64s([]);
     setMealType('auto'); setError(null); setResult(null);
     setFoodInput('text'); setWeightVal(''); setRateLimitSecs(null);
-    setEditItems([]); setFromPin(false); setPinOnSave(false);
+    setEditItems([]); setFromPin(false); setPinOnSave(false); setEditingPin(null);
   };
 
-  const close = () => { reset(); onClose(); };
+  const close = () => { speech.stop(); reset(); onClose(); };
 
   const onFiles = async (files: File[]) => {
     try {
@@ -210,13 +229,17 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const onReestimate = async () => {
     setError(null);
-    if (!editNote.trim() && imageB64s.length === 0) {
+    if (!editNote.trim() && imagePreviews.length === 0) {
       setError('Add a note or photo to re-estimate.');
       return;
     }
     setLoading(true);
     try {
-      const parsed = await estimateMeal(settings.geminiApiKey, editNote, imageB64s.length > 0 ? imageB64s : undefined);
+      const dataUrls = await Promise.all(imagePreviews.map(photoToDataUrl));
+      const photos = dataUrls
+        .map((d) => (d ? dataUrlToB64(d) : null))
+        .filter((x): x is { data: string; mimeType: string } => x !== null);
+      const parsed = await estimateMeal(settings.geminiApiKey, editNote, photos.length > 0 ? photos : undefined);
       setEditItems(parsed.items.length ? parsed.items : [emptyItem()]);
       setTotalCalInput(String(Math.round(parsed.calories)));
       setEditReasoning(parsed.reasoning ?? null);
@@ -275,7 +298,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     close();
   };
 
-  const title = isEdit
+  const title = editingPin
+    ? 'Edit pinned meal'
+    : isEdit
     ? 'Edit meal'
     : isWeightEdit ? (existingWeight ? 'Edit weight' : 'Add weight')
     : targetDate && !isToday(targetDate) ? `Log · ${formatHeaderDate(fromKey(targetDate))}` : 'Quick log';
@@ -311,7 +336,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   return (
     <Modal open={open} onClose={close} title={title}>
       {/* Mode toggle (hidden in edit / weight-edit mode) */}
-      {!isEdit && !isWeightEdit && (
+      {!isEdit && !isWeightEdit && !editingPin && (
         <div className="flex gap-2 mb-4">
           <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
           <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
@@ -364,7 +389,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
               {imagePreviews.map((src, i) => (
                 <div key={i} className="relative flex-shrink-0">
-                  <img src={src} alt="dish" className="w-24 h-24 rounded-2xl object-cover" />
+                  <MealPhoto src={src} alt="dish" className="w-24 h-24 rounded-2xl object-cover" />
                   <button
                     onClick={() => removePhoto(i)}
                     className="absolute top-1 right-1 bg-black/40 backdrop-blur-sm text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
@@ -513,7 +538,15 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           </button>
         </div>
       ) : mode === 'food' ? (
-        result ? (
+        editingPin ? (
+          <PinEditor
+            key={editingPin.id}
+            pin={editingPin}
+            onCancel={() => setEditingPin(null)}
+            onSave={(patch) => { updatePin(editingPin.id, patch); setEditingPin(null); }}
+            onDelete={() => { onUnpin(editingPin); setEditingPin(null); }}
+          />
+        ) : result ? (
           /* ---- Result view ---- */
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -522,7 +555,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </div>
 
             {imagePreviews[0] && (
-              <img src={imagePreviews[0]} alt="meal" className="w-full h-36 object-cover rounded-2xl mb-3" />
+              <MealPhoto src={imagePreviews[0]} alt="meal" className="w-full h-36 object-cover rounded-2xl mb-3" />
             )}
 
             <div className="space-y-2 mb-3">
@@ -606,13 +639,22 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                   {pinned.map((pin) => (
                     <div key={pin.id} className="rounded-xl overflow-hidden border border-gray-100 dark:border-gray-800">
                       <SwipeToDelete onDelete={() => onUnpin(pin)} label="Unpin meal">
-                        <button
-                          onClick={() => onPickPinned(pin)}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-left"
-                        >
-                          <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{pin.name}</span>
-                          <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(pin.calories)} kcal</span>
-                        </button>
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => onPickPinned(pin)}
+                            className="flex-1 min-w-0 flex items-center gap-3 pl-3 py-2.5 text-left"
+                          >
+                            <span className="flex-1 min-w-0 text-sm font-semibold text-gray-900 dark:text-white truncate">{pin.name}</span>
+                            <span className="text-xs font-semibold text-orange-500 flex-shrink-0">{Math.round(pin.calories)} kcal</span>
+                          </button>
+                          <button
+                            onClick={() => setEditingPin(pin)}
+                            aria-label={`Edit ${pin.name}`}
+                            className="flex-shrink-0 px-3 py-2.5 text-gray-300 hover:text-emerald-600 transition-colors"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
                       </SwipeToDelete>
                     </div>
                   ))}
@@ -638,7 +680,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
                 {imagePreviews.map((src, i) => (
                   <div key={i} className="relative flex-shrink-0">
-                    <img src={src} alt="preview" className="w-24 h-24 rounded-2xl object-cover" />
+                    <MealPhoto src={src} alt="preview" className="w-24 h-24 rounded-2xl object-cover" />
                     <button
                       onClick={() => removePhoto(i)}
                       className="absolute top-1 right-1 bg-black/40 backdrop-blur-sm text-white rounded-full w-6 h-6 flex items-center justify-center text-xs"
@@ -658,13 +700,30 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               </div>
             )}
 
-            <textarea
-              value={text}
-              onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
-              placeholder="e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli"
-              rows={3}
-              className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 ring-emerald-500/30"
-            />
+            <div className="relative">
+              <textarea
+                value={text}
+                onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
+                placeholder={speech.supported ? 'e.g. grilled chicken breast 200g, brown rice 1 cup — or tap the mic and say it' : 'e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli'}
+                rows={3}
+                className={`w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 ring-emerald-500/30 ${speech.supported ? 'pr-14' : ''}`}
+              />
+              {speech.supported && (
+                <button
+                  onClick={onMic}
+                  aria-label={speech.listening ? 'Stop voice input' : 'Speak your meal'}
+                  aria-pressed={speech.listening}
+                  className={`absolute right-2.5 bottom-3.5 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    speech.listening ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-900 text-emerald-600 shadow-sm border border-gray-100 dark:border-gray-700'
+                  }`}
+                >
+                  {speech.listening && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
+                  <Mic size={18} className="relative" />
+                </button>
+              )}
+            </div>
+            {speech.listening && <p className="text-[11px] text-red-500 font-semibold mt-1.5">Listening… say what you ate</p>}
+            {speech.error && !speech.listening && <p className="text-[11px] text-amber-600 mt-1.5">{speech.error}</p>}
 
             {/* Meal type selector */}
             <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar">

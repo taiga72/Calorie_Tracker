@@ -6,9 +6,12 @@ import { CalorieRing } from '@/components/CalorieRing';
 import { LogModal } from '@/modals/LogModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { MealPhoto } from '@/components/MealPhoto';
 import { PinMealButton } from '@/components/PinMealButton';
 import { useGoalForecast } from '@/lib/useGoalForecast';
 import { formatForecastDate } from '@/lib/forecast';
+import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
+import { lastWeek, showRecapOnHome } from '@/lib/weeklyRecap';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
 import type { MealEntry } from '@/types';
@@ -34,6 +37,8 @@ export function HomeTab() {
   // should actually show (see "why is the app not showing the saved weight").
   const latestWeight = weights.length > 0 ? weights[weights.length - 1] : undefined;
   const forecast = useGoalForecast();
+  // Monday–Wednesday, until dismissed; it lives on Stats the rest of the week.
+  const [recapVisible, setRecapVisible] = useState(() => showRecapOnHome(new Date(), lastWeek(new Date()).start));
 
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -174,6 +179,12 @@ export function HomeTab() {
 
       </div>
 
+      {recapVisible && (
+        <div className="mt-4">
+          <WeeklyRecapCard onDismiss={() => setRecapVisible(false)} />
+        </div>
+      )}
+
       {/* Meals today count */}
       <div className="flex items-center justify-between mt-6">
         <h2 className="text-base font-bold text-gray-900 dark:text-white">Meals today</h2>
@@ -206,7 +217,7 @@ export function HomeTab() {
                         <div className="flex items-center gap-3 py-2.5">
                           {thumb ? (
                             <div className="relative flex-shrink-0">
-                              <img src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
+                              <MealPhoto src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
                               {m.imageDatas && m.imageDatas.length > 1 && (
                                 <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
                               )}

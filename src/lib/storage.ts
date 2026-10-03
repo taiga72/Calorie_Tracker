@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabaseClient';
+import { deleteAllPhotos, isDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal } from '@/types';
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -85,6 +86,28 @@ function mealToRow(userId: string, m: MealEntry) {
   };
 }
 
+/** All of a meal's photos as one list (older rows used the single image_data). */
+function photosOf(m: Pick<MealEntry, 'imageData' | 'imageDatas'>): string[] {
+  return m.imageDatas ?? (m.imageData ? [m.imageData] : []);
+}
+
+/**
+ * Moves inline photos into Storage before a meal is written, so rows only
+ * carry small references. Returns null when an upload failed (offline):
+ * the write then fails and the outbox retries it later.
+ */
+async function withStoredPhotos<T extends Pick<MealEntry, 'imageData' | 'imageDatas'>>(
+  userId: string,
+  m: T,
+  opts?: { keepInlineOnFailure?: boolean },
+): Promise<T | null> {
+  const photos = photosOf(m);
+  if (!photos.some(isDataUrl)) return m;
+  const stored = await storeInlinePhotos(userId, photos, opts);
+  if (!stored) return null;
+  return { ...m, imageData: undefined, imageDatas: stored };
+}
+
 function mealPatchToRow(patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) {
   const row: Record<string, unknown> = {};
   if (patch.date !== undefined) row.date = patch.date;
@@ -97,7 +120,11 @@ function mealPatchToRow(patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) {
   if (patch.fiber !== undefined) row.fiber = patch.fiber;
   if (patch.reasoning !== undefined) row.reasoning = patch.reasoning;
   if (patch.imageData !== undefined) row.image_data = patch.imageData ?? null;
-  if (patch.imageDatas !== undefined) row.image_datas = patch.imageDatas ?? null;
+  if (patch.imageDatas !== undefined) {
+    row.image_datas = patch.imageDatas ?? null;
+    // imageDatas supersedes the legacy single-photo column.
+    if (patch.imageData === undefined) row.image_data = null;
+  }
   return row;
 }
 
@@ -314,18 +341,33 @@ export const storage = {
   insertMeal: async (userId: string, meal: MealEntry): Promise<boolean> => {
     // An upsert, so replaying a queued insert that already landed (the
     // response was lost when the connection dropped) doesn't fail.
+    const toSave = await withStoredPhotos(userId, meal);
+    if (!toSave) return false;
     const { error } = await withRetry(() =>
-      supabase.from('meals').upsert(mealToRow(userId, meal), { onConflict: 'id' })
+      supabase.from('meals').upsert(mealToRow(userId, toSave), { onConflict: 'id' })
     );
     if (error) console.error('Failed to save meal', error);
     return !error;
   },
 
   updateMeal: async (userId: string, id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>): Promise<boolean> => {
+    const toSave = patch.imageDatas !== undefined || patch.imageData !== undefined
+      ? await withStoredPhotos(userId, patch)
+      : patch;
+    if (!toSave) return false;
     const { error } = await withRetry(() =>
-      supabase.from('meals').update(mealPatchToRow(patch)).eq('user_id', userId).eq('id', id)
+      supabase.from('meals').update(mealPatchToRow(toSave)).eq('user_id', userId).eq('id', id)
     );
     if (error) console.error('Failed to update meal', error);
+    return !error;
+  },
+
+  /** Points a meal at its uploaded photos (moving an older row off inline photos). */
+  replaceMealPhotos: async (userId: string, id: string, refs: string[]): Promise<boolean> => {
+    const { error } = await withRetry(() =>
+      supabase.from('meals').update({ image_data: null, image_datas: refs }).eq('user_id', userId).eq('id', id)
+    );
+    if (error) console.error('Failed to update meal photos', error);
     return !error;
   },
 
@@ -437,7 +479,11 @@ export const storage = {
     const del2 = await withRetry(() => supabase.from('weights').delete().eq('user_id', userId));
     if (del2.error) { console.error('Failed to clear weights before import', del2.error); ok = false; }
     if (payload.meals?.length) {
-      const rows = payload.meals.map((m) => mealToRow(userId, m));
+      // Backups carry photos inline; store them as files like any new photo
+      // (kept inline if an upload fails, so an import never loses one).
+      const meals: MealEntry[] = [];
+      for (const m of payload.meals) meals.push((await withStoredPhotos(userId, m, { keepInlineOnFailure: true })) ?? m);
+      const rows = meals.map((m) => mealToRow(userId, m));
       for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
         const { error } = await withRetry(() => supabase.from('meals').insert(batch));
         if (error) { console.error('Failed to import meals', error); ok = false; }
@@ -479,6 +525,7 @@ export const storage = {
     if (r4.error) { console.error('Failed to clear profile', r4.error); ok = false; }
     const r5 = await withRetry(() => supabase.from('pinned_meals').delete().eq('user_id', userId));
     if (r5.error && !isMissingTable(r5.error)) { console.error('Failed to clear pinned meals', r5.error); ok = false; }
+    if (!(await deleteAllPhotos(userId))) ok = false;
     return ok;
   },
 };

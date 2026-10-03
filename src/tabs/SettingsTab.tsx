@@ -11,6 +11,7 @@ import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
+import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
@@ -555,6 +556,11 @@ export function SettingsTab() {
       {!pinsSyncEnabled && (
         <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
           Pinned meals are only on this device. Re-run supabase/schema.sql in Supabase to sync them across devices.
+        </p>
+      )}
+      {!photoStorageAvailable() && (
+        <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
+          Photo storage isn't set up, so photos are saved inside each meal (slower to load). Re-run supabase/schema.sql in Supabase to enable it.
         </p>
       )}
 

@@ -1,4 +1,5 @@
 import type { MealEntry, Settings, WeightEntry } from '@/types';
+import type { WeeklyRecap } from '@/lib/weeklyRecap';
 import { resolveApiKey, RateLimitError } from '@/lib/gemini';
 import { kgToUnit } from '@/lib/units';
 import { rangeKeys, toKey, formatShortDate } from '@/lib/dateUtils';
@@ -184,6 +185,33 @@ export async function getInsight(apiKey: string, ctx: CoachContext): Promise<Coa
   }
   if (!parsed.summary || !parsed.tip) throw new Error('Insight response missing fields.');
   return { summary: String(parsed.summary), tip: String(parsed.tip) };
+}
+
+const WEEKLY_SYSTEM_PROMPT = `You are an AI nutrition coach writing a weekly recap. You get last week's numbers as JSON.
+Write 2–3 short sentences, plain text (no markdown, no lists, no emoji):
+- Start with what went well, citing a real number.
+- Then one specific, practical focus for this week based on the numbers (e.g. protein, days over goal, logging consistency).
+Be warm and direct. Don't repeat every number; don't invent data.`;
+
+/** A short coach summary of last week. One call per week (cached by the caller). */
+export async function getWeeklySummary(apiKey: string, recap: WeeklyRecap, settings: Settings): Promise<string> {
+  const key = resolveApiKey(apiKey);
+  const context = {
+    calorieGoal: settings.calorieGoal,
+    weightGoal: Number(kgToUnit(settings.goalWeight, settings.weightUnit).toFixed(1)),
+    weeklyWeightTarget: Number(kgToUnit(settings.weeklyWeightTarget, settings.weightUnit).toFixed(2)),
+    weightUnit: settings.weightUnit,
+    ...recap,
+    weightChange: recap.weightChangeKg === null ? null : Number(kgToUnit(recap.weightChangeKg, settings.weightUnit).toFixed(1)),
+    weightChangeKg: undefined,
+  };
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: `${WEEKLY_SYSTEM_PROMPT}\n\nLast week (JSON):\n${JSON.stringify(context)}` }] }],
+    generationConfig: { temperature: 0.6, maxOutputTokens: 200 },
+  };
+  const text = (await callWithFallback(key, body)).trim();
+  if (!text) throw new Error('Empty weekly summary.');
+  return text;
 }
 
 async function callWithFallback(key: string, body: unknown): Promise<string> {
