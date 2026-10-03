@@ -117,7 +117,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         style={{ opacity: 1 - Math.min(dragY / 300, 0.6) }}

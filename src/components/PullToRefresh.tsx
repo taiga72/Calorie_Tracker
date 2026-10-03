@@ -7,6 +7,8 @@ const SETTLED_HEIGHT_PX = 64;
 const DRAG_RESISTANCE = 0.5;
 const AXIS_LOCK_PX = 8;
 const RESULT_VISIBLE_MS = 1100;
+// Gestures inside these never start a pull.
+const NO_PULL = '[role="dialog"]';
 
 const RING_R = 15;
 const RING_C = 2 * Math.PI * RING_R;
@@ -56,8 +58,10 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
   };
 
   // The gesture itself, shared by touch (phones) and mouse/pen.
-  const begin = (x: number, y: number) => {
-    if (busy || window.scrollY > 0) return;
+  const begin = (x: number, y: number, target: EventTarget | null) => {
+    // Sheets (day details, meal editor…) are rendered inside the page, so
+    // their swipe-down-to-close would otherwise also count as a pull here.
+    if (busy || window.scrollY > 0 || (target as Element | null)?.closest?.(NO_PULL)) return;
     start.current = { x, y };
     axis.current = null;
   };
@@ -107,7 +111,7 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
     if (!el) return;
     const onStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
-      gesture.current.begin(e.touches[0].clientX, e.touches[0].clientY);
+      gesture.current.begin(e.touches[0].clientX, e.touches[0].clientY, e.target);
     };
     const onMove = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
@@ -127,7 +131,7 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
   }, []);
 
   // Mouse and pen; touch is handled above.
-  const onPointerDown = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') begin(e.clientX, e.clientY); };
+  const onPointerDown = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') begin(e.clientX, e.clientY, e.target); };
   const onPointerMove = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') move(e.clientX, e.clientY); };
   const onPointerEnd = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') end(); };
 

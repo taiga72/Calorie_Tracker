@@ -152,3 +152,36 @@ describe('PullToRefresh on touch screens', () => {
     expect(onRefresh).not.toHaveBeenCalled();
   });
 });
+
+describe('PullToRefresh with an open sheet inside the page', () => {
+  it('a swipe down on the sheet closes the sheet without also syncing', async () => {
+    const { Modal } = await import('@/components/Modal');
+    const onRefresh = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <PullToRefresh onRefresh={onRefresh} refreshing={false}>
+        <p>page</p>
+        <Modal open onClose={onClose} title="Saturday"><p>day details</p></Modal>
+      </PullToRefresh>,
+    );
+    const inSheet = screen.getByText('day details');
+
+    fireEvent.touchStart(inSheet, { touches: [{ clientX: 0, clientY: 100 }] });
+    fireEvent.touchMove(inSheet, { touches: [{ clientX: 0, clientY: 320 }] });
+    fireEvent.touchEnd(inSheet, { touches: [] });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(screen.queryByText('Release to sync')).not.toBeInTheDocument();
+  });
+
+  it('still pulls to refresh from the page itself', () => {
+    const onRefresh = vi.fn();
+    render(<PullToRefresh onRefresh={onRefresh} refreshing={false}><p>page</p></PullToRefresh>);
+    const page = screen.getByText('page');
+    fireEvent.touchStart(page, { touches: [{ clientX: 0, clientY: 0 }] });
+    fireEvent.touchMove(page, { touches: [{ clientX: 0, clientY: 200 }] });
+    fireEvent.touchEnd(page, { touches: [] });
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+});
