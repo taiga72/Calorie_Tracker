@@ -6,6 +6,8 @@ const SWIPE_THRESHOLD_PX = 50;
 interface Options {
   onSwipeLeft: () => void;
   onSwipeRight: () => void;
+  /** Gestures starting on matching elements are left alone (e.g. swipe-to-delete rows). */
+  ignoreSelector?: string;
 }
 
 /**
@@ -14,13 +16,17 @@ interface Options {
  * The click that ends a swipe is swallowed so it doesn't also activate
  * whatever element the finger lifted off of.
  */
-export function useHorizontalSwipe({ onSwipeLeft, onSwipeRight }: Options) {
+export function useHorizontalSwipe({ onSwipeLeft, onSwipeRight, ignoreSelector }: Options) {
   const [dragX, setDragX] = useState(0);
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<'horizontal' | 'vertical' | null>(null);
   const suppressClick = useRef(false);
 
   const onPointerDown = (e: ReactPointerEvent) => {
+    if (ignoreSelector && (e.target as Element | null)?.closest?.(ignoreSelector)) {
+      start.current = null;
+      return;
+    }
     start.current = { x: e.clientX, y: e.clientY };
     axis.current = null;
     suppressClick.current = false;

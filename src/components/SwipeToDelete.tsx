@@ -95,6 +95,7 @@ export function SwipeToDelete({ onDelete, children, label = 'Delete' }: SwipeToD
         onPointerUp={onPointerEnd}
         onPointerCancel={onPointerEnd}
         onClickCapture={onClickCapture}
+        data-swipe-row
         className="relative bg-white dark:bg-gray-900 touch-pan-y"
         style={{
           transform: translateX ? `translateX(${translateX}px)` : undefined,

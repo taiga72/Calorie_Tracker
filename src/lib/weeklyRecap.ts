@@ -3,9 +3,16 @@ import { addDays, fromKey, toKey } from '@/lib/dateUtils';
 import { normalizeItemName } from '@/lib/pinnedMeals';
 
 export interface WeeklyRecap {
+  /**
+   * 'this-week': Friday–Sunday, the week so far — the end-of-week brief.
+   * 'last-week': Monday–Thursday, the full week before.
+   */
+  mode: 'this-week' | 'last-week';
   /** Monday of the recapped week (YYYY-MM-DD) — also the cache key. */
   weekStart: string;
   weekEnd: string;
+  /** Days in the period so far (7 for a full week, 5 on a Friday). */
+  periodDays: number;
   loggedDays: number;
   /** Average over logged days only (unlogged days aren't zero-calorie days). */
   avgCalories: number;
@@ -36,6 +43,20 @@ export function lastWeek(today: Date): { start: string; end: string } {
   return { start: toKey(addDays(thisMonday, -7)), end: toKey(addDays(thisMonday, -1)) };
 }
 
+const FRIDAY = 4; // Mon = 0
+const weekdayOf = (d: Date) => (d.getDay() + 6) % 7;
+
+/** True Friday to Sunday — when the end-of-week brief is out. */
+export function isBriefTime(today: Date): boolean {
+  return weekdayOf(today) >= FRIDAY;
+}
+
+/** The week the recap covers: this week so far from Friday, otherwise last week. */
+export function recapPeriod(today: Date): { start: string; end: string; mode: WeeklyRecap['mode'] } {
+  if (isBriefTime(today)) return { start: toKey(startOfIsoWeek(today)), end: toKey(today), mode: 'this-week' };
+  return { ...lastWeek(today), mode: 'last-week' };
+}
+
 function dailyTotals(meals: MealEntry[], start: string, end: string) {
   const days = new Map<string, { calories: number; protein: number }>();
   for (const m of meals) {
@@ -53,9 +74,9 @@ function displayName(n: string) {
   return n.charAt(0).toUpperCase() + n.slice(1);
 }
 
-/** Last week's numbers, or null when nothing was logged that week. */
+/** The recap week's numbers (see recapPeriod), or null when nothing was logged. */
 export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], settings: Settings, today = new Date()): WeeklyRecap | null {
-  const { start, end } = lastWeek(today);
+  const { start, end, mode } = recapPeriod(today);
   const days = dailyTotals(meals, start, end);
   if (days.length === 0) return null;
 
@@ -100,8 +121,10 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
   const best = under.sort((a, b) => b[1].calories - a[1].calories)[0];
 
   return {
+    mode,
     weekStart: start,
     weekEnd: end,
+    periodDays: Math.round((fromKey(end).getTime() - fromKey(start).getTime()) / 86_400_000) + 1,
     loggedDays: days.length,
     avgCalories,
     avgCaloriesDelta,
@@ -120,10 +143,9 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
 const DISMISSED_KEY = 'calorie_tracker_recap_dismissed';
 const SUMMARY_KEY = 'calorie_tracker_recap_summary';
 
-/** Home shows the recap Monday to Wednesday, until dismissed. */
+/** Home shows the end-of-week brief Friday to Sunday, until dismissed. */
 export function showRecapOnHome(today: Date, weekStart: string): boolean {
-  const weekday = (today.getDay() + 6) % 7; // Mon = 0
-  if (weekday > 2) return false;
+  if (!isBriefTime(today)) return false;
   try {
     return localStorage.getItem(DISMISSED_KEY) !== weekStart;
   } catch {
@@ -139,7 +161,7 @@ export function dismissRecap(weekStart: string): void {
   }
 }
 
-/** The AI summary is generated once per week and reused (one Gemini call a week). */
+/** The brief is written once, on Friday (or the first open after), and reused. */
 export function cachedRecapSummary(weekStart: string): string | null {
   try {
     const raw = localStorage.getItem(SUMMARY_KEY);

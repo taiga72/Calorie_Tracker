@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@/store';
-import { fromKey, formatHeaderDate, isToday } from '@/lib/dateUtils';
+import { addDays, fromKey, formatHeaderDate, isToday, relativeDayLabel, toKey } from '@/lib/dateUtils';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
@@ -8,10 +9,15 @@ import { SwipeToDelete } from '@/components/SwipeToDelete';
 import { MealPhoto } from '@/components/MealPhoto';
 import { PinMealButton } from '@/components/PinMealButton';
 import { useUndoToast } from '@/components/UndoToastProvider';
-import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils } from 'lucide-react';
+import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MealEntry } from '@/types';
 
 const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+
+/** "Wed 7" — compact label for the previous/next day buttons. */
+function formatDayShort(key: string): string {
+  return fromKey(key).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
+}
 const MEAL_ICON: Record<string, typeof Coffee> = {
   Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
 };
@@ -19,15 +25,31 @@ const MEAL_ICON: Record<string, typeof Coffee> = {
 interface DayDetailModalProps {
   dateKey: string | null;
   onClose: () => void;
+  /** Move to the previous (-1) or next (+1) day; enables swiping between days. */
+  onNavigate?: (delta: 1 | -1) => void;
 }
 
-export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
+export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalProps) {
   const { getDay, settings, addMeal, deleteMeal, loadPhotos } = useStore();
   const { requestUndo } = useUndoToast();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
   const open = dateKey !== null;
+  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
+  const go = (delta: 1 | -1) => {
+    if (!onNavigate) return;
+    setSlideFrom(delta > 0 ? 'right' : 'left');
+    onNavigate(delta);
+  };
+  // Swipe left for the next day, right for the previous one. Meal rows keep
+  // their own swipe-to-delete.
+  const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
+    onSwipeLeft: () => go(1),
+    onSwipeRight: () => go(-1),
+    ignoreSelector: '[data-swipe-row]',
+  });
+  useEffect(() => { if (!open) setSlideFrom(null); }, [open]);
   const day = dateKey ? getDay(dateKey) : null;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
@@ -48,9 +70,37 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
   return (
     <>
       <Modal open={open} onClose={onClose} title={dateKey ? formatHeaderDate(fromKey(dateKey)) : ''}>
-        {day && (
-          <div>
-            <p className="text-xs text-gray-400 mb-3">{isToday(dateKey!) ? 'Today' : ''}</p>
+        {day && dateKey && (
+          <div
+            {...(onNavigate ? swipeHandlers : {})}
+            className="touch-pan-y"
+            style={{ transform: dragX ? `translateX(${dragX * 0.35}px)` : undefined, transition: dragX ? 'none' : 'transform .2s ease' }}
+          >
+          <div
+            key={dateKey}
+            className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
+          >
+            {onNavigate ? (
+              <div className="flex items-center justify-between -mt-1 mb-3">
+                <button
+                  onClick={() => go(-1)}
+                  aria-label="Previous day"
+                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-emerald-600 py-1 pr-2 transition-colors"
+                >
+                  <ChevronLeft size={15} /> {formatDayShort(toKey(addDays(fromKey(dateKey), -1)))}
+                </button>
+                <span className="text-[11px] font-semibold text-gray-400">{isToday(dateKey) ? 'Today' : relativeDayLabel(dateKey)}</span>
+                <button
+                  onClick={() => go(1)}
+                  aria-label="Next day"
+                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-emerald-600 py-1 pl-2 transition-colors"
+                >
+                  {formatDayShort(toKey(addDays(fromKey(dateKey), 1)))} <ChevronRight size={15} />
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 mb-3">{isToday(dateKey) ? 'Today' : ''}</p>
+            )}
 
             {/* Weight stat - interactive */}
             {day.weight ? (
@@ -164,6 +214,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                 })}
               </div>
             )}
+          </div>
           </div>
         )}
       </Modal>

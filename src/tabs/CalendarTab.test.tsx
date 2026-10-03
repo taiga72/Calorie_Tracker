@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
-import { toKey, addMonths, formatMonthYear } from '@/lib/dateUtils';
+import { toKey, addMonths, formatMonthYear, formatHeaderDate } from '@/lib/dateUtils';
 import type { DaySummary, MealEntry, Profile, Settings, WeightEntry } from '@/types';
 
 const DEFAULT_SETTINGS: Settings = {
@@ -192,3 +192,56 @@ describe('CalendarTab month swiping', () => {
   });
 });
 
+
+describe('CalendarTab day sheet: moving between days', () => {
+  const todayDate = new Date();
+  const keyOffset = (n: number) => toKey(new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + n));
+  const title = (n: number) => formatHeaderDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate() + n));
+
+  function openToday() {
+    renderCalendar();
+    fireEvent.click(cellFor(fromTodayDayNumber()));
+  }
+
+  function swipe(el: Element, dx: number) {
+    fireEvent.pointerDown(el, { clientX: 200, clientY: 300 });
+    fireEvent.pointerMove(el, { clientX: 200 + dx, clientY: 300 });
+    fireEvent.pointerUp(el, { clientX: 200 + dx, clientY: 300 });
+  }
+
+  it('goes to the next and previous day with the arrows', () => {
+    days = {};
+    openToday();
+    expect(screen.getByText(title(0))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Next day'));
+    expect(screen.getByText(title(1))).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Previous day'));
+    fireEvent.click(screen.getByLabelText('Previous day'));
+    expect(screen.getByText(title(-1))).toBeInTheDocument();
+  });
+
+  it('swipes left for the next day and right for the previous one', () => {
+    days = {};
+    openToday();
+    swipe(screen.getByText('No weight logged this day'), -120);
+    expect(screen.getByText(title(1))).toBeInTheDocument();
+    swipe(screen.getByText('No weight logged this day'), 120);
+    expect(screen.getByText(title(0))).toBeInTheDocument();
+  });
+
+  it('shows the new day’s data', () => {
+    days = { [keyOffset(-1)]: { ...emptyDay(keyOffset(-1)), meals: [{ ...meal(777), date: keyOffset(-1) }], totalCalories: 777 } };
+    openToday();
+    fireEvent.click(screen.getByLabelText('Previous day'));
+    expect(screen.getByText('777')).toBeInTheDocument();
+  });
+
+  it('a swipe on a meal row deletes-swipes the meal instead of changing day', () => {
+    days = { [keyOffset(0)]: { ...emptyDay(keyOffset(0)), meals: [{ ...meal(500), date: keyOffset(0) }], totalCalories: 500 } };
+    openToday();
+    const row = document.querySelector('[data-swipe-row]')!;
+    swipe(row, -60);
+    expect(screen.getByText(title(0))).toBeInTheDocument();
+  });
+});
