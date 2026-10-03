@@ -209,32 +209,54 @@ describe('CalendarTab day sheet: moving between days', () => {
     fireEvent.pointerUp(el, { clientX: 200 + dx, clientY: 300 });
   }
 
-  it('goes to the next and previous day with the arrows', () => {
+  it('goes to the next and previous day with the arrows (after the page-turn)', async () => {
     days = {};
     openToday();
     expect(screen.getByText(title(0))).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Next day'));
-    expect(screen.getByText(title(1))).toBeInTheDocument();
+    expect(await screen.findByText(title(1))).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Previous day'));
+    await screen.findByText(title(0));
     fireEvent.click(screen.getByLabelText('Previous day'));
-    expect(screen.getByText(title(-1))).toBeInTheDocument();
+    expect(await screen.findByText(title(-1))).toBeInTheDocument();
   });
 
-  it('swipes left for the next day and right for the previous one', () => {
+  it('swipes left for the next day and right for the previous one', async () => {
     days = {};
     openToday();
     swipe(screen.getByText('No weight logged this day'), -120);
-    expect(screen.getByText(title(1))).toBeInTheDocument();
+    expect(await screen.findByText(title(1))).toBeInTheDocument();
     swipe(screen.getByText('No weight logged this day'), 120);
-    expect(screen.getByText(title(0))).toBeInTheDocument();
+    expect(await screen.findByText(title(0))).toBeInTheDocument();
   });
 
-  it('shows the new day’s data', () => {
+  it('slides the current day out before the next one comes in', () => {
+    days = {};
+    openToday();
+    fireEvent.click(screen.getByLabelText('Next day'));
+    // Still showing today, on its way out.
+    expect(screen.getByText(title(0))).toBeInTheDocument();
+    const page = screen.getByText('No weight logged this day').closest('.touch-pan-y') as HTMLElement;
+    expect(page.style.transform).toBe('translateX(-110%)');
+  });
+
+  it('the day follows the finger while dragging', () => {
+    days = {};
+    openToday();
+    const el = screen.getByText('No weight logged this day');
+    fireEvent.pointerDown(el, { clientX: 200, clientY: 300 });
+    fireEvent.pointerMove(el, { clientX: 140, clientY: 300 });
+    const page = el.closest('.touch-pan-y') as HTMLElement;
+    expect(page.style.transform).toBe('translateX(-60px)');
+    fireEvent.pointerUp(el, { clientX: 140, clientY: 300 });
+  });
+
+  it('shows the new day’s data', async () => {
     days = { [keyOffset(-1)]: { ...emptyDay(keyOffset(-1)), meals: [{ ...meal(777), date: keyOffset(-1) }], totalCalories: 777 } };
     openToday();
     fireEvent.click(screen.getByLabelText('Previous day'));
-    expect(screen.getByText('777')).toBeInTheDocument();
+    expect(await screen.findByText('777')).toBeInTheDocument();
   });
 
   it('a swipe on a meal row deletes-swipes the meal instead of changing day', () => {

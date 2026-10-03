@@ -33,46 +33,14 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
   const [phase, setPhase] = useState<Phase>('idle');
   const start = useRef<{ x: number; y: number } | null>(null);
   const axis = useRef<'vertical' | 'horizontal' | null>(null);
+  const pull = useRef(0);
   const wasReady = useRef(false);
   const mounted = useRef(true);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => { mounted.current = false; }, []);
 
-  const reset = () => {
-    start.current = null;
-    axis.current = null;
-    wasReady.current = false;
-    setDragging(false);
-    setPullY(0);
-  };
-
   const busy = refreshing || phase === 'syncing';
-
-  const onPointerDown = (e: ReactPointerEvent) => {
-    if (busy || window.scrollY > 0) return;
-    start.current = { x: e.clientX, y: e.clientY };
-    axis.current = null;
-  };
-
-  const onPointerMove = (e: ReactPointerEvent) => {
-    if (!start.current) return;
-    const dx = e.clientX - start.current.x;
-    const dy = e.clientY - start.current.y;
-
-    if (axis.current === null) {
-      if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return;
-      axis.current = Math.abs(dy) > Math.abs(dx) ? 'vertical' : 'horizontal';
-      if (axis.current === 'vertical') setDragging(true);
-    }
-
-    if (axis.current !== 'vertical') return;
-    const next = dy <= 0 ? 0 : Math.min(dy * DRAG_RESISTANCE, MAX_PULL_PX);
-    const ready = next > PULL_THRESHOLD_PX;
-    // A tiny tick when crossing the threshold, where supported (Android).
-    if (ready && !wasReady.current) navigator.vibrate?.(8);
-    wasReady.current = ready;
-    setPullY(next);
-  };
 
   const runRefresh = async () => {
     setPhase('syncing');
@@ -87,10 +55,81 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
     setTimeout(() => { if (mounted.current) setPhase('idle'); }, RESULT_VISIBLE_MS);
   };
 
-  const onPointerEnd = () => {
-    if (axis.current === 'vertical' && pullY > PULL_THRESHOLD_PX) void runRefresh();
-    reset();
+  // The gesture itself, shared by touch (phones) and mouse/pen.
+  const begin = (x: number, y: number) => {
+    if (busy || window.scrollY > 0) return;
+    start.current = { x, y };
+    axis.current = null;
   };
+
+  /** Returns true while this is a pull, so the browser's own scroll is held off. */
+  const move = (x: number, y: number): boolean => {
+    if (!start.current) return false;
+    const dx = x - start.current.x;
+    const dy = y - start.current.y;
+
+    if (axis.current === null) {
+      if (Math.abs(dx) < AXIS_LOCK_PX && Math.abs(dy) < AXIS_LOCK_PX) return false;
+      // Only a downward drag starts a pull; scrolling up the page is left alone.
+      axis.current = Math.abs(dy) > Math.abs(dx) && dy > 0 ? 'vertical' : 'horizontal';
+      if (axis.current === 'vertical') setDragging(true);
+    }
+
+    if (axis.current !== 'vertical') return false;
+    const next = dy <= 0 ? 0 : Math.min(dy * DRAG_RESISTANCE, MAX_PULL_PX);
+    const ready = next > PULL_THRESHOLD_PX;
+    // A tiny tick when crossing the threshold, where supported (Android).
+    if (ready && !wasReady.current) navigator.vibrate?.(8);
+    wasReady.current = ready;
+    pull.current = next;
+    setPullY(next);
+    return true;
+  };
+
+  const end = () => {
+    if (axis.current === 'vertical' && pull.current > PULL_THRESHOLD_PX) void runRefresh();
+    start.current = null;
+    axis.current = null;
+    wasReady.current = false;
+    pull.current = 0;
+    setDragging(false);
+    setPullY(0);
+  };
+
+  const gesture = useRef({ begin, move, end });
+  gesture.current = { begin, move, end };
+
+  // On iPhone a vertical drag is taken over by the browser's own scrolling
+  // (pointer events get cancelled), so touches are handled directly, with a
+  // non-passive listener that can claim the drag once it's clearly a pull.
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const onStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      gesture.current.begin(e.touches[0].clientX, e.touches[0].clientY);
+    };
+    const onMove = (e: TouchEvent) => {
+      if (e.touches.length !== 1) return;
+      if (gesture.current.move(e.touches[0].clientX, e.touches[0].clientY) && e.cancelable) e.preventDefault();
+    };
+    const onEnd = () => gesture.current.end();
+    el.addEventListener('touchstart', onStart, { passive: true });
+    el.addEventListener('touchmove', onMove, { passive: false });
+    el.addEventListener('touchend', onEnd);
+    el.addEventListener('touchcancel', onEnd);
+    return () => {
+      el.removeEventListener('touchstart', onStart);
+      el.removeEventListener('touchmove', onMove);
+      el.removeEventListener('touchend', onEnd);
+      el.removeEventListener('touchcancel', onEnd);
+    };
+  }, []);
+
+  // Mouse and pen; touch is handled above.
+  const onPointerDown = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') begin(e.clientX, e.clientY); };
+  const onPointerMove = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') move(e.clientX, e.clientY); };
+  const onPointerEnd = (e: ReactPointerEvent) => { if (e.pointerType !== 'touch') end(); };
 
   const syncing = refreshing || phase === 'syncing';
   const showResult = phase === 'done' || phase === 'failed';
@@ -105,6 +144,7 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
 
   return (
     <div
+      ref={rootRef}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
