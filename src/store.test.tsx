@@ -89,6 +89,10 @@ vi.mock('@/lib/storage', () => ({
       db.pinned = [pin, ...db.pinned.filter((p) => p.id !== pin.id)];
       return true;
     }),
+    replaceMealPhotos: vi.fn(async (_userId: string, id: string, refs: string[]) => {
+      db.meals = db.meals.map((m) => (m.id === id ? { ...m, imageData: undefined, imageDatas: refs } : m));
+      return true;
+    }),
     deletePinnedMeal: vi.fn(async (_userId: string, id: string) => {
       db.pinned = db.pinned.filter((p) => p.id !== id);
       return true;
@@ -108,6 +112,16 @@ vi.mock('@/lib/storage', () => ({
       return true;
     }),
   },
+}));
+
+const storeInlinePhotos = vi.fn(async (_uid: string, photos: string[]) => photos.map((p) => (p.startsWith('data:') ? `sb:${p.slice(5)}` : p)));
+const photoToDataUrl = vi.fn(async (src: string) => (src.startsWith('sb:') ? `data:${src.slice(3)}` : src));
+vi.mock('@/lib/photoStorage', () => ({
+  isDataUrl: (s: string) => s.startsWith('data:'),
+  isStorageRef: (s: string) => s.startsWith('sb:'),
+  photoStorageAvailable: () => true,
+  storeInlinePhotos: (uid: string, photos: string[]) => storeInlinePhotos(uid, photos),
+  photoToDataUrl: (src: string) => photoToDataUrl(src),
 }));
 
 const { StoreProvider, useStore } = await import('@/store');
@@ -144,6 +158,8 @@ beforeEach(() => {
   resetDb();
   vi.clearAllMocks();
   localStorage.clear();
+  // Photo migration has its own tests; elsewhere it's already done.
+  localStorage.setItem(`calorie_tracker_photos_migrated_${TEST_USER_ID}`, '1');
   setOnline(true);
   authStatus = 'verified';
 });
@@ -588,6 +604,17 @@ describe('pinned meals', () => {
     expect(result.current.pinned).toEqual([pin]);
   });
 
+  it('renames/edits a pin and syncs the change', async () => {
+    const { result } = await renderStore();
+    act(() => { result.current.pinMeal(oats); });
+    const id = result.current.pinned[0].id;
+
+    act(() => { result.current.updatePin(id, { name: 'Usual oats', calories: 250 }); });
+
+    expect(result.current.pinned[0]).toMatchObject({ id, name: 'Usual oats', calories: 250, mealType: 'Breakfast' });
+    await waitFor(() => expect(db.pinned[0]).toMatchObject({ name: 'Usual oats', calories: 250 }));
+  });
+
   it('keeps pins on the device when the pinned_meals table has not been created', async () => {
     vi.mocked(storage.getPinnedMeals).mockResolvedValue(null);
     const { result } = await renderStore();
@@ -679,5 +706,56 @@ describe('before the session is confirmed', () => {
     second.rerender();
     await waitFor(() => expect(storage.insertMeal).toHaveBeenCalled());
     await waitFor(() => expect(storage.getMeals).toHaveBeenCalled());
+  });
+});
+
+describe('moving inline photos to Storage', () => {
+  it('uploads older inline photos in the background and points the rows at the files', async () => {
+    localStorage.removeItem(`calorie_tracker_photos_migrated_${TEST_USER_ID}`);
+    db.meals = [
+      { ...emptyMeal(), id: 'inline', imageDatas: ['data:old-photo'], createdAt: 1 },
+      { ...emptyMeal(), id: 'already', imageDatas: ['sb:u/x.jpg'], createdAt: 2 },
+    ];
+    await renderStore();
+
+    await waitFor(() => expect(storage.replaceMealPhotos).toHaveBeenCalled(), { timeout: 6000 });
+    expect(storage.replaceMealPhotos).toHaveBeenCalledTimes(1);
+    expect(storage.replaceMealPhotos).toHaveBeenCalledWith(TEST_USER_ID, 'inline', ['sb:old-photo']);
+    await waitFor(() => expect(localStorage.getItem(`calorie_tracker_photos_migrated_${TEST_USER_ID}`)).not.toBeNull());
+  }, 10_000);
+
+  it('stops on a failed upload and tries again next time', async () => {
+    localStorage.removeItem(`calorie_tracker_photos_migrated_${TEST_USER_ID}`);
+    db.meals = [{ ...emptyMeal(), id: 'inline', imageDatas: ['data:old-photo'], createdAt: 1 }];
+    storeInlinePhotos.mockResolvedValueOnce(null as never);
+    await renderStore();
+
+    await waitFor(() => expect(storeInlinePhotos).toHaveBeenCalled(), { timeout: 6000 });
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    expect(storage.replaceMealPhotos).not.toHaveBeenCalled();
+    expect(localStorage.getItem(`calorie_tracker_photos_migrated_${TEST_USER_ID}`)).toBeNull();
+  }, 10_000);
+});
+
+describe('backup export with stored photos', () => {
+  it('embeds stored photos back into the file as data URLs, like before', async () => {
+    db.meals = [{ ...emptyMeal(), id: 'm', imageDatas: ['sb:jpeg-bytes'], createdAt: 1 }];
+    const { result } = await renderStore();
+
+    let exported!: Awaited<ReturnType<typeof result.current.prepareExport>>;
+    await act(async () => { exported = await result.current.prepareExport(); });
+
+    expect(exported.payload.meals[0].imageDatas).toEqual(['data:jpeg-bytes']);
+    expect(exported.missingPhotos).toBe(false);
+  });
+
+  it('flags photos that could not be downloaded', async () => {
+    db.meals = [{ ...emptyMeal(), id: 'm', imageDatas: ['sb:jpeg-bytes'], createdAt: 1 }];
+    const { result } = await renderStore();
+    photoToDataUrl.mockResolvedValueOnce(null as never);
+
+    let exported!: Awaited<ReturnType<typeof result.current.prepareExport>>;
+    await act(async () => { exported = await result.current.prepareExport(); });
+    expect(exported.missingPhotos).toBe(true);
   });
 });

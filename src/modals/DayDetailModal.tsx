@@ -5,6 +5,7 @@ import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { MealPhoto } from '@/components/MealPhoto';
 import { PinMealButton } from '@/components/PinMealButton';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils } from 'lucide-react';
@@ -132,7 +133,7 @@ export function DayDetailModal({ dateKey, onClose }: DayDetailModalProps) {
                               <div className="flex items-center gap-3 py-2.5">
                                 {thumb ? (
                                   <div className="relative flex-shrink-0">
-                                    <img src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
+                                    <MealPhoto src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
                                     {m.imageDatas && m.imageDatas.length > 1 && (
                                       <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
                                     )}

@@ -4,6 +4,7 @@ import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type Me
 import { addDays, toKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
+import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
   applyPending, describeOp, isOnline, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
   type OutboxOp, type QueuedOp, type Snapshot,
@@ -30,6 +31,8 @@ interface StoreValue {
   /** Pins a meal; returns the existing pin instead when the same meal is already pinned. */
   pinMeal: (m: Omit<PinnedMeal, 'id' | 'createdAt'>) => { pin: PinnedMeal; alreadyPinned: boolean };
   unpinMeal: (id: string) => void;
+  /** Renames/edits a pinned meal (name, type, nutrition). */
+  updatePin: (id: string, patch: Partial<Omit<PinnedMeal, 'id' | 'createdAt'>>) => void;
   /** Puts a previously removed pin back exactly as it was (for undo). */
   restorePin: (pin: PinnedMeal) => void;
   clearAll: () => void;
@@ -73,6 +76,13 @@ const SNAPSHOT_DEBOUNCE_MS = 800;
 // Photos for meals this recent are fetched in the background after each
 // sync; older ones only when a day is opened (or for a backup export).
 const RECENT_PHOTO_DAYS = 30;
+// Moving older inline photos into Storage happens a few meals at a time, in
+// the background, once per account per device until done.
+const MIGRATION_BATCH = 20;
+const MIGRATION_PAUSE_MS = 250;
+const MIGRATION_START_DELAY_MS = 3000;
+const migratedKey = (uid: string) => `calorie_tracker_photos_migrated_${uid}`;
+const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 function runOp(userId: string, op: OutboxOp): Promise<boolean> {
   switch (op.kind) {
@@ -154,6 +164,47 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       missing.forEach((id) => photosInFlight.current.delete(id));
     }
   }, [withPhotos]);
+
+  const migrating = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // Older meals still carry their photos inline (that's what made loading
+  // slow). Upload them to Storage and point the rows at the files. Stops at
+  // the first failure (offline, no bucket yet) and picks up next launch.
+  const migrateInlinePhotos = useCallback(async (uid: string) => {
+    try {
+      if (migrating.current || localStorage.getItem(migratedKey(uid))) return;
+    } catch {
+      return;
+    }
+    migrating.current = true;
+    try {
+      await pause(MIGRATION_START_DELAY_MS);
+      if (!mounted.current) return;
+      const ids = current.current.meals.map((m) => m.id);
+      for (let i = 0; i < ids.length; i += MIGRATION_BATCH) {
+        if (!mounted.current || !isOnline() || !canSyncRef.current || !photoStorageAvailable()) return;
+        const rows = await storage.getMealPhotos(uid, ids.slice(i, i + MIGRATION_BATCH));
+        for (const row of rows) {
+          const list = row.imageDatas ?? (row.imageData ? [row.imageData] : []);
+          if (!list.some(isDataUrl)) continue;
+          const stored = await storeInlinePhotos(uid, list);
+          if (!stored || !photoStorageAvailable()) return;
+          if (!(await storage.replaceMealPhotos(uid, row.id, stored))) return;
+        }
+        await pause(MIGRATION_PAUSE_MS);
+      }
+      localStorage.setItem(migratedKey(uid), String(Date.now()));
+    } catch {
+      // Try again next launch.
+    } finally {
+      migrating.current = false;
+    }
+  }, []);
 
   const persistQueue = useCallback((uid: string, next: QueuedOp[]) => {
     queue.current = next;
@@ -259,6 +310,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (failed.length === 0) {
         setSyncError((prev) => (prev?.startsWith("Couldn't load") ? null : prev));
         setLastSyncedAt(Date.now());
+        void migrateInlinePhotos(uid);
         return true;
       }
       // Offline is expected, not an error: the offline pill already says so.
@@ -267,7 +319,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })();
     syncInFlight.current = run;
     return run.finally(() => { syncInFlight.current = null; });
-  }, [flush, applySnapshot, rememberPhotos, withPhotos, fetchPhotos]);
+  }, [flush, applySnapshot, rememberPhotos, withPhotos, fetchPhotos, migrateInlinePhotos]);
 
   // StoreProvider is only mounted once a user is signed in (see App.tsx), but
   // guard against a transient render before that so hooks stay unconditional.
@@ -408,12 +460,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       profile,
     });
 
+    // Backups embed photos as data URLs, exactly as before, so they restore
+    // anywhere: stored photos are downloaded back into the file.
     const prepareExport: StoreValue['prepareExport'] = async () => {
-      const ok = await loadPhotos(current.current.meals.map((m) => m.id));
-      return {
-        payload: { ...exportBackup(), meals: current.current.meals },
-        missingPhotos: !ok,
-      };
+      let ok = await loadPhotos(current.current.meals.map((m) => m.id));
+      const meals: MealEntry[] = [];
+      for (const m of current.current.meals) {
+        const list = m.imageDatas ?? (m.imageData ? [m.imageData] : []);
+        if (list.every(isDataUrl)) { meals.push(m); continue; }
+        const embedded = await Promise.all(list.map(async (src) => (await photoToDataUrl(src)) ?? src));
+        if (embedded.some((src) => !isDataUrl(src))) ok = false;
+        meals.push({ ...m, imageData: undefined, imageDatas: embedded });
+      }
+      return { payload: { ...exportBackup(), meals }, missingPhotos: !ok };
     };
 
     const putWeight = (displayValue: number, dateKey: string) => {
@@ -468,6 +527,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit({ kind: 'deletePinned', id });
     };
 
+    const updatePin: StoreValue['updatePin'] = (id, patch) => {
+      const existing = current.current.pinned.find((p) => p.id === id);
+      if (!existing) return;
+      const pin: PinnedMeal = { ...existing, ...patch };
+      current.current = { ...current.current, pinned: current.current.pinned.map((p) => (p.id === id ? pin : p)) };
+      setPinned((prev) => prev.map((p) => (p.id === id ? pin : p)));
+      commit({ kind: 'upsertPinned', pin });
+    };
+
     const restorePin: StoreValue['restorePin'] = (pin) => {
       setPinned((prev) => [...prev.filter((p) => p.id !== pin.id), pin].sort((a, b) => b.createdAt - a.createdAt));
       commit({ kind: 'upsertPinned', pin });
@@ -504,7 +572,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addMeal, updateMeal, deleteMeal,
       logWeight, logWeightForDate, deleteWeight,
       updateSettings, updateProfile,
-      pinMeal, unpinMeal, restorePin,
+      pinMeal, unpinMeal, updatePin, restorePin,
       clearAll, importBackup, exportBackup, prepareExport, loadPhotos, getDay,
       syncError, dismissSyncError,
       refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,

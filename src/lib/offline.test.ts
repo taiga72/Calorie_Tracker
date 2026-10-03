@@ -56,11 +56,12 @@ describe('outbox storage', () => {
 });
 
 describe('snapshot storage', () => {
-  it('round-trips the last known state, leaving out photos (loaded separately)', () => {
-    saveSnapshot('u1', { ...empty, meals: [meal('a', 100, 'data:photo')] });
+  it('round-trips the last known state, leaving out inline photos but keeping stored ones', () => {
+    saveSnapshot('u1', { ...empty, meals: [meal('a', 100, 'data:photo'), meal('b', 100, 'sb:u1/b.jpg')] });
     const loaded = loadSnapshot('u1')!;
-    expect(loaded.meals.map((m) => m.id)).toEqual(['a']);
+    expect(loaded.meals.map((m) => m.id)).toEqual(['a', 'b']);
     expect(loaded.meals[0].imageDatas).toBeUndefined();
+    expect(loaded.meals[1].imageDatas).toEqual(['sb:u1/b.jpg']);
     expect(loaded.settings).toEqual(settings);
   });
 });

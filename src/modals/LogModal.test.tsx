@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { PinnedMeal, Settings } from '@/types';
 
@@ -17,6 +17,7 @@ const addMeal = vi.fn();
 const pinMeal = vi.fn();
 const unpinMeal = vi.fn((id: string) => { pinned = pinned.filter((p) => p.id !== id); });
 const restorePin = vi.fn((pin: PinnedMeal) => { pinned = [pin, ...pinned]; });
+const updatePin = vi.fn();
 
 vi.mock('@/store', () => ({
   useStore: () => ({
@@ -30,6 +31,7 @@ vi.mock('@/store', () => ({
     pinned,
     pinMeal,
     unpinMeal,
+    updatePin,
     restorePin,
   }),
 }));
@@ -171,5 +173,126 @@ describe('LogModal pinning an AI estimate', () => {
     await estimateBowl();
     expect(screen.getByText('Already in your pinned meals')).toBeInTheDocument();
     expect(screen.queryByText(/Pin this meal/)).not.toBeInTheDocument();
+  });
+});
+
+describe('LogModal editing a pin', () => {
+  it('renames a pin and changes its type', () => {
+    pinned = [pin('Oat bowl', 400)];
+    renderLog();
+
+    fireEvent.click(screen.getByLabelText('Edit Oat bowl'));
+    expect(screen.getByText('Edit pinned meal')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Usual oats' } });
+    fireEvent.click(screen.getByText('Snack'));
+    fireEvent.click(screen.getByText('Save pin'));
+
+    expect(updatePin).toHaveBeenCalledWith('pin-Oat bowl', expect.objectContaining({ name: 'Usual oats', mealType: 'Snack', calories: 400 }));
+    // Back to the normal Quick log view.
+    expect(screen.getByText('Estimate with AI')).toBeInTheDocument();
+  });
+
+  it('scales macros and items when calories change', () => {
+    pinned = [pin('Oat bowl', 400)]; // P 12, C 55, F 7, Fb 8
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Edit Oat bowl'));
+
+    const kcal = screen.getByLabelText('Calories');
+    fireEvent.change(kcal, { target: { value: '200' } });
+    fireEvent.blur(kcal);
+    expect(screen.getByLabelText('Protein (g)')).toHaveValue(6);
+    fireEvent.click(screen.getByText('Save pin'));
+
+    const patch = updatePin.mock.calls[0][1];
+    expect(patch).toMatchObject({ calories: 200, protein: 6, carbs: 27.5, fat: 3.5, fiber: 4 });
+    expect(patch.items[0].calories).toBe(200);
+  });
+
+  it('cancel leaves the pin unchanged', () => {
+    pinned = [pin('Oat bowl', 400)];
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Edit Oat bowl'));
+    fireEvent.click(screen.getByText('Cancel'));
+    expect(updatePin).not.toHaveBeenCalled();
+    expect(screen.getByText('Oat bowl')).toBeInTheDocument();
+  });
+
+  it('deletes a pin from the editor, with undo', () => {
+    pinned = [pin('Oat bowl', 400)];
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Edit Oat bowl'));
+    fireEvent.click(screen.getByLabelText('Delete pin'));
+    expect(unpinMeal).toHaveBeenCalledWith('pin-Oat bowl');
+    fireEvent.click(screen.getByText('Undo'));
+    expect(restorePin).toHaveBeenCalled();
+  });
+});
+
+describe('LogModal voice input', () => {
+  class FakeRecognition {
+    static last: FakeRecognition | null = null;
+    lang = '';
+    interimResults = false;
+    continuous = false;
+    onresult: ((e: unknown) => void) | null = null;
+    onerror: ((e: { error: string }) => void) | null = null;
+    onend: (() => void) | null = null;
+    start = vi.fn(() => { FakeRecognition.last = this; });
+    stop = vi.fn(() => this.onend?.());
+    abort = vi.fn();
+    say(parts: [string, boolean][]) {
+      const results = parts.map(([t, isFinal]) => ({ isFinal, 0: { transcript: t } }));
+      act(() => this.onresult?.({ resultIndex: 0, results }));
+    }
+  }
+
+  beforeEach(() => {
+    (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition = FakeRecognition;
+  });
+  afterEach(() => {
+    delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+  });
+
+  it('fills the description as you speak', () => {
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Speak your meal'));
+    expect(screen.getByText(/Listening/)).toBeInTheDocument();
+
+    FakeRecognition.last!.say([['two eggs', false]]);
+    expect(screen.getByRole('textbox')).toHaveValue('two eggs');
+    FakeRecognition.last!.say([['two eggs and toast', true]]);
+    expect(screen.getByRole('textbox')).toHaveValue('two eggs and toast');
+  });
+
+  it('adds dictation after what was already typed', () => {
+    renderLog();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'coffee' } });
+    fireEvent.click(screen.getByLabelText('Speak your meal'));
+    FakeRecognition.last!.say([['banana', true]]);
+    expect(screen.getByRole('textbox')).toHaveValue('coffee, banana');
+  });
+
+  it('explains when the microphone is blocked', () => {
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Speak your meal'));
+    act(() => {
+      FakeRecognition.last!.onerror?.({ error: 'not-allowed' });
+      FakeRecognition.last!.onend?.();
+    });
+    expect(screen.getByText(/Microphone access is blocked/)).toBeInTheDocument();
+  });
+
+  it('tapping again stops listening', () => {
+    renderLog();
+    fireEvent.click(screen.getByLabelText('Speak your meal'));
+    fireEvent.click(screen.getByLabelText('Stop voice input'));
+    expect(FakeRecognition.last!.stop).toHaveBeenCalled();
+    expect(screen.queryByText(/Listening/)).not.toBeInTheDocument();
+  });
+
+  it('hides the mic where the browser has no speech recognition', () => {
+    delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
+    renderLog();
+    expect(screen.queryByLabelText('Speak your meal')).not.toBeInTheDocument();
   });
 });

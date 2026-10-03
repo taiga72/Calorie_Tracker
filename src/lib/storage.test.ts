@@ -1,13 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { MealEntry, WeightEntry, Settings, Profile } from '@/types';
 
+const bucket = {
+  upload: vi.fn(async (): Promise<{ error: unknown }> => ({ error: null })),
+  list: vi.fn(async (): Promise<{ data: { name: string }[] | null; error: unknown }> => ({ data: [], error: null })),
+  remove: vi.fn(async () => ({ error: null })),
+  createSignedUrls: vi.fn(),
+};
+
 vi.mock('@/lib/supabaseClient', () => ({
-  supabase: { from: vi.fn() },
+  supabase: { from: vi.fn(), storage: { from: () => bucket } },
 }));
 
 // Imported after the mock so `storage` picks up the mocked client.
 const { storage } = await import('@/lib/storage');
 const { supabase } = await import('@/lib/supabaseClient');
+const { resetPhotoStorageState } = await import('@/lib/photoStorage');
 
 type Result = { data?: unknown; error?: unknown; status?: number };
 
@@ -67,6 +75,10 @@ const weight: WeightEntry = { date: '2026-01-01', weight: 70, createdAt: 1 };
 
 beforeEach(() => {
   vi.mocked(supabase.from).mockReset();
+  bucket.upload.mockReset().mockResolvedValue({ error: null });
+  bucket.list.mockReset().mockResolvedValue({ data: [], error: null });
+  bucket.remove.mockClear();
+  resetPhotoStorageState();
 });
 
 afterEach(() => {
@@ -491,5 +503,79 @@ describe('pinned meals', () => {
 
     expect(await storage.deletePinnedMeal(USER_ID, 'p1')).toBe(true);
     expect(from.node.eq).toHaveBeenCalledWith('id', 'p1');
+  });
+});
+
+const firstArg = (fn: { mock: { calls: unknown[][] } }) => fn.mock.calls[0][0];
+
+describe('meal photos in Storage', () => {
+  const PHOTO = 'data:image/jpeg;base64,' + btoa('fake-jpeg-bytes');
+  const withPhoto = (id: string): MealEntry => ({ ...meal(id), imageDatas: [PHOTO] });
+
+  it('uploads inline photos and saves only a reference in the row', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    expect(await storage.insertMeal(USER_ID, withPhoto('m1'))).toBe(true);
+
+    expect(bucket.upload).toHaveBeenCalledWith(expect.stringMatching(new RegExp(`^${USER_ID}/.+\\.jpg$`)), expect.any(Blob), expect.objectContaining({ contentType: 'image/jpeg' }));
+    const row = firstArg(from.upsert) as { image_datas: string[]; image_data: unknown };
+    expect(row.image_datas).toHaveLength(1);
+    expect(row.image_datas[0]).toMatch(/^sb:user-123\//);
+    expect(row.image_data).toBeNull();
+  });
+
+  it('fails the save (so it is retried later) when an upload fails, e.g. offline', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    bucket.upload.mockResolvedValue({ error: { message: 'Failed to fetch' } });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await storage.insertMeal(USER_ID, withPhoto('m1'))).toBe(false);
+    expect(from.upsert).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('keeps photos inline, as before, when the bucket has not been created', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    bucket.upload.mockResolvedValue({ error: { message: 'Bucket not found', statusCode: '404' } });
+
+    expect(await storage.insertMeal(USER_ID, withPhoto('m1'))).toBe(true);
+    expect((firstArg(from.upsert) as { image_datas: string[] }).image_datas).toEqual([PHOTO]);
+  });
+
+  it('leaves photos that are already references untouched', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    await storage.updateMeal(USER_ID, 'm1', { imageDatas: ['sb:user-123/a.jpg'] });
+
+    expect(bucket.upload).not.toHaveBeenCalled();
+    expect(from.update).toHaveBeenCalledWith({ image_datas: ['sb:user-123/a.jpg'], image_data: null });
+  });
+
+  it('uploads photos from an imported backup, keeping any that fail inline', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    bucket.upload.mockResolvedValueOnce({ error: null }).mockResolvedValueOnce({ error: { message: 'Failed to fetch' } });
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await storage.importBackup(USER_ID, { version: 1, exportedAt: '', meals: [withPhoto('m1'), withPhoto('m2')], weights: [], settings: {} as Settings });
+
+    const rows = firstArg(from.insert) as { image_datas: string[] }[];
+    expect(rows[0].image_datas[0]).toMatch(/^sb:/);
+    expect(rows[1].image_datas[0]).toBe(PHOTO);
+    spy.mockRestore();
+  });
+
+  it('deletes the user\'s photo files when clearing all data', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    bucket.list.mockResolvedValueOnce({ data: [{ name: 'a.jpg' }, { name: 'b.jpg' }], error: null });
+
+    expect(await storage.clearAll(USER_ID)).toBe(true);
+    expect(bucket.list).toHaveBeenCalledWith(USER_ID, { limit: 100 });
+    expect(bucket.remove).toHaveBeenCalledWith([`${USER_ID}/a.jpg`, `${USER_ID}/b.jpg`]);
   });
 });

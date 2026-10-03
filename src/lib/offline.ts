@@ -1,4 +1,5 @@
 import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal } from '@/types';
+import { isStorageRef } from '@/lib/photoStorage';
 
 /**
  * A write that hasn't reached Supabase yet. Every op is idempotent (upserts,
@@ -69,13 +70,17 @@ export function loadSnapshot(userId: string): Snapshot | null {
 
 /**
  * Caches the last known state so the app opens instantly — and works with no
- * connection. Meal photos are left out: they're most of the data (writing
- * them on every change was slow and overflowed storage) and are loaded
- * separately. Edits never send absent photos, so this can't erase them.
+ * connection. Inline (base64) photos are left out: they're most of the data
+ * (writing them on every change was slow and overflowed storage). Photos in
+ * Storage are kept — they're just short references. Edits never send absent
+ * photos, so this can't erase them.
  */
 export function saveSnapshot(userId: string, snap: Snapshot): void {
   try {
-    const meals = snap.meals.map(({ imageData: _a, imageDatas: _b, ...rest }) => rest);
+    const meals = snap.meals.map(({ imageData: _legacy, imageDatas, ...rest }) => {
+      const refs = imageDatas?.filter(isStorageRef);
+      return refs?.length ? { ...rest, imageDatas: refs } : rest;
+    });
     localStorage.setItem(snapshotKey(userId), JSON.stringify({ ...snap, meals }));
   } catch {
     // Best-effort only.
