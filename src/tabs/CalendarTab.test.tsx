@@ -73,6 +73,27 @@ describe('CalendarTab heatmap', () => {
     expect(cellFor(d).className).toMatch(/bg-rose-50/);
   });
 
+  it('counts up to 5% over the goal as within it', () => {
+    const d = fromTodayDayNumber();
+    days = { [today]: { ...emptyDay(today), meals: [meal(2080)], totalCalories: 2080 } };
+    renderCalendar();
+    expect(cellFor(d).className).toMatch(/bg-emerald-50/);
+  });
+
+  it('tints a finished day under half the goal as partly logged, but not today', () => {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yKey = toKey(y);
+    days = {
+      [yKey]: { ...emptyDay(yKey), meals: [meal(400)], totalCalories: 400 },
+      [today]: { ...emptyDay(today), meals: [meal(400)], totalCalories: 400 },
+    };
+    renderCalendar();
+    expect(cellFor(fromTodayDayNumber()).className).toMatch(/bg-emerald-50/);
+    if (y.getMonth() !== new Date().getMonth()) fireEvent.click(screen.getByLabelText('Previous month'));
+    expect(cellFor(String(y.getDate())).className).toMatch(/bg-amber-50/);
+  });
+
   it('tints a weight-only day blue', () => {
     const d = fromTodayDayNumber();
     days = { [today]: { ...emptyDay(today), weight: { date: today, weight: 70, createdAt: 1 } } };
@@ -92,6 +113,7 @@ describe('CalendarTab heatmap', () => {
     renderCalendar();
     expect(screen.getByText('Within goal')).toBeInTheDocument();
     expect(screen.getByText('Over goal')).toBeInTheDocument();
+    expect(screen.getByText('Partly logged')).toBeInTheDocument();
     expect(screen.getByText('Weight only')).toBeInTheDocument();
   });
 });

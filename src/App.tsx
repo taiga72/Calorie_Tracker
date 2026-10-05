@@ -81,8 +81,8 @@ function AppInner() {
 
   useEffect(() => {
     if (loading) return;
-    const { count } = calculateStreak(meals);
-    if (shouldShowStreakPopup(count)) {
+    const { count, todayLogged } = calculateStreak(meals);
+    if (shouldShowStreakPopup(count, todayLogged)) {
       setStreakCount(count);
       setStreakOpen(true);
     }

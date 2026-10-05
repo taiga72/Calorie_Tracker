@@ -7,8 +7,9 @@ const SETTLED_HEIGHT_PX = 64;
 const DRAG_RESISTANCE = 0.5;
 const AXIS_LOCK_PX = 8;
 const RESULT_VISIBLE_MS = 1100;
-// Gestures inside these never start a pull.
-const NO_PULL = '[role="dialog"]';
+// Gestures inside these never start a pull: sheets, and charts (dragging
+// on one reads its values).
+const NO_PULL = '[role="dialog"], [data-chart]';
 
 const RING_R = 15;
 const RING_C = 2 * Math.PI * RING_R;

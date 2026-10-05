@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Modal } from '@/components/Modal';
 import { useStore } from '@/store';
+import { useAuth } from '@/auth';
 import { askCoach, getOrFetchInsight, type CoachMessage, type CoachInsight } from '@/lib/geminiCoach';
+import { loadCoachChat, saveCoachChat, MAX_HISTORY_SENT } from '@/lib/coachChat';
 import { RateLimitError } from '@/lib/gemini';
-import { Sparkles, Send, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sparkles, Send, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
 
 const QUICK_PROMPTS = [
   'Is my calorie deficit right for me?',
@@ -19,7 +21,9 @@ const GREETING: CoachMessage = {
 
 export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { meals, weights, settings } = useStore();
-  const [messages, setMessages] = useState<CoachMessage[]>([GREETING]);
+  const userId = useAuth().user?.id;
+  // The greeting isn't stored: it's always the first bubble.
+  const [messages, setMessages] = useState<CoachMessage[]>(() => [GREETING, ...loadCoachChat(userId)]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +32,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
 
   useEffect(() => {
     if (open) {
-      setMessages([GREETING]);
+      setMessages([GREETING, ...loadCoachChat(userId)]);
       setError(null);
       setInput('');
       setInsight(null);
@@ -37,6 +41,17 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
         .catch(() => {});
     }
   }, [open]);
+
+  useEffect(() => {
+    saveCoachChat(userId, messages.slice(1));
+  }, [messages, userId]);
+
+  const hasConversation = messages.length > 1;
+  const newChat = () => {
+    if (loading) return;
+    setMessages([GREETING]);
+    setError(null);
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -51,7 +66,11 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
     setInput('');
     setLoading(true);
     try {
-      const reply = await askCoach(settings.geminiApiKey, { settings, meals, weights }, nextHistory.slice(0, -1), trimmed);
+      // Earlier turns give the model context; the oldest are dropped to keep
+      // requests small, and it starts on a question so turns alternate.
+      let history = nextHistory.slice(1, -1).slice(-MAX_HISTORY_SENT);
+      while (history.length > 0 && history[0].role !== 'user') history = history.slice(1);
+      const reply = await askCoach(settings.geminiApiKey, { settings, meals, weights }, history, trimmed);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
       const msg = err instanceof RateLimitError
@@ -80,7 +99,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                 m.role === 'user'
                   ? 'bg-emerald-600 text-white rounded-br-md'
-                  : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 rounded-bl-md'
+                  : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 rounded-bl-md whitespace-pre-line'
               }`}
             >
               {m.text}
@@ -107,6 +126,18 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
         <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mt-3">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {hasConversation && (
+        <div className="flex justify-end mt-2">
+          <button
+            onClick={newChat}
+            disabled={loading}
+            className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-emerald-600 disabled:opacity-40"
+          >
+            <RotateCcw size={11} /> New chat
+          </button>
         </div>
       )}
 

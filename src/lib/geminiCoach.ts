@@ -63,7 +63,7 @@ function buildContextJson(ctx: CoachContext): string {
     dailyCalorieGoal: settings.calorieGoal,
     goalWeight: Number(kgToUnit(settings.goalWeight, settings.weightUnit).toFixed(1)),
     weeklyWeightTarget: Number(kgToUnit(Math.abs(settings.weeklyWeightTarget), settings.weightUnit).toFixed(2)),
-    goalDirection: settings.weeklyWeightTarget <= 0 ? 'lose' : 'gain',
+    goalDirection: settings.weeklyWeightTarget < 0 ? 'lose' : settings.weeklyWeightTarget > 0 ? 'gain' : 'maintain',
     bmr: settings.calc?.bmr ?? null,
     tdee: settings.calc?.tdee ?? null,
     dailyDeficit: settings.calc?.dailyDeficit ?? null,
@@ -81,7 +81,8 @@ const COACH_SYSTEM_PROMPT = `You are an encouraging, knowledgeable AI nutrition 
 The user's profile and their past 7 days of meal/weight logs are provided as a JSON context block.
 Give structured, warm, and actionable advice tailored to their actual data. Reference their real numbers when relevant.
 Keep answers concise (3-5 sentences) unless the user asks for detail. Use plain language, no medical diagnoses, no prescribing. If they could be doing better, frame it positively.
-Never invent stats that contradict the provided context. If data is missing, say so and give general guidance.`;
+Never invent stats that contradict the provided context. If data is missing, say so and give general guidance.
+Write plain text: no markdown, asterisks, backticks or headings. For a list, put each point on its own line starting with "- ".`;
 
 export interface CoachMessage {
   role: 'user' | 'model';
@@ -105,7 +106,7 @@ export async function askCoach(
   ];
 
   const body = { contents, generationConfig: { temperature: 0.7 } };
-  return callWithFallback(key, body);
+  return cleanCoachText(await callWithFallback(key, body), { keepLines: true });
 }
 
 export interface CoachInsight {
@@ -184,28 +185,43 @@ export async function getInsight(apiKey: string, ctx: CoachContext): Promise<Coa
     throw new Error('Failed to parse coach insight JSON.');
   }
   if (!parsed.summary || !parsed.tip) throw new Error('Insight response missing fields.');
-  return { summary: String(parsed.summary), tip: String(parsed.tip) };
+  return { summary: cleanCoachText(String(parsed.summary)), tip: cleanCoachText(String(parsed.tip)) };
 }
 
 const WEEKLY_SYSTEM_PROMPT = `You are an AI nutrition coach writing a short end-of-week brief, sent on Friday. You get this week's numbers so far (Monday to today) as JSON.
 Write 2–3 short sentences of plain text. No markdown at all: no asterisks, backticks, bold, headings, bullet points or emoji.
 - Start with what went well, citing a real number.
 - Then one specific, practical focus for the weekend and the week ahead based on the numbers (e.g. protein, days over goal, logging consistency).
-Be warm and direct. Don't repeat every number; don't invent data.`;
+Be warm and direct. Don't repeat every number; don't invent data.
+partialDays are days with under half the goal logged, probably not fully logged: they are left out of avgCalories and daysOnTarget (which is out of countedDays). If there are any, a gentle nudge to log whole days fits.`;
 
 /**
  * Gemini often formats with markdown even when asked not to; the note is
  * shown as plain text, so strip it rather than show stray * and ` marks.
  */
-export function cleanCoachText(text: string): string {
-  return text
+export function cleanCoachText(text: string, { keepLines = false }: { keepLines?: boolean } = {}): string {
+  let out = text
     .replace(/```[a-z]*\n?/gi, '')
     .replace(/`/g, '')
-    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
-    .replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  // Chat replies keep their list structure as plain bullets; the one-line
+  // brief drops it.
+  out = keepLines
+    ? out.replace(/^[ \t]*[-*•][ \t]+/gm, '• ')
+    : out.replace(/^\s*(?:[-*•]|\d+[.)])\s+/gm, '');
+  out = out
     .replace(/(\*\*|__)(.+?)\1/g, '$2')
     .replace(/(^|[\s(])[*_]([^*_\n]+)[*_](?=[\s.,!?;:)]|$)/g, '$1$2')
-    .replace(/[*]/g, '')
+    .replace(/[*]/g, '');
+  if (keepLines) {
+    return out
+      .split('\n')
+      .map((line) => line.replace(/[ \t]{2,}/g, ' ').trim())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+  return out
     .replace(/[ \t]*\n+[ \t]*/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();

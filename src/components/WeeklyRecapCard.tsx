@@ -77,9 +77,9 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
         />
         <Tile
           label="Within goal"
-          value={`${recap.daysOnTarget} of ${recap.loggedDays} days`}
-          sub={`${recap.loggedDays}/${recap.periodDays} days logged`}
-          tone={recap.daysOnTarget >= Math.ceil(recap.loggedDays * 0.7) ? 'good' : undefined}
+          value={recap.countedDays > 0 ? `${recap.daysOnTarget} of ${recap.countedDays} days` : '—'}
+          sub={`${recap.loggedDays}/${recap.periodDays} days logged${recap.partialDays > 0 ? ` · ${recap.partialDays} partly` : ''}`}
+          tone={recap.countedDays > 0 && recap.daysOnTarget >= Math.ceil(recap.countedDays * 0.7) ? 'good' : undefined}
         />
         <Tile
           label="Weight"
@@ -90,7 +90,7 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
         <Tile
           label="Protein"
           value={`${recap.avgProtein} g/day`}
-          sub={recap.proteinTarget ? `target hit ${recap.daysProteinHit}/${recap.loggedDays} days` : 'daily average'}
+          sub={recap.proteinTarget ? `target hit ${recap.daysProteinHit}/${recap.countedDays || recap.loggedDays} days` : 'daily average'}
         />
       </div>
 

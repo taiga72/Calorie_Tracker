@@ -46,6 +46,24 @@ describe('computeWeeklyRecap', () => {
     expect(r.bestDay).toEqual({ date: '2026-09-30', calories: 1900 });
   });
 
+  it('leaves partly logged days out of the average and goal count', () => {
+    const meals = [meal('2026-09-28', 1800), meal('2026-09-29', 2080), meal('2026-09-30', 400), meal('2026-10-01', 2400)];
+    const r = computeWeeklyRecap(meals, [], settings, TODAY)!;
+    expect(r.loggedDays).toBe(4);
+    expect(r.partialDays).toBe(1);
+    expect(r.countedDays).toBe(3);
+    expect(r.avgCalories).toBe(Math.round((1800 + 2080 + 2400) / 3));
+    // 2080 is within 5% of 2000, so it counts; 2400 doesn't.
+    expect(r.daysOnTarget).toBe(2);
+  });
+
+  it("doesn't call today partial in the end-of-week brief", () => {
+    const friday = new Date(2026, 9, 9);
+    const r = computeWeeklyRecap([meal('2026-10-05', 1900), meal('2026-10-09', 500)], [], settings, friday)!;
+    expect(r.partialDays).toBe(0);
+    expect(r.countedDays).toBe(2);
+  });
+
   it('lists the most eaten foods, ignoring portion details', () => {
     const meals = [meal('2026-09-28', 300, 10, 'Oats (80g)'), meal('2026-09-29', 300, 10, 'Oats 100 g'), meal('2026-09-30', 300, 10, 'Banana')];
     expect(computeWeeklyRecap(meals, [], settings, TODAY)!.topFoods).toEqual([{ name: 'Oats', count: 2 }]);

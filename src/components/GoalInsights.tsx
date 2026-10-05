@@ -69,8 +69,8 @@ export function AdaptiveTargetCard() {
   const { meals, weights, settings, updateSettings } = useStore();
   const { requestUndo } = useUndoToast();
   const result = useMemo(
-    () => adaptiveTarget(meals, weights, settings.weeklyWeightTarget),
-    [meals, weights, settings.weeklyWeightTarget],
+    () => adaptiveTarget(meals, weights, settings.weeklyWeightTarget, new Date(), settings.calorieGoal),
+    [meals, weights, settings.weeklyWeightTarget, settings.calorieGoal],
   );
   const unit = settings.weightUnit;
 
@@ -97,7 +97,7 @@ export function AdaptiveTargetCard() {
         return (
           <>
             <p className="text-xs text-gray-400 mb-3">
-              Based on your last {ADAPTIVE_WINDOW_DAYS} days ({result.loggedDays} logged): what you ate vs. how your weight moved.
+              Based on your last {ADAPTIVE_WINDOW_DAYS} days ({result.loggedDays} logged{result.partialDays > 0 ? `, ${result.partialDays} partly logged left out` : ''}): what you ate vs. how your weight moved.
             </p>
             <div className="grid grid-cols-3 gap-2">
               <Mini label="You ate" value={`${result.avgIntake.toLocaleString()} kcal`} />

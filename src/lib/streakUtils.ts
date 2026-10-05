@@ -27,17 +27,32 @@ export function calculateStreak(meals: MealEntry[]): StreakResult {
   return { count, todayLogged };
 }
 
-export function shouldShowStreakPopup(streak: number): boolean {
-  if (streak <= 0) return false;
-  const todayKey = toKey(new Date());
+/**
+ * The celebration pops up only on milestones (the streak itself is always on
+ * Home): 3, 7, 14, 21 and 30 days, then 50, 75, 100 and every 50 after.
+ */
+export function isStreakMilestone(streak: number): boolean {
+  if ([3, 7, 14, 21, 30, 50, 75].includes(streak)) return true;
+  return streak >= 100 && streak % 50 === 0;
+}
+
+/**
+ * Once per milestone of a given run of days: the same streak shows twice in a
+ * row when today isn't logged yet (it counts up to yesterday), and only the
+ * first time should celebrate.
+ */
+export function shouldShowStreakPopup(streak: number, todayLogged = true): boolean {
+  if (!isStreakMilestone(streak)) return false;
+  const start = new Date();
+  start.setDate(start.getDate() - (todayLogged ? streak - 1 : streak));
+  const marker = `${toKey(start)}:${streak}`;
   try {
-    const seen = localStorage.getItem(SEEN_KEY);
-    if (seen === todayKey) return false;
+    if (localStorage.getItem(SEEN_KEY) === marker) return false;
   } catch {
     // ignore storage read errors
   }
   try {
-    localStorage.setItem(SEEN_KEY, todayKey);
+    localStorage.setItem(SEEN_KEY, marker);
   } catch {
     // ignore storage write errors
   }

@@ -88,6 +88,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const [editItems, setEditItems] = useState<FoodItem[]>([]);
   const [totalCalInput, setTotalCalInput] = useState('');
   const [editNote, setEditNote] = useState('');
+  // Editing can also move a meal to another day (e.g. logged on the wrong one).
+  const [editDate, setEditDate] = useState('');
   const [editReasoning, setEditReasoning] = useState<string | null>(null);
 
   useEffect(() => {
@@ -103,6 +105,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     if (editMeal) {
       setMode('food');
       setMealType(editMeal.mealType);
+      setEditDate(editMeal.date);
       setEditItems(editMeal.items.length ? editMeal.items.map((i) => ({ ...i })) : [emptyItem()]);
       setTotalCalInput(String(editMeal.calories));
       const prevPhotos = editMeal.imageDatas ?? (editMeal.imageData ? [editMeal.imageData] : []);
@@ -267,7 +270,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       fiber: Number(it.fiber) || 0,
     }));
     const totals = sumItems(items);
+    const movedTo = /^\d{4}-\d{2}-\d{2}$/.test(editDate) && editDate !== editMeal.date ? editDate : undefined;
     updateMeal(editMeal.id, {
+      ...(movedTo ? { date: movedTo } : {}),
       mealType: mealType === 'auto' ? editMeal.mealType : (mealType as MealType),
       items,
       calories: totals.calories,
@@ -375,6 +380,25 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <Pill key={t} active={mealType === t} onClick={() => setMealType(t)}>{t}</Pill>
             ))}
           </div>
+
+          {/* Day — move the meal if it was logged on the wrong one */}
+          <label className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl px-3 py-2 mb-3 text-xs">
+            <Calendar size={14} className="flex-shrink-0 text-gray-400" />
+            <span className="font-medium text-gray-500 dark:text-gray-400">Day</span>
+            <input
+              type="date"
+              aria-label="Meal date"
+              value={editDate}
+              max={toKey(new Date())}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="ml-auto bg-transparent font-semibold text-gray-900 dark:text-white outline-none text-right"
+            />
+          </label>
+          {editMeal && editDate && editDate !== editMeal.date && (
+            <p className="text-[11px] text-blue-600 dark:text-blue-400 -mt-2 mb-3 px-1">
+              Will move to {formatHeaderDate(fromKey(editDate))}
+            </p>
+          )}
 
           {/* Photo gallery */}
           <input
