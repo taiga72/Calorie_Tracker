@@ -21,8 +21,29 @@ export function isSameDay(a: Date, b: Date): boolean {
   return toKey(a) === toKey(b);
 }
 
+// ---- Which day is "today"
+
+/**
+ * Hour (0–5) when a new day starts (Settings → Goal plan). With 3, a snack
+ * at 1 am still counts toward the day before — for night owls and shifts.
+ */
+let dayStartHour = 0;
+
+export function setDayStartHour(hour: number): void {
+  dayStartHour = Math.min(5, Math.max(0, Math.round(hour || 0)));
+}
+
+/** Now, shifted so that the hours before the day-start hour fall on the previous day. */
+export function logicalNow(): Date {
+  return new Date(Date.now() - dayStartHour * 3_600_000);
+}
+
+export function todayKey(): string {
+  return toKey(logicalNow());
+}
+
 export function isToday(key: string): boolean {
-  return key === toKey(new Date());
+  return key === todayKey();
 }
 
 export function formatHeaderDate(date: Date): string {
@@ -81,7 +102,7 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** A short, human label for a date key relative to today: "Today", "Yesterday", "N days ago". */
 export function relativeDayLabel(key: string): string {
-  const diffDays = Math.round((fromKey(toKey(new Date())).getTime() - fromKey(key).getTime()) / MS_PER_DAY);
+  const diffDays = Math.round((fromKey(todayKey()).getTime() - fromKey(key).getTime()) / MS_PER_DAY);
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return 'Yesterday';
   if (diffDays > 1) return `${diffDays} days ago`;

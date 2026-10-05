@@ -126,7 +126,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
         {STEP_TITLES.map((_, i) => (
           <div
             key={i}
-            className={`h-1.5 rounded-full transition-all ${i <= step ? 'bg-emerald-600 flex-1' : 'bg-gray-200 dark:bg-gray-700 w-4'}`}
+            className={`h-1.5 rounded-full transition-all ${i <= step ? 'bg-accent-600 flex-1' : 'bg-gray-200 dark:bg-gray-700 w-4'}`}
           />
         ))}
       </div>
@@ -164,7 +164,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={s.key}
                 onClick={() => { setSex(s.key); setError(null); }}
-                className={`py-6 rounded-2xl text-sm font-bold transition-colors ${sex === s.key ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
+                className={`py-6 rounded-2xl text-sm font-bold transition-colors ${sex === s.key ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
               >
                 {s.label}
               </button>
@@ -181,7 +181,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={u}
                 onClick={() => setHeightUnit(u)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${heightUnit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${heightUnit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
               >
                 {u === 'cm' ? 'Centimeters' : 'Inches'}
               </button>
@@ -226,16 +226,16 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               <button
                 key={a}
                 onClick={() => { setActivity(a); setError(null); }}
-                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors ${activity === a ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}
+                className={`w-full flex items-center gap-3 p-3.5 rounded-2xl text-left transition-colors ${activity === a ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}
               >
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold">{ACTIVITY_LABELS[a]}</span>
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${activity === a ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
+                    <span className={`text-10 font-bold px-1.5 py-0.5 rounded ${activity === a ? 'bg-white/20 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'}`}>
                       ×{ACTIVITY_FACTORS[a]}
                     </span>
                   </div>
-                  <p className={`text-xs mt-0.5 ${activity === a ? 'text-emerald-50' : 'text-gray-400'}`}>{ACTIVITY_SUBS[a]}</p>
+                  <p className={`text-xs mt-0.5 ${activity === a ? 'text-accent-50' : 'text-gray-400'}`}>{ACTIVITY_SUBS[a]}</p>
                 </div>
                 {activity === a && <Check size={18} />}
               </button>
@@ -256,22 +256,22 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
                 <button
                   key={d.key}
                   onClick={() => { setDeficit(d.key); setError(null); }}
-                  className={`w-full p-4 rounded-2xl text-left transition-all ${active ? 'bg-emerald-600 text-white border-2 border-emerald-600' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-transparent'}`}
+                  className={`w-full p-4 rounded-2xl text-left transition-all ${active ? 'bg-accent-600 text-white border-2 border-accent-600' : 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-2 border-transparent'}`}
                 >
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm font-bold">{d.label}</p>
-                      <p className={`text-xs mt-0.5 ${active ? 'text-emerald-50' : 'text-gray-400'}`}>{d.sub}</p>
+                      <p className={`text-xs mt-0.5 ${active ? 'text-accent-50' : 'text-gray-400'}`}>{d.sub}</p>
                     </div>
                     <div className="text-right">
                       <p className={`text-sm font-bold ${active ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>-{d.kcal} kcal</p>
-                      <p className={`text-[10px] ${active ? 'text-emerald-50' : 'text-gray-400'}`}>{rateText}</p>
+                      <p className={`text-10 ${active ? 'text-accent-50' : 'text-gray-400'}`}>{rateText}</p>
                     </div>
                   </div>
                   {previewTarget && (
                     <div className={`mt-3 pt-3 border-t ${active ? 'border-white/20' : 'border-gray-200 dark:border-gray-700'} flex items-center justify-between`}>
-                      <span className={`text-[11px] font-medium ${active ? 'text-emerald-50' : 'text-gray-400'}`}>Target</span>
-                      <span className={`text-sm font-bold ${active ? 'text-white' : 'text-emerald-600'}`}>{previewTarget} kcal/day</span>
+                      <span className={`text-11 font-medium ${active ? 'text-accent-50' : 'text-gray-400'}`}>Target</span>
+                      <span className={`text-sm font-bold ${active ? 'text-white' : 'text-accent-600'}`}>{previewTarget} kcal/day</span>
                     </div>
                   )}
                 </button>
@@ -290,10 +290,10 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       {step === 7 && result && (
         <div>
           {/* Header: goal date + progress */}
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950 dark:to-teal-950 rounded-2xl p-4 mb-4 border border-emerald-100/60 dark:border-emerald-900">
+          <div className="bg-gradient-to-br from-accent-50 to-teal-50 dark:from-accent-950 dark:to-teal-950 rounded-2xl p-4 mb-4 border border-accent-100/60 dark:border-accent-900">
             <div className="flex items-center gap-2 mb-2">
-              <Target size={16} className="text-emerald-600" />
-              <p className="text-xs font-bold tracking-wider text-emerald-600">ESTIMATED GOAL DATE</p>
+              <Target size={16} className="text-accent-600" />
+              <p className="text-xs font-bold tracking-wider text-accent-600">ESTIMATED GOAL DATE</p>
             </div>
             <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">{fmtGoalDate(result.goalDate, result.weeksToGoal)}</p>
             <div className="bg-white/70 dark:bg-gray-900/60 rounded-xl p-3">
@@ -301,12 +301,12 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
                 <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
                   {weightUnit === 'lb' ? (result.currentWeightKg * 2.2046).toFixed(0) : result.currentWeightKg.toFixed(0)} {weightUnit}
                 </span>
-                <span className="text-xs font-semibold text-emerald-600">
+                <span className="text-xs font-semibold text-accent-600">
                   {weightUnit === 'lb' ? (result.goalWeightKg * 2.2046).toFixed(0) : result.goalWeightKg.toFixed(0)} {weightUnit}
                 </span>
               </div>
               <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-emerald-400 to-emerald-600 rounded-full" style={{ width: '100%' }} />
+                <div className="h-full bg-gradient-to-r from-accent-400 to-accent-600 rounded-full" style={{ width: '100%' }} />
               </div>
             </div>
           </div>
@@ -316,7 +316,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
             <MetricCard icon={<Flame size={14} className="text-orange-500" />} label="BMR" value={result.bmr} sub="kcal at rest" />
             <MetricCard icon={<Activity size={14} className="text-blue-500" />} label="TDEE" value={result.tdee} sub="maintenance" />
             <MetricCard icon={<TrendingDown size={14} className="text-red-500" />} label="Deficit" value={result.deficit > 0 ? `-${result.deficit}` : `+${Math.abs(result.deficit)}`} sub="kcal/day" />
-            <MetricCard icon={<Target size={14} className="text-emerald-600" />} label="Target" value={result.targetCalories} sub="kcal/day" highlight />
+            <MetricCard icon={<Target size={14} className="text-accent-600" />} label="Target" value={result.targetCalories} sub="kcal/day" highlight />
           </div>
 
           {/* Macros */}
@@ -352,7 +352,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
 
           <button
             onClick={onApply}
-            className="w-full bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+            className="w-full bg-accent-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
           >
             <Check size={18} /> Apply to my goals
           </button>
@@ -379,7 +379,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           <button
             onClick={next}
             disabled={!canNext()}
-            className="flex-[2] bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[.99] transition-transform"
+            className="flex-[2] bg-accent-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-40 active:scale-[.99] transition-transform"
           >
             Continue <ChevronRight size={18} />
           </button>
@@ -396,7 +396,7 @@ function UnitToggle({ unit, onChange }: { unit: InputWeightUnit; onChange: (u: I
         <button
           key={u}
           onClick={() => onChange(u)}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+          className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
         >
           {u === 'kg' ? 'Kilograms' : 'Pounds'}
         </button>
@@ -424,13 +424,13 @@ function NumberField({ value, onChange, unit, placeholder }: { value: string; on
 
 function MetricCard({ icon, label, value, sub, highlight }: { icon: React.ReactNode; label: string; value: number | string; sub: string; highlight?: boolean }) {
   return (
-    <div className={`rounded-2xl p-3.5 border ${highlight ? 'bg-emerald-50 dark:bg-emerald-950 border-emerald-100 dark:border-emerald-900' : 'bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800'}`}>
+    <div className={`rounded-2xl p-3.5 border ${highlight ? 'bg-accent-50 dark:bg-accent-950 border-accent-100 dark:border-accent-900' : 'bg-white dark:bg-gray-900 border-gray-50 dark:border-gray-800'}`}>
       <div className="flex items-center gap-2 mb-1">
         {icon}
         <p className="text-xs font-semibold text-gray-400">{label}</p>
       </div>
-      <p className={`text-lg font-bold ${highlight ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>{value}</p>
-      <p className="text-[10px] text-gray-400">{sub}</p>
+      <p className={`text-lg font-bold ${highlight ? 'text-accent-700 dark:text-accent-400' : 'text-gray-900 dark:text-white'}`}>{value}</p>
+      <p className="text-10 text-gray-400">{sub}</p>
     </div>
   );
 }
@@ -440,7 +440,7 @@ function MacroRow({ label, value, color, sub }: { label: string; value: number; 
     <div className="flex items-center justify-between">
       <div className="min-w-0">
         <p className={`text-sm font-bold ${color}`}>{label} {value}g</p>
-        <p className="text-[10px] text-gray-400">{sub}</p>
+        <p className="text-10 text-gray-400">{sub}</p>
       </div>
     </div>
   );
@@ -449,8 +449,8 @@ function MacroRow({ label, value, color, sub }: { label: string; value: number; 
 function MealSplitCol({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex flex-col items-center">
-      <p className="text-sm font-bold text-emerald-600">{value}</p>
-      <p className="text-[10px] text-gray-400 mt-0.5">{label}</p>
+      <p className="text-sm font-bold text-accent-600">{value}</p>
+      <p className="text-10 text-gray-400 mt-0.5">{label}</p>
     </div>
   );
 }

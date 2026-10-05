@@ -36,16 +36,16 @@ export function RemindersSection() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
+    <div className="card p-5 mt-4">
       <div className="flex items-center gap-2 mb-1">
-        <Bell size={18} className="text-emerald-600" />
+        <Bell size={18} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white flex-1">Reminders</h2>
         <button
           role="switch"
           aria-checked={config.enabled}
           aria-label="Reminders"
           onClick={onToggleEnabled}
-          className={`relative w-11 h-6 rounded-full transition-colors ${config.enabled ? 'bg-emerald-600' : 'bg-gray-200 dark:bg-gray-700'}`}
+          className={`relative w-11 h-6 rounded-full transition-colors ${config.enabled ? 'bg-accent-600' : 'bg-gray-200 dark:bg-gray-700'}`}
         >
           <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${config.enabled ? 'translate-x-5' : ''}`} />
         </button>
@@ -64,7 +64,7 @@ export function RemindersSection() {
                   checked={config.slots[id].on}
                   onChange={(e) => setSlot(id, { on: e.target.checked })}
                   aria-label={`${REMINDER_LABELS[id]} reminder`}
-                  className="w-4 h-4 accent-emerald-600"
+                  className="w-4 h-4 accent-accent-600"
                 />
                 <span className={`flex-1 text-sm font-medium ${config.slots[id].on ? 'text-gray-900 dark:text-white' : 'text-gray-400'}`}>
                   {REMINDER_LABELS[id]}
@@ -82,7 +82,7 @@ export function RemindersSection() {
           </div>
 
           {permission === 'granted' ? (
-            <button onClick={onTest} className="mt-3 text-xs font-semibold text-emerald-600">
+            <button onClick={onTest} className="mt-3 text-xs font-semibold text-accent-600">
               {testSent ? 'Test notification sent ✓' : 'Send a test notification'}
             </button>
           ) : (
@@ -97,7 +97,7 @@ export function RemindersSection() {
               </span>
             </div>
           )}
-          <p className="text-[11px] text-gray-400 mt-2">
+          <p className="text-11 text-gray-400 mt-2">
             Reminders are per device, and are delivered while the app is open or recently backgrounded.
           </p>
         </>

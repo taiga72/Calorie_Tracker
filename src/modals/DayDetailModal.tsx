@@ -87,15 +87,15 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
                 <button
                   onClick={() => go(-1)}
                   aria-label="Previous day"
-                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-emerald-600 py-1 pr-2 transition-colors"
+                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-accent-600 py-1 pr-2 transition-colors"
                 >
                   <ChevronLeft size={15} /> {formatDayShort(toKey(addDays(fromKey(dateKey), -1)))}
                 </button>
-                <span className="text-[11px] font-semibold text-gray-400">{isToday(dateKey) ? 'Today' : relativeDayLabel(dateKey)}</span>
+                <span className="text-11 font-semibold text-gray-400">{isToday(dateKey) ? 'Today' : relativeDayLabel(dateKey)}</span>
                 <button
                   onClick={() => go(1)}
                   aria-label="Next day"
-                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-emerald-600 py-1 pl-2 transition-colors"
+                  className="flex items-center gap-0.5 text-xs font-semibold text-gray-400 hover:text-accent-600 py-1 pl-2 transition-colors"
                 >
                   {formatDayShort(toKey(addDays(fromKey(dateKey), 1)))} <ChevronRight size={15} />
                 </button>
@@ -145,7 +145,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
                 <div key={label} className={`rounded-2xl p-3 flex flex-col items-center ${color}`}>
                   <Icon size={16} />
                   <span className="text-base font-bold mt-1">{val}</span>
-                  <span className="text-[10px] font-medium opacity-80">{label}</span>
+                  <span className="text-10 font-medium opacity-80">{label}</span>
                 </div>
               ))}
             </div>
@@ -157,7 +157,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               </h3>
               <button
                 onClick={() => setLogOpen(true)}
-                className="flex items-center gap-1 bg-emerald-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+                className="flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
               >
                 <Plus size={14} /> Log Meal
               </button>

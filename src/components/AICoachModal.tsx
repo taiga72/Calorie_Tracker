@@ -5,7 +5,8 @@ import { useAuth } from '@/auth';
 import { askCoach, getOrFetchInsight, type CoachMessage, type CoachInsight } from '@/lib/geminiCoach';
 import { loadCoachChat, saveCoachChat, MAX_HISTORY_SENT } from '@/lib/coachChat';
 import { RateLimitError } from '@/lib/gemini';
-import { Sparkles, Send, AlertCircle, RefreshCw, RotateCcw } from 'lucide-react';
+import { CoachMemoryEditor } from '@/components/CoachMemory';
+import { Sparkles, Send, AlertCircle, RefreshCw, RotateCcw, Brain } from 'lucide-react';
 
 const QUICK_PROMPTS = [
   'Is my calorie deficit right for me?',
@@ -21,6 +22,8 @@ const GREETING: CoachMessage = {
 
 export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { meals, weights, settings } = useStore();
+  const [memoryOpen, setMemoryOpen] = useState(false);
+  const memoryCount = settings.prefs?.coachMemory?.length ?? 0;
   const userId = useAuth().user?.id;
   // The greeting isn't stored: it's always the first bubble.
   const [messages, setMessages] = useState<CoachMessage[]>(() => [GREETING, ...loadCoachChat(userId)]);
@@ -83,11 +86,11 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={<span className="flex items-center gap-2"><Sparkles size={18} className="text-emerald-600" /> AI Coach</span>}>
+    <Modal open={open} onClose={onClose} title={<span className="flex items-center gap-2"><Sparkles size={18} className="text-accent-600" /> AI Coach</span>}>
       {insight && (
-        <div className="flex items-start gap-2 bg-emerald-50 dark:bg-emerald-950 border border-emerald-100 dark:border-emerald-900 rounded-2xl px-3.5 py-3 mb-3">
-          <Sparkles size={15} className="mt-0.5 flex-shrink-0 text-emerald-600" />
-          <p className="text-xs leading-relaxed text-emerald-900 dark:text-emerald-200">{insight.summary}</p>
+        <div className="flex items-start gap-2 bg-accent-50 dark:bg-accent-950 border border-accent-100 dark:border-accent-900 rounded-2xl px-3.5 py-3 mb-3">
+          <Sparkles size={15} className="mt-0.5 flex-shrink-0 text-accent-600" />
+          <p className="text-xs leading-relaxed text-accent-900 dark:text-accent-200">{insight.summary}</p>
         </div>
       )}
 
@@ -98,7 +101,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
             <div
               className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed ${
                 m.role === 'user'
-                  ? 'bg-emerald-600 text-white rounded-br-md'
+                  ? 'bg-accent-600 text-white rounded-br-md'
                   : 'bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 text-gray-700 dark:text-gray-200 rounded-bl-md whitespace-pre-line'
               }`}
             >
@@ -129,15 +132,28 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
         </div>
       )}
 
-      {hasConversation && (
-        <div className="flex justify-end mt-2">
+      <div className="flex items-center justify-between mt-2">
+        <button
+          onClick={() => setMemoryOpen((o) => !o)}
+          aria-expanded={memoryOpen}
+          className={`flex items-center gap-1 text-11 font-semibold ${memoryOpen ? 'text-accent-600' : 'text-gray-400 hover:text-accent-600'}`}
+        >
+          <Brain size={12} /> Memory{memoryCount ? ` (${memoryCount})` : ''}
+        </button>
+        {hasConversation && (
           <button
             onClick={newChat}
             disabled={loading}
-            className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-emerald-600 disabled:opacity-40"
+            className="flex items-center gap-1 text-11 font-semibold text-gray-400 hover:text-accent-600 disabled:opacity-40"
           >
             <RotateCcw size={11} /> New chat
           </button>
+        )}
+      </div>
+      {memoryOpen && (
+        <div className="mt-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl p-3">
+          <p className="text-11 text-gray-400 mb-2">Your coach always keeps these in mind.</p>
+          <CoachMemoryEditor compact />
         </div>
       )}
 
@@ -148,7 +164,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
             key={p}
             onClick={() => send(p)}
             disabled={loading}
-            className="flex-shrink-0 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs font-medium px-3 py-2 rounded-full whitespace-nowrap disabled:opacity-50 active:scale-[.98] transition-transform"
+            className="flex-shrink-0 bg-accent-50 dark:bg-accent-950 text-accent-700 dark:text-accent-300 text-xs font-medium px-3 py-2 rounded-full whitespace-nowrap disabled:opacity-50 active:scale-[.98] transition-transform"
           >
             {p}
           </button>
@@ -168,7 +184,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
         <button
           onClick={() => send(input)}
           disabled={loading || !input.trim()}
-          className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform"
+          className="w-8 h-8 rounded-full bg-accent-600 text-white flex items-center justify-center disabled:opacity-40 active:scale-95 transition-transform"
         >
           <Send size={15} />
         </button>
@@ -182,7 +198,7 @@ export function CoachRefreshButton({ onClick, loading }: { onClick: () => void; 
     <button
       onClick={onClick}
       disabled={loading}
-      className="p-1.5 rounded-full hover:bg-emerald-50 text-emerald-600 disabled:opacity-40 active:scale-90 transition-transform"
+      className="p-1.5 rounded-full hover:bg-accent-50 text-accent-600 disabled:opacity-40 active:scale-90 transition-transform"
       aria-label="Refresh insight"
     >
       <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />

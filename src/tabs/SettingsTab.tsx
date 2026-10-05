@@ -1,30 +1,34 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { useAuth } from '@/auth';
-import { useTheme, type ThemePreference } from '@/lib/theme';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
-import { formatRelativeTime } from '@/lib/dateUtils';
+import { formatRelativeTime, todayKey } from '@/lib/dateUtils';
 import type { BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
+import { AppearanceSection } from '@/components/AppearanceSection';
+import { LayoutSection } from '@/components/LayoutSection';
+import { GoalPlanSection } from '@/components/GoalPlanSection';
+import { CoachMemorySection } from '@/components/CoachMemory';
+import { phaseOn } from '@/lib/goalPlan';
 import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, LogOut, RefreshCw, Sun, Moon, MonitorSmartphone,
+  ChevronDown, ChevronUp, Save, LogOut, RefreshCw,
 } from 'lucide-react';
 
 export function SettingsTab() {
   const {
     settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
-    lastSyncedAt, refreshing, pinsSyncEnabled,
+    lastSyncedAt, refreshing, pinsSyncEnabled, prefsSyncEnabled,
   } = useStore();
   const { user, signOut } = useAuth();
-  const { preference: themePreference, setPreference: setThemePreference } = useTheme();
+  const activePhase = phaseOn(settings, todayKey());
   const [, setTick] = useState(0);
 
   // Keeps the "Last synced Xm ago" text fresh without needing a user action.
@@ -205,9 +209,9 @@ export function SettingsTab() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Settings</h1>
 
       {/* Profile card */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-5">
+      <div className="card p-5 mt-5">
         <div className="flex items-center gap-2 mb-4">
-          <User size={18} className="text-emerald-600" />
+          <User size={18} className="text-accent-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile</h2>
         </div>
         <div className="flex flex-col items-center mb-4">
@@ -230,7 +234,7 @@ export function SettingsTab() {
           />
           <button
             onClick={() => avatarRef.current?.click()}
-            className="text-xs font-semibold text-emerald-600 mt-2"
+            className="text-xs font-semibold text-accent-600 mt-2"
           >
             {avatar ? 'Change photo' : 'Upload photo'}
           </button>
@@ -257,68 +261,49 @@ export function SettingsTab() {
         </Field>
         <button
           onClick={onSaveProfile}
-          className="w-full bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
+          className="w-full bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
         >
           {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
         </button>
       </div>
 
-      {/* Theme */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
-        <div className="flex items-center gap-2 mb-4">
-          <Sun size={18} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Appearance</h2>
-        </div>
-        <div className="flex gap-2">
-          {([
-            { key: 'light', label: 'Light', Icon: Sun },
-            { key: 'dark', label: 'Dark', Icon: Moon },
-            { key: 'system', label: 'System', Icon: MonitorSmartphone },
-          ] as { key: ThemePreference; label: string; Icon: typeof Sun }[]).map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => setThemePreference(key)}
-              className={`flex-1 flex flex-col items-center gap-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${
-                themePreference === key
-                  ? 'bg-gray-900 dark:bg-emerald-600 text-white'
-                  : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-              }`}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <AppearanceSection />
+
+      <LayoutSection />
 
       {/* Wizard banner — only for new users who haven't completed setup */}
       {!setupComplete && (
         <button
           onClick={() => setWizardOpen(true)}
-          className="w-full bg-emerald-600 rounded-3xl p-4 mt-5 flex items-center gap-3 text-white text-left active:scale-[.99] transition-transform"
+          className="w-full bg-accent-600 rounded-3xl p-4 mt-5 flex items-center gap-3 text-white text-left active:scale-[.99] transition-transform"
         >
           <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
             <Sparkles size={20} />
           </div>
           <div className="flex-1">
             <p className="text-sm font-bold">Setup Wizard</p>
-            <p className="text-xs text-emerald-50">Calculate your calorie & weight goals</p>
+            <p className="text-xs text-accent-50">Calculate your calorie & weight goals</p>
           </div>
         </button>
       )}
 
       {/* Goals card */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
+      <div className="card p-5 mt-4">
         <div className="flex items-center gap-2 mb-4">
-          <Target size={18} className="text-emerald-600" />
+          <Target size={18} className="text-accent-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your goals</h2>
         </div>
+        {activePhase && (
+          <p className="text-11 text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-950 rounded-xl px-3 py-2 -mt-2 mb-3">
+            Your {activePhase.name} phase sets today's goal ({activePhase.calorieGoal.toLocaleString()} kcal). The goal below applies outside your phases — see Goal plan.
+          </p>
+        )}
 
         {!setupComplete ? (
           /* Empty state for new users */
           <div className="flex flex-col items-center text-center py-8">
-            <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center mb-3">
-              <Sparkles size={24} className="text-emerald-600" />
+            <div className="w-14 h-14 rounded-full bg-accent-50 dark:bg-accent-950 flex items-center justify-center mb-3">
+              <Sparkles size={24} className="text-accent-600" />
             </div>
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">No goals set yet</p>
             <p className="text-xs text-gray-400 mb-4 leading-relaxed px-4">
@@ -326,7 +311,7 @@ export function SettingsTab() {
             </p>
             <button
               onClick={() => setWizardOpen(true)}
-              className="bg-emerald-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 active:scale-[.99] transition-transform"
+              className="bg-accent-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 active:scale-[.99] transition-transform"
             >
               <Sparkles size={16} /> Start Setup Wizard
             </button>
@@ -343,7 +328,7 @@ export function SettingsTab() {
                 value={liveDeficit > 0 ? `+${liveDeficit}` : liveDeficit}
               />
               <SummaryStat
-                icon={<Target size={12} className="text-emerald-600" />}
+                icon={<Target size={12} className="text-accent-600" />}
                 label="Goal"
                 value={liveGoalDate ? new Date(liveGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 isText
@@ -395,13 +380,13 @@ export function SettingsTab() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => setLose(true)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                     >
                       Lose
                     </button>
                     <button
                       onClick={() => setLose(false)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                     >
                       Gain
                     </button>
@@ -425,7 +410,7 @@ export function SettingsTab() {
                       <button
                         key={u}
                         onClick={() => setUnit(u)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
                       >
                         {u === 'kg' ? 'Kilograms' : 'Pounds'}
                       </button>
@@ -453,23 +438,23 @@ export function SettingsTab() {
                     <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
-                    <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-emerald-600" compact />
-                    <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-emerald-600" compact />
-                    <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-emerald-600" compact />
-                    <MacroField label="Snack" value={snack} onChange={setSnack} color="text-emerald-600" compact />
+                    <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-accent-600" compact />
+                    <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-accent-600" compact />
+                    <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-accent-600" compact />
+                    <MacroField label="Snack" value={snack} onChange={setSnack} color="text-accent-600" compact />
                   </div>
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => setWizardOpen(true)}
-                    className="flex-1 bg-emerald-50 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                    className="flex-1 bg-accent-50 dark:bg-accent-950 text-accent-800 dark:text-accent-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
                   >
                     <Sparkles size={15} /> Re-calculate
                   </button>
                   <button
                     onClick={onSaveGoals}
-                    className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                    className="flex-1 bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
                   >
                     {saved ? <><Check size={15} /> Saved</> : <><Save size={15} /> Save goals</>}
                   </button>
@@ -480,12 +465,16 @@ export function SettingsTab() {
         )}
       </div>
 
+      <GoalPlanSection />
+
+      <CoachMemorySection />
+
       <RemindersSection />
 
       {/* Backup & Export */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
+      <div className="card p-5 mt-4">
         <div className="flex items-center gap-2 mb-3">
-          <FileSpreadsheet size={18} className="text-emerald-600" />
+          <FileSpreadsheet size={18} className="text-accent-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Backup & Export</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
@@ -506,9 +495,9 @@ export function SettingsTab() {
       </div>
 
       {/* Account */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
+      <div className="card p-5 mt-4">
         <div className="flex items-center gap-2 mb-3">
-          <User size={18} className="text-emerald-600" />
+          <User size={18} className="text-accent-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
@@ -521,7 +510,7 @@ export function SettingsTab() {
       </div>
 
       {/* Danger Zone */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-5 shadow-sm border border-red-100 dark:border-red-900 mt-4">
+      <div className="card p-5 border-red-100 dark:border-red-900 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle size={18} className="text-red-500" />
           <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
@@ -539,17 +528,22 @@ export function SettingsTab() {
 
       {/* Syncing itself is pull-to-refresh and the status pill at the top;
           this just says when it last happened. */}
-      <p className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 mt-6 py-2">
+      <p className="flex items-center justify-center gap-1.5 text-11 text-gray-400 mt-6 py-2">
         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
         {refreshing ? 'Syncing…' : lastSyncedAt ? `Last synced ${formatRelativeTime(lastSyncedAt).replace(/^Just/, 'just')}` : 'Not synced yet'}
       </p>
+      {!prefsSyncEnabled && (
+        <p className="text-center text-11 text-gray-400 mt-1 px-4">
+          Your layout, goal plan, milestones and coach memory are only on this device. Re-run supabase/schema.sql in Supabase to sync them.
+        </p>
+      )}
       {!pinsSyncEnabled && (
-        <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
+        <p className="text-center text-11 text-gray-400 mt-1 px-4">
           Pinned meals are only on this device. Re-run supabase/schema.sql in Supabase to sync them across devices.
         </p>
       )}
       {!photoStorageAvailable() && (
-        <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
+        <p className="text-center text-11 text-gray-400 mt-1 px-4">
           Photo storage isn't set up, so photos are saved inside each meal (slower to load). Re-run supabase/schema.sql in Supabase to enable it.
         </p>
       )}
@@ -608,8 +602,8 @@ function ActionBtn({
       disabled={disabled}
       className="w-full flex items-center gap-3 bg-gray-50 dark:bg-gray-800 rounded-2xl p-3.5 text-left disabled:opacity-40 active:scale-[.99] transition-transform"
     >
-      <div className="w-9 h-9 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center flex-shrink-0">
-        <Icon size={17} className="text-emerald-600" />
+      <div className="w-9 h-9 rounded-full bg-accent-100 dark:bg-accent-900 flex items-center justify-center flex-shrink-0">
+        <Icon size={17} className="text-accent-600" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-gray-900 dark:text-white">{label}</p>
@@ -624,9 +618,9 @@ function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; la
     <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 text-center">
       <div className="flex items-center justify-center gap-1 mb-0.5">
         {icon}
-        <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
+        <p className="text-9 font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
       </div>
-      <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-[11px]' : 'text-sm'}`}>{value}</p>
+      <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-11' : 'text-sm'}`}>{value}</p>
     </div>
   );
 }
@@ -650,7 +644,7 @@ function MacroField({
     <div className="min-w-0 flex-1">
       <div className="flex items-center justify-between mb-1 min-w-0">
         <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
-        {!compact && sub && <span className="text-[10px] text-gray-400 truncate ml-1">{sub}</span>}
+        {!compact && sub && <span className="text-10 text-gray-400 truncate ml-1">{sub}</span>}
       </div>
       <div className="flex items-center bg-white dark:bg-gray-900 rounded-xl px-2.5 py-2 border border-gray-100 dark:border-gray-700 min-w-0">
         <input
@@ -662,7 +656,7 @@ function MacroField({
             compact ? 'text-xs' : 'text-sm'
           }`}
         />
-        <span className="text-[10px] font-semibold text-gray-400 shrink-0 ml-1">
+        <span className="text-10 font-semibold text-gray-400 shrink-0 ml-1">
           {compact ? 'kcal' : 'g'}
         </span>
       </div>

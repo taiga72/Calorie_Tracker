@@ -20,7 +20,7 @@ export function UndoToast({ message, onUndo, onDismiss, durationMs = 5000 }: Und
         <span className="flex-1 text-sm font-medium truncate">{message}</span>
         <button
           onClick={onUndo}
-          className="flex items-center gap-1 text-emerald-400 font-semibold text-sm flex-shrink-0 active:scale-95 transition-transform"
+          className="flex items-center gap-1 text-accent-400 font-semibold text-sm flex-shrink-0 active:scale-95 transition-transform"
         >
           <Undo2 size={15} /> Undo
         </button>

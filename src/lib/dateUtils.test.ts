@@ -207,3 +207,19 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(new Date(2026, 0, 8).getTime())).toBe('Jan 8');
   });
 });
+
+describe('day boundary', () => {
+  it('counts the small hours toward the previous day when set', async () => {
+    const { setDayStartHour, todayKey, isToday } = await import('@/lib/dateUtils');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 6, 1, 30)); // 1:30 am, 6 Oct
+    expect(todayKey()).toBe('2026-10-06');
+    setDayStartHour(3);
+    expect(todayKey()).toBe('2026-10-05');
+    expect(isToday('2026-10-05')).toBe(true);
+    vi.setSystemTime(new Date(2026, 9, 6, 3, 0));
+    expect(todayKey()).toBe('2026-10-06');
+    setDayStartHour(0);
+    vi.useRealTimers();
+  });
+});

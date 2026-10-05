@@ -183,6 +183,22 @@ describe('HomeTab macros and streak', () => {
   });
 });
 
+describe('HomeTab layout choices', () => {
+  it('follows the chosen cards and order', () => {
+    settings = { ...DEFAULT_SETTINGS, prefs: { homeCards: { order: ['meals', 'quickPins', 'summary', 'brief', 'forecast', 'milestones'], hidden: ['brief', 'forecast', 'milestones'] }, homeSummary: { weight: false, macros: true }, showStreak: false } };
+    meals = [0, 1, 2].map((i) => lunchOn(toKey(addDays(new Date(), -i)), 600));
+    pinned = [{ id: 'p1', name: 'Oat bowl', mealType: 'Breakfast', items: [], calories: 350, protein: 12, carbs: 55, fat: 7, fiber: 8, createdAt: 1 }];
+    renderHomeTab();
+    const order = ['Meals today', 'Quick add', "TODAY'S CALORIES"].map((t) => screen.getByText(t));
+    expect(order[0].compareDocumentPosition(order[1]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(order[1].compareDocumentPosition(order[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByLabelText('Log weight')).not.toBeInTheDocument(); // weight tile hidden
+    expect(screen.getByText("TODAY'S MACROS")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/day logging streak/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Log Oat bowl')).toBeInTheDocument();
+  });
+});
+
 describe('HomeTab pinning a logged meal', () => {
   const meal: MealEntry = {
     id: 'm1', date: toKey(new Date()), mealType: 'Breakfast',

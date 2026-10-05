@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store';
-import { toKey } from '@/lib/dateUtils';
+import { todayKey } from '@/lib/dateUtils';
 import {
   dueReminders, loadFired, loadReminderConfig, reminderMessage, saveFired, showSystemNotification,
   type ReminderId,
@@ -23,7 +23,7 @@ export function useReminders(enabled: boolean) {
     if (!enabled) return;
     const check = () => {
       const now = new Date();
-      const key = toKey(now);
+      const key = todayKey();
       const fired = loadFired(key);
       const day = getDayRef.current(key);
       const due = dueReminders(

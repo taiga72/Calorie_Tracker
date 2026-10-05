@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { applyAppearance, readAppearance, saveAppearance, setHapticsEnabled, DEFAULT_APPEARANCE, type Appearance } from '@/lib/appearance';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
@@ -26,6 +27,9 @@ interface ThemeContextValue {
   preference: ThemePreference;
   isDark: boolean;
   setPreference: (p: ThemePreference) => void;
+  /** Accent, text size, density, card style… (see lib/appearance). */
+  appearance: Appearance;
+  setAppearance: (patch: Partial<Appearance>) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
@@ -33,6 +37,20 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference);
   const [isDark, setIsDark] = useState(() => resolveIsDark(preference));
+  const [appearance, setAppearanceState] = useState<Appearance>(readAppearance);
+
+  useEffect(() => {
+    applyAppearance(appearance);
+    setHapticsEnabled(appearance.haptics);
+  }, [appearance]);
+
+  const setAppearance = (patch: Partial<Appearance>) => {
+    setAppearanceState((prev) => {
+      const next = { ...prev, ...patch };
+      saveAppearance(next);
+      return next;
+    });
+  };
 
   useEffect(() => {
     setIsDark(resolveIsDark(preference));
@@ -57,7 +75,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <ThemeContext.Provider value={{ preference, isDark, setPreference }}>
+    <ThemeContext.Provider value={{ preference, isDark, setPreference, appearance, setAppearance }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -67,4 +85,9 @@ export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
+}
+
+/** The look-and-feel settings; defaults outside a ThemeProvider (e.g. in tests). */
+export function useAppearance(): Appearance {
+  return useContext(ThemeContext)?.appearance ?? DEFAULT_APPEARANCE;
 }

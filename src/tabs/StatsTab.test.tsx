@@ -20,7 +20,9 @@ vi.mock('@/components/WeeklyRecapCard', () => ({ WeeklyRecapCard: () => <p>Weekl
 vi.mock('@/components/GoalInsights', () => ({
   GoalForecastCard: () => <p>Goal forecast card</p>,
   AdaptiveTargetCard: () => <p>Calorie target card</p>,
+  GoalPlanCard: () => <p>Goal plan card</p>,
 }));
+vi.mock('@/components/Milestones', () => ({ MilestonesCard: () => <p>Milestones card</p> }));
 
 const { StatsTab } = await import('@/tabs/StatsTab');
 
@@ -43,6 +45,21 @@ describe('StatsTab numbers', () => {
   });
 });
 
+describe('StatsTab layout', () => {
+  it('shows the chosen cards in the chosen order, with the range picker above the first chart', () => {
+    settings.prefs = { statsCards: { order: ['weight', 'recap', 'calories', 'macros'], hidden: ['macros'] } };
+    render(<StatsTab />);
+    const titles = screen.getAllByRole('heading').map((h) => h.textContent);
+    expect(titles.indexOf('Weight trend')).toBeLessThan(titles.indexOf('Calories trend'));
+    expect(screen.queryByText('Macros breakdown')).not.toBeInTheDocument();
+    // The range picker comes before the weight chart (the first chart now).
+    const picker = screen.getByText('30 Days');
+    expect(picker.compareDocumentPosition(screen.getByText('Weight trend')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(picker.compareDocumentPosition(screen.getByText('Weekly recap card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    delete settings.prefs;
+  });
+});
+
 describe('StatsTab pages', () => {
   it('opens on Trends: weekly recap, range picker and the charts', () => {
     render(<StatsTab />);
@@ -60,6 +77,8 @@ describe('StatsTab pages', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Goals' }));
     expect(screen.getByText('Goal forecast card')).toBeInTheDocument();
     expect(screen.getByText('Calorie target card')).toBeInTheDocument();
+    expect(screen.getByText('Milestones card')).toBeInTheDocument();
+    expect(screen.getByText('Goal plan card')).toBeInTheDocument();
     expect(screen.queryByText('30 Days')).not.toBeInTheDocument();
     expect(screen.queryByText('Calories trend')).not.toBeInTheDocument();
   });

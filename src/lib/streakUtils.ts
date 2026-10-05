@@ -1,5 +1,5 @@
 import type { MealEntry } from '@/types';
-import { toKey } from '@/lib/dateUtils';
+import { logicalNow, toKey } from '@/lib/dateUtils';
 
 const SEEN_KEY = 'cc_streak_seen';
 
@@ -12,7 +12,7 @@ export function calculateStreak(meals: MealEntry[]): StreakResult {
   if (meals.length === 0) return { count: 0, todayLogged: false };
   const dates = new Set(meals.map((m) => m.date));
   let count = 0;
-  const today = new Date();
+  const today = logicalNow();
   const todayKey = toKey(today);
   const todayLogged = dates.has(todayKey);
 
@@ -43,7 +43,7 @@ export function isStreakMilestone(streak: number): boolean {
  */
 export function shouldShowStreakPopup(streak: number, todayLogged = true): boolean {
   if (!isStreakMilestone(streak)) return false;
-  const start = new Date();
+  const start = logicalNow();
   start.setDate(start.getDate() - (todayLogged ? streak - 1 : streak));
   const marker = `${toKey(start)}:${streak}`;
   try {

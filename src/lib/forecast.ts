@@ -1,5 +1,5 @@
 import type { MealEntry, WeightEntry } from '@/types';
-import { addDays, fromKey, toKey } from '@/lib/dateUtils';
+import { addDays, fromKey, logicalNow, toKey } from '@/lib/dateUtils';
 import { isPartialDay } from '@/lib/goal';
 
 /** Roughly the energy in 1 kg of body weight change. */
@@ -54,7 +54,7 @@ const MIN_MEANINGFUL_SLOPE = 0.005;
 const MAX_FORECAST_DAYS = 3 * 365;
 
 /** When the goal weight will be reached at the current pace. */
-export function goalForecast(weights: WeightEntry[], goalKg: number, today = new Date()): GoalForecast {
+export function goalForecast(weights: WeightEntry[], goalKg: number, today = logicalNow()): GoalForecast {
   const trend = weightTrend(weights, today);
   if (!trend) return { status: 'not-enough-data' };
   const { currentKg, slopeKgPerDay } = trend;
@@ -108,8 +108,9 @@ export function adaptiveTarget(
   meals: MealEntry[],
   weights: WeightEntry[],
   weeklyTargetKg: number,
-  today = new Date(),
-  calorieGoal?: number,
+  today = logicalNow(),
+  /** The goal, or the goal per day (see lib/goalPlan), to spot partly logged days. */
+  calorieGoal?: number | ((dateKey: string) => number),
 ): AdaptiveTarget {
   const startKey = toKey(addDays(today, -ADAPTIVE_WINDOW_DAYS));
   const endKey = toKey(addDays(today, -1));
@@ -118,8 +119,12 @@ export function adaptiveTarget(
     if (m.date < startKey || m.date > endKey) continue;
     perDay.set(m.date, (perDay.get(m.date) ?? 0) + m.calories);
   }
-  const logged = [...perDay.values()].filter((c) => c > 0);
-  const intakes = calorieGoal ? logged.filter((c) => !isPartialDay(c, calorieGoal)) : logged;
+  const goalOf = typeof calorieGoal === 'function' ? calorieGoal : () => calorieGoal;
+  const loggedDays = [...perDay.entries()].filter(([, c]) => c > 0);
+  const logged = loggedDays.map(([, c]) => c);
+  const intakes = calorieGoal
+    ? loggedDays.filter(([date, c]) => !isPartialDay(c, goalOf(date) ?? 0)).map(([, c]) => c)
+    : logged;
   const partialDays = logged.length - intakes.length;
   const trend = weightTrend(weights, addDays(today, -1), ADAPTIVE_WINDOW_DAYS, 10);
 

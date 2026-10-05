@@ -18,6 +18,11 @@ create table if not exists public.settings (
   calc jsonb
 );
 
+-- Personalization that follows the account: Home/Statistics layout, goal
+-- phases, weekday goals, milestones, coach memory… (added later, so it's
+-- also added to existing databases here).
+alter table public.settings add column if not exists prefs jsonb;
+
 create table if not exists public.meals (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,

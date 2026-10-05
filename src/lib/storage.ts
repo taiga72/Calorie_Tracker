@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabaseClient';
 import { deleteAllPhotos, isDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
-import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal, Prefs } from '@/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -149,6 +149,7 @@ interface SettingsRow {
   weight_unit: Settings['weightUnit'];
   gemini_api_key: string;
   calc: Settings['calc'];
+  prefs?: Prefs | null;
 }
 
 function rowToSettings(row: SettingsRow | null): Settings {
@@ -160,6 +161,7 @@ function rowToSettings(row: SettingsRow | null): Settings {
     weightUnit: row.weight_unit,
     geminiApiKey: row.gemini_api_key ?? '',
     calc: row.calc ?? null,
+    ...(row.prefs ? { prefs: row.prefs } : {}),
   };
 }
 
@@ -172,7 +174,37 @@ function settingsToRow(userId: string, s: Settings) {
     weight_unit: s.weightUnit,
     gemini_api_key: s.geminiApiKey,
     calc: s.calc ?? null,
+    ...(prefsColumn !== false ? { prefs: s.prefs ?? null } : {}),
   };
+}
+
+// The settings.prefs column (personalization) was added after launch. Until
+// the updated supabase/schema.sql has been run, saving settings leaves it
+// out, and the store keeps prefs on this device instead.
+let prefsColumn: boolean | null = null;
+
+/** For tests: forget what's known about the prefs column. */
+export function resetPrefsColumnState(): void {
+  prefsColumn = null;
+}
+
+/** False once the server is known to lack settings.prefs. */
+export function prefsSyncAvailable(): boolean {
+  return prefsColumn !== false;
+}
+
+function isMissingPrefsColumn(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return (e?.code === 'PGRST204' || e?.code === '42703') && /prefs/.test(e?.message ?? '');
+}
+
+async function upsertSettings(userId: string, s: Settings) {
+  const res = await withRetry(() => supabase.from('settings').upsert(settingsToRow(userId, s), { onConflict: 'user_id' }));
+  if (res.error && prefsColumn !== false && isMissingPrefsColumn(res.error)) {
+    prefsColumn = false;
+    return withRetry(() => supabase.from('settings').upsert(settingsToRow(userId, s), { onConflict: 'user_id' }));
+  }
+  return res;
 }
 
 interface ProfileRow {
@@ -412,13 +444,14 @@ export const storage = {
       console.error('Failed to load settings', error);
       throw error;
     }
+    if (data) prefsColumn = 'prefs' in (data as object);
     return rowToSettings(data as SettingsRow | null);
   },
 
+  prefsSyncAvailable,
+
   setSettings: async (userId: string, s: Settings): Promise<boolean> => {
-    const { error } = await withRetry(() =>
-      supabase.from('settings').upsert(settingsToRow(userId, s), { onConflict: 'user_id' })
-    );
+    const { error } = await upsertSettings(userId, s);
     if (error) console.error('Failed to save settings', error);
     return !error;
   },
@@ -496,12 +529,7 @@ export const storage = {
         if (error) { console.error('Failed to import weights', error); ok = false; }
       }
     }
-    const s = await withRetry(() =>
-      supabase.from('settings').upsert(
-        settingsToRow(userId, { ...DEFAULT_SETTINGS, ...payload.settings }),
-        { onConflict: 'user_id' }
-      )
-    );
+    const s = await upsertSettings(userId, { ...DEFAULT_SETTINGS, ...payload.settings });
     if (s.error) { console.error('Failed to import settings', s.error); ok = false; }
     const p = await withRetry(() =>
       supabase.from('profiles').upsert(

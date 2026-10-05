@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Modal } from '@/components/Modal';
+import { haptic } from '@/lib/appearance';
 import { Flame } from 'lucide-react';
 import { getEncouragingMessage } from '@/lib/streakUtils';
 
@@ -10,6 +12,7 @@ interface StreakModalProps {
 }
 
 export function StreakModal({ open, onClose, name, streak }: StreakModalProps) {
+  useEffect(() => { if (open) haptic('celebrate'); }, [open]);
   return (
     <Modal open={open} onClose={onClose} maxWidth="max-w-sm">
       <div className="flex flex-col items-center text-center py-6">

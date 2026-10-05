@@ -20,8 +20,11 @@ import { StatsTab } from '@/tabs/StatsTab';
 import { CalendarTab } from '@/tabs/CalendarTab';
 import { SettingsTab } from '@/tabs/SettingsTab';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
+import { newlyAchieved } from '@/lib/milestones';
+import { todayKey } from '@/lib/dateUtils';
+import { MilestoneModal } from '@/components/Milestones';
 import { Loader2, AlertTriangle, X, CloudOff, RefreshCw } from 'lucide-react';
-import type { TabKey } from '@/types';
+import type { Milestone, TabKey } from '@/types';
 
 function App() {
   return (
@@ -70,7 +73,8 @@ function AppInner() {
   const [coachOpen, setCoachOpen] = useState(false);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
-  const { meals, profile, loading, syncError, dismissSyncError, refresh, refreshing, online, pendingCount } = useStore();
+  const { meals, weights, settings, updatePrefs, profile, loading, syncError, dismissSyncError, refresh, refreshing, online, pendingCount } = useStore();
+  const [celebrate, setCelebrate] = useState<Milestone | null>(null);
   useSplashReady(!loading);
   const reminder = useReminders(!loading);
 
@@ -88,10 +92,24 @@ function AppInner() {
     }
   }, [meals, loading]);
 
+  // Celebrate milestones as they're reached (once each: they're marked as
+  // reached right away, on every device).
+  useEffect(() => {
+    if (loading) return;
+    const milestones = settings.prefs?.milestones ?? [];
+    const reached = newlyAchieved(milestones, { meals, weights, settings });
+    if (reached.length === 0) return;
+    const ids = new Set(reached.map((m) => m.id));
+    const today = todayKey();
+    updatePrefs({ milestones: milestones.map((m) => (ids.has(m.id) ? { ...m, achievedAt: today } : m)) });
+    setCelebrate(reached[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meals, weights, settings.prefs?.milestones, loading]);
+
   if (loading) return null;
 
   return (
-    <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] text-gray-900 dark:text-gray-100 max-w-md mx-auto">
+    <div className="min-h-screen text-gray-900 dark:text-gray-100 max-w-md mx-auto">
       {syncError && (
         <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs p-3 border-b border-red-100 dark:border-red-900">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
@@ -111,7 +129,7 @@ function AppInner() {
       )}
       {(!online || pendingCount > 0) && (
         <div className="sticky top-0 z-40 flex justify-center pt-2 -mb-9 pointer-events-none">
-          <span role="status" className="pointer-events-auto inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-full shadow-sm bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900 backdrop-blur animate-[slideDown_.25s_ease-out]">
+          <span role="status" className="pointer-events-auto inline-flex items-center gap-1.5 text-11 font-semibold px-3 py-1.5 rounded-full shadow-sm bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900 backdrop-blur animate-[slideDown_.25s_ease-out]">
             {!online ? (
               <><CloudOff size={12} /> Offline{pendingCount > 0 ? ` · ${pendingCount} change${pendingCount === 1 ? '' : 's'} saved on this device` : ''}</>
             ) : (
@@ -138,8 +156,10 @@ function AppInner() {
       <BottomNav active={tab} onChange={setTab} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
       <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />
+      <MilestoneModal milestone={celebrate} onClose={() => setCelebrate(null)} />
+      {/* One celebration at a time: the streak waits for the milestone. */}
       <StreakModal
-        open={streakOpen}
+        open={streakOpen && !celebrate}
         onClose={() => setStreakOpen(false)}
         name={profile.name}
         streak={streakCount}

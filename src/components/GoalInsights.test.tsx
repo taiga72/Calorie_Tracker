@@ -32,7 +32,7 @@ describe('AdaptiveTargetCard', () => {
   it('suggests a goal from real intake vs. weight and applies it with undo', () => {
     render(<UndoToastProvider><AdaptiveTargetCard /></UndoToastProvider>);
 
-    expect(screen.getByText('2,000 kcal', { selector: 'p.text-emerald-600' })).toBeInTheDocument();
+    expect(screen.getByText('2,000 kcal', { selector: 'p.text-accent-600' })).toBeInTheDocument();
     fireEvent.click(screen.getByText('Use 2,000 kcal'));
     expect(updateSettings).toHaveBeenCalledWith(expect.objectContaining({ calorieGoal: 2000 }));
 

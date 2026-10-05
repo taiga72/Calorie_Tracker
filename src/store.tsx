@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal, Prefs } from '@/types';
 import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type MealPhotos } from '@/lib/storage';
-import { addDays, toKey } from '@/lib/dateUtils';
+import { addDays, setDayStartHour, toKey, todayKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
@@ -19,14 +19,19 @@ interface StoreValue {
   pinned: PinnedMeal[];
   /** False until the pinned_meals table exists; pins then stay on this device. */
   pinsSyncEnabled: boolean;
+  /** False until settings.prefs exists; personalization then stays on this device. */
+  prefsSyncEnabled: boolean;
   loading: boolean;
-  addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => void;
+  /** Logs a meal; returns its id (undefined when signed out). */
+  addMeal: (m: Omit<MealEntry, 'id' | 'createdAt'>) => string | undefined;
   updateMeal: (id: string, patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) => void;
   deleteMeal: (id: string) => void;
   logWeight: (value: number) => void; // value in display unit
   logWeightForDate: (value: number, dateKey: string) => void; // value in display unit
   deleteWeight: (dateKey: string) => void;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** Merges into settings.prefs (layout, goal plan, milestones, coach memory…). */
+  updatePrefs: (patch: Partial<Prefs>) => void;
   updateProfile: (patch: Partial<Profile>) => void;
   /** Pins a meal; returns the existing pin instead when the same meal is already pinned. */
   pinMeal: (m: Omit<PinnedMeal, 'id' | 'createdAt'>) => { pin: PinnedMeal; alreadyPinned: boolean };
@@ -84,6 +89,25 @@ const MIGRATION_START_DELAY_MS = 3000;
 const migratedKey = (uid: string) => `calorie_tracker_photos_migrated_${uid}`;
 const pause = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+// Personalization is also kept on this device, so it survives even before
+// the settings.prefs column exists on the server.
+const LOCAL_PREFS_PREFIX = 'cc_prefs:';
+function loadLocalPrefs(userId: string): Prefs | undefined {
+  try {
+    const raw = localStorage.getItem(LOCAL_PREFS_PREFIX + userId);
+    return raw ? (JSON.parse(raw) as Prefs) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+function saveLocalPrefs(userId: string, prefs: Prefs): void {
+  try {
+    localStorage.setItem(LOCAL_PREFS_PREFIX + userId, JSON.stringify(prefs));
+  } catch {
+    // storage full or blocked
+  }
+}
+
 function runOp(userId: string, op: OutboxOp): Promise<boolean> {
   switch (op.kind) {
     case 'insertMeal': return storage.insertMeal(userId, op.meal);
@@ -111,9 +135,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const [weights, setWeights] = useState<WeightEntry[]>([]);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  // Which day "today" is depends on the day-start hour; set it before any
+  // child renders with these settings (idempotent, so safe during render).
+  setDayStartHour(settings.prefs?.dayStartHour ?? 0);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [pinned, setPinned] = useState<PinnedMeal[]>([]);
   const [pinsSyncEnabled, setPinsSyncEnabled] = useState(true);
+  const [prefsSyncEnabled, setPrefsSyncEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -294,7 +322,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const next: Snapshot = { ...base };
       if (m.status === 'fulfilled') next.meals = withPhotos(m.value); else failed.push('meals');
       if (w.status === 'fulfilled') next.weights = w.value; else failed.push('weight history');
-      if (s.status === 'fulfilled') next.settings = s.value; else failed.push('settings');
+      if (s.status === 'fulfilled') {
+        // Without the prefs column (or before the first save), fall back to
+        // the copy kept on this device.
+        next.settings = s.value.prefs ? s.value : { ...s.value, prefs: loadLocalPrefs(uid) ?? base.settings.prefs };
+        setPrefsSyncEnabled(storage.prefsSyncAvailable?.() ?? true);
+      } else {
+        failed.push('settings');
+      }
       if (p.status === 'fulfilled') next.profile = p.value; else failed.push('profile');
       if (pins.status === 'fulfilled') {
         setPinsSyncEnabled(pins.value !== null);
@@ -402,6 +437,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       rememberPhotos(entry);
       setMeals((prev) => [entry, ...prev]);
       commit({ kind: 'insertMeal', meal: entry });
+      return entry.id;
     };
 
     const deleteMeal: StoreValue['deleteMeal'] = (id) => {
@@ -486,7 +522,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit({ kind: 'upsertWeight', entry });
     };
 
-    const logWeight: StoreValue['logWeight'] = (displayValue) => putWeight(displayValue, toKey(new Date()));
+    const logWeight: StoreValue['logWeight'] = (displayValue) => putWeight(displayValue, todayKey());
     const logWeightForDate: StoreValue['logWeightForDate'] = (displayValue, dateKey) => putWeight(displayValue, dateKey);
 
     const deleteWeight: StoreValue['deleteWeight'] = (dateKey) => {
@@ -500,7 +536,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const next = { ...current.current.settings, ...patch };
       current.current = { ...current.current, settings: next };
       setSettings(next);
+      if (patch.prefs) saveLocalPrefs(userId, patch.prefs);
       commit({ kind: 'setSettings', settings: next });
+    };
+
+    const updatePrefs: StoreValue['updatePrefs'] = (patch) => {
+      updateSettings({ prefs: { ...current.current.settings.prefs, ...patch } });
     };
 
     const updateProfile: StoreValue['updateProfile'] = (patch) => {
@@ -568,16 +609,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     return {
-      meals, weights, settings, profile, pinned, pinsSyncEnabled, loading,
+      meals, weights, settings, profile, pinned, pinsSyncEnabled, prefsSyncEnabled, loading,
       addMeal, updateMeal, deleteMeal,
       logWeight, logWeightForDate, deleteWeight,
-      updateSettings, updateProfile,
+      updateSettings, updatePrefs, updateProfile,
       pinMeal, unpinMeal, updatePin, restorePin,
       clearAll, importBackup, exportBackup, prepareExport, loadPhotos, getDay,
       syncError, dismissSyncError,
       refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
+  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, prefsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

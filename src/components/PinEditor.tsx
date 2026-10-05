@@ -78,7 +78,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         maxLength={60}
-        className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-emerald-500/30"
+        className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
       />
 
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar mt-3">
@@ -87,7 +87,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
             key={t}
             onClick={() => setMealType(t)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-              mealType === t ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+              mealType === t ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
             }`}
           >
             {t}
@@ -108,7 +108,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
         />
         <span className="text-xs text-gray-400">kcal</span>
       </div>
-      <p className="text-[11px] text-gray-400 mt-1">Changing calories scales the macros to match.</p>
+      <p className="text-11 text-gray-400 mt-1">Changing calories scales the macros to match.</p>
 
       <div className="grid grid-cols-4 gap-2 mt-3">
         {([
@@ -126,7 +126,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
               onChange={(e) => setMacros((m) => ({ ...m, [key]: e.target.value }))}
               className={`w-full bg-transparent text-center text-sm font-bold outline-none ${color}`}
             />
-            <span className="text-[10px] text-gray-400">{label} g</span>
+            <span className="text-10 text-gray-400">{label} g</span>
           </label>
         ))}
       </div>
@@ -142,7 +142,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
         <button onClick={onCancel} className="flex-1 bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm">
           Cancel
         </button>
-        <button onClick={save} className="flex-1 bg-emerald-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2">
+        <button onClick={save} className="flex-1 bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-2">
           <Check size={16} /> Save pin
         </button>
       </div>

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import {
   toKey, fromKey, formatMonthYear, weekdayShort,
-  daysInMonth, firstWeekdayOfMonth, addMonths, addDays, isToday,
+  daysInMonth, firstWeekdayOfMonth, addMonths, addDays, isToday, logicalNow, todayKey,
 } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -10,10 +10,11 @@ import { DayDetailModal } from '@/modals/DayDetailModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { dayStatus } from '@/lib/goal';
+import { calorieGoalOn } from '@/lib/goalPlan';
 
 export function CalendarTab() {
   const { getDay, settings, refresh, refreshing } = useStore();
-  const [cursor, setCursor] = useState(() => new Date());
+  const [cursor, setCursor] = useState(() => logicalNow());
   const [selected, setSelected] = useState<string | null>(null);
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
 
@@ -37,6 +38,11 @@ export function CalendarTab() {
     onSwipeLeft: () => changeMonth(1),
     onSwipeRight: () => changeMonth(-1),
   });
+
+  // What each day shows besides its colour (Settings → Layout).
+  const cellContent = settings.prefs?.calendarCell ?? 'both';
+  const showKcal = cellContent === 'both' || cellContent === 'calories';
+  const showWeight = cellContent === 'both' || cellContent === 'weight';
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
@@ -91,7 +97,7 @@ export function CalendarTab() {
       {/* Weekday header */}
       <div className="grid grid-cols-7">
         {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="text-center text-[11px] font-bold text-gray-400 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div key={i} className="text-center text-11 font-bold text-gray-400 py-2 border-b border-gray-200 dark:border-gray-700">
             {weekdayShort(i)}
           </div>
         ))}
@@ -103,7 +109,7 @@ export function CalendarTab() {
           side the swipe came from, instead of snapping back from the wrong side. */}
       <div
         key={`${year}-${month}`}
-        className={`grid grid-cols-7 auto-rows-fr min-h-[58vh] [&>*:nth-child(7n)]:border-r-0 [&>*:nth-last-child(-n+7)]:border-b-0 motion-reduce:animate-none ${
+        className={`grid grid-cols-7 auto-rows-fr min-h-[58vh] compact:min-h-[46vh] [&>*:nth-child(7n)]:border-r-0 [&>*:nth-last-child(-n+7)]:border-b-0 motion-reduce:animate-none ${
           slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''
         }`}
         style={{
@@ -120,7 +126,7 @@ export function CalendarTab() {
           // glance instead of relying on the tiny numbers alone. Today is
           // still going, so it's never "partly logged".
           const status = day.meals.length > 0
-            ? dayStatus(day.totalCalories, settings.calorieGoal, { inProgress: isCur || key > toKey(new Date()) })
+            ? dayStatus(day.totalCalories, calorieGoalOn(settings, key), { inProgress: isCur || key > todayKey() })
             : 'empty';
           const cellTint = status === 'over' ? 'bg-rose-50 dark:bg-rose-950'
             : status === 'within' ? 'bg-emerald-50 dark:bg-emerald-950'
@@ -140,13 +146,13 @@ export function CalendarTab() {
                 {d.getDate()}
               </span>
               <div className="mt-1 w-full space-y-0.5 overflow-hidden">
-                {day.totalCalories > 0 && (
-                  <span className="block text-[10px] font-semibold text-orange-600 dark:text-orange-300 truncate">
+                {showKcal && day.totalCalories > 0 && (
+                  <span className="block text-10 font-semibold text-orange-600 dark:text-orange-300 truncate">
                     {Math.round(day.totalCalories)} kcal
                   </span>
                 )}
-                {day.weight && (
-                  <span className="block text-[10px] font-semibold text-blue-600 dark:text-blue-300 truncate">
+                {showWeight && day.weight && (
+                  <span className="block text-10 font-semibold text-blue-600 dark:text-blue-300 truncate">
                     {fmtWeight(day.weight.weight, settings.weightUnit, 1).split(' ')[0]} {settings.weightUnit}
                   </span>
                 )}
@@ -167,7 +173,7 @@ function Legend({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
       <span className={`w-2.5 h-2.5 rounded-full ${color} border border-black/5`} />
-      <span className="text-[10px] text-gray-400 font-medium">{label}</span>
+      <span className="text-10 text-gray-400 font-medium">{label}</span>
     </div>
   );
 }
