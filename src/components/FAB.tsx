@@ -6,7 +6,7 @@ export function FAB({ onClick, onCoachClick }: { onClick: () => void; onCoachCli
       <button
         onClick={onCoachClick}
         aria-label="Open AI Coach"
-        className="w-12 h-12 rounded-full bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-emerald-700"
+        className="w-12 h-12 rounded-full bg-accent-600 text-white shadow-lg shadow-accent-600/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-accent-700"
       >
         <Sparkles size={20} />
       </button>

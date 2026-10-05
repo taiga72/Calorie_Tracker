@@ -40,7 +40,7 @@ export function CalorieRing({ value, goal, size = 120, stroke = 10, label, subla
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {label && <span className="text-xl font-bold text-gray-900 dark:text-white leading-none">{label}</span>}
-        {sublabel && <span className="text-[10px] font-medium text-gray-400 mt-1">{sublabel}</span>}
+        {sublabel && <span className="text-10 font-medium text-gray-400 mt-1">{sublabel}</span>}
       </div>
     </div>
   );

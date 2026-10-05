@@ -1,15 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '@/store';
-import { rangeKeys, formatShortDate, toKey } from '@/lib/dateUtils';
+import { rangeKeys, formatShortDate, logicalNow, todayKey as todayKeyFn } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
 import { TrendChart } from '@/components/TrendChart';
 import { dayIndex, fitDomain, smoothingFor, trendLine, SMOOTHING_LABEL } from '@/lib/trends';
 import { MacroBar } from '@/components/MacroBar';
-import { GoalForecastCard, AdaptiveTargetCard } from '@/components/GoalInsights';
+import { GoalForecastCard, AdaptiveTargetCard, GoalPlanCard } from '@/components/GoalInsights';
+import { MilestonesCard } from '@/components/Milestones';
+import { GOALS_LAYOUT, STATS_LAYOUT, visibleCards } from '@/lib/layout';
+import type { GoalsCardId, StatsCardId } from '@/types';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { isOverGoal, isPartialDay } from '@/lib/goal';
+import { baseGoalOn, goalFor, weeklyTargetOn } from '@/lib/goalPlan';
 import { fiberTarget } from '@/lib/macros';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
 
@@ -34,8 +38,8 @@ export function StatsTab() {
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
   const days = RANGES.find((r) => r.key === range)!.days;
 
-  const todayKey = toKey(new Date());
-  const keys = useMemo(() => rangeKeys(new Date(), days), [days]);
+  const todayKey = todayKeyFn();
+  const keys = useMemo(() => rangeKeys(logicalNow(), days), [days]);
   const smoothing = smoothingFor(days);
   const unit = settings.weightUnit;
 
@@ -43,15 +47,27 @@ export function StatsTab() {
   // (not a 0 kcal day), and today — still in progress — is shown on its own.
   // Partly logged days (under half the goal) are drawn faintly but kept out
   // of the line and the numbers, so a forgotten dinner isn't a "great day".
-  const goal = settings.calorieGoal;
+  // Each day is judged by its own goal (phases, weekday adjustments).
+  const goalOf = useMemo(() => goalFor(settings), [settings]);
+  const goal = goalOf(todayKey);
+  // The goal line: one step per goal phase in the range (weekday
+  // adjustments would make it zigzag daily, so it shows the phase goal).
+  const goalSteps = useMemo(() => {
+    const steps: { date: string; value: number }[] = [];
+    for (const k of keys) {
+      const v = baseGoalOn(settings, k);
+      if (steps.length === 0 || steps[steps.length - 1].value !== v) steps.push({ date: k, value: v });
+    }
+    return steps;
+  }, [keys, settings]);
   const loggedDayList = useMemo(
     () => keys.filter((k) => k !== todayKey).map((k) => getDay(k)).filter((d) => d.meals.length > 0),
     [keys, todayKey, getDay],
   );
-  const fullDayList = useMemo(() => loggedDayList.filter((d) => !isPartialDay(d.totalCalories, goal)), [loggedDayList, goal]);
+  const fullDayList = useMemo(() => loggedDayList.filter((d) => !isPartialDay(d.totalCalories, goalOf(d.date))), [loggedDayList, goalOf]);
   const partialRaw = useMemo(
-    () => loggedDayList.filter((d) => isPartialDay(d.totalCalories, goal)).map((d) => ({ date: d.date, value: d.totalCalories })),
-    [loggedDayList, goal],
+    () => loggedDayList.filter((d) => isPartialDay(d.totalCalories, goalOf(d.date))).map((d) => ({ date: d.date, value: d.totalCalories })),
+    [loggedDayList, goalOf],
   );
   const calRaw = useMemo(() => fullDayList.map((d) => ({ date: d.date, value: d.totalCalories })), [fullDayList]);
   const calLine = useMemo(() => trendLine(calRaw, smoothing), [calRaw, smoothing]);
@@ -60,15 +76,15 @@ export function StatsTab() {
   // Fitted to the real days only: one 400 kcal partial day would squash the
   // rest into a thin band. Partial days below the axis still read out on hover.
   const calDomain = useMemo(
-    () => fitDomain((calRaw.length ? calRaw : partialRaw).map((p) => p.value), { minSpan: 600, include: [goal] }),
-    [calRaw, partialRaw, goal],
+    () => fitDomain((calRaw.length ? calRaw : partialRaw).map((p) => p.value), { minSpan: 600, include: goalSteps.map((g) => g.value) }),
+    [calRaw, partialRaw, goalSteps],
   );
 
   const loggedDays = loggedDayList.length;
   const fullDays = fullDayList.length;
   const avgCal = fullDays ? Math.round(calRaw.reduce((a, b) => a + b.value, 0) / fullDays) : 0;
   const highest = calRaw.reduce((a, b) => Math.max(a, b.value), 0);
-  const daysWithinGoal = calRaw.filter((p) => !isOverGoal(p.value, goal)).length;
+  const daysWithinGoal = calRaw.filter((p) => !isOverGoal(p.value, goalOf(p.date))).length;
 
   // Macros averaged over the same fully logged days.
   const totals = useMemo(() => fullDayList.reduce(
@@ -117,6 +133,160 @@ export function StatsTab() {
   // A little resistance at either end, like the calendar.
   const edgeDrag = (page === 'trends' && dragX > 0) || (page === 'goals' && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
 
+  // Cards in the order and selection from Settings → Layout. The range
+  // picker sits just above the first chart that uses it.
+  const rangePicker = (
+    <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+      {RANGES.map((r) => (
+        <button
+          key={r.key}
+          onClick={() => setRange(r.key)}
+          className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
+            range === r.key ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800'
+          }`}
+        >
+          {r.label}
+        </button>
+      ))}
+    </div>
+  );
+  const trendSections: Record<StatsCardId, ReactNode> = {
+    recap: <WeeklyRecapCard />,
+    calories: (
+    <div className="card p-4">
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <Flame size={16} className="text-orange-500" />
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Calories trend</h2>
+        </div>
+        <span className="text-11 text-gray-400">{loggedDays} of {keys.length - 1 || 1} days logged</span>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        {smoothing === 'none' ? 'Each logged day' : `Dots are days · line is the ${lineLabel.toLowerCase()}`}
+      </p>
+      {loggedDays === 0 && !calPending ? (
+        <p className="text-sm text-gray-400 py-6 text-center">No meals logged in this range.</p>
+      ) : (
+        <TrendChart
+          start={keys[0]}
+          end={todayKey}
+          raw={calRaw}
+          line={calLine}
+          rawIsLine={smoothing === 'none'}
+          pending={calPending}
+          pendingLabel="Today so far"
+          partial={partialRaw}
+          partialLabel="kcal · partly logged"
+          reference={goalSteps.length === 1 ? { value: goalSteps[0].value, label: 'Goal' } : undefined}
+          referenceSteps={goalSteps.length > 1 ? { points: goalSteps, label: 'Goal' } : undefined}
+          domain={calDomain}
+          color="#F97316"
+          format={(v) => Math.round(v).toLocaleString()}
+          rawLabel="kcal that day"
+          lineLabel={lineLabel}
+          ariaLabel={`Calories, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
+        />
+      )}
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <Stat label="Avg/day" value={avgCal ? avgCal.toLocaleString() : '—'} unit="kcal" tone="orange" />
+        <Stat label="Within goal" value={`${daysWithinGoal}/${fullDays}`} unit="days" tone="gray" />
+        <Stat label="Highest" value={highest ? highest.toLocaleString() : '—'} unit="kcal" tone="gray" />
+      </div>
+      {partialRaw.length > 0 && (
+        <p className="text-10 text-gray-400 mt-2">
+          {partialRaw.length} partly logged day{partialRaw.length === 1 ? '' : 's'} (under half your goal) left out of these numbers.
+        </p>
+      )}
+    </div>
+    ),
+    macros: (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <TrendingUp size={16} className="text-accent-600" />
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white">Macros breakdown</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
+      <MacroBar
+        protein={perDay(totals.protein)}
+        carbs={perDay(totals.carbs)}
+        fat={perDay(totals.fat)}
+      />
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <Stat label="Protein" value={`${perDay(totals.protein).toFixed(0)}`} unit="g/day" tone="green" />
+        <Stat label="Carbs" value={`${perDay(totals.carbs).toFixed(0)}`} unit="g/day" tone="orange" />
+        <Stat label="Fat" value={`${perDay(totals.fat).toFixed(0)}`} unit="g/day" tone="amber" />
+      </div>
+      {fullDays > 0 && (
+        <p className="text-11 text-gray-400 mt-3">
+          Fiber <span className="font-bold text-purple-500">{perDay(totals.fiber).toFixed(0)} g/day</span>
+          {' '}· aim for about {fiberTarget(goal)} g
+        </p>
+      )}
+    </div>
+    ),
+    weight: (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Scale size={16} className="text-blue-600" />
+        <h2 className="text-sm font-bold text-gray-900 dark:text-white">Weight trend</h2>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">
+        {smoothing === 'none' ? 'Each weigh-in' : `Dots are weigh-ins · line is the ${lineLabel.toLowerCase()}`}
+      </p>
+      {wRaw.length > 0 ? (
+        <>
+          <TrendChart
+            start={keys[0]}
+            end={todayKey}
+            raw={wRaw}
+            line={wLine}
+            rawIsLine={wLine === wRaw || smoothing === 'none'}
+            reference={goalNearby ? { value: goalInUnit, label: 'Goal' } : undefined}
+            domain={wDomain}
+            color="#3B82F6"
+            format={(v) => v.toFixed(1)}
+            rawLabel={`${unit} weigh-in`}
+            lineLabel={lineLabel}
+              height={160}
+            ariaLabel={`Weight in ${unit}, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
+          />
+          <div className="flex items-end justify-between mt-4 pt-3 border-t border-gray-50 dark:border-gray-800">
+            <div>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">{latestWeigh ? latestWeigh.value.toFixed(1) : '—'}</span>
+              <span className="text-sm text-gray-400 ml-1">{unit}</span>
+              <p className="text-10 text-gray-400">latest weigh-in</p>
+            </div>
+            {wLine.length >= 2 && (
+              <div className="text-right">
+                <p className={`text-sm font-semibold ${Math.sign(wChange) === Math.sign(weeklyTargetOn(settings, todayKey)) || Math.abs(wChange) < 0.05 ? 'text-emerald-600' : 'text-orange-500'}`}>
+                  {wChange > 0 ? '+' : wChange < 0 ? '−' : ''}{Math.abs(wChange).toFixed(1)} {unit}
+                </p>
+                <p className="text-10 text-gray-400">
+                  trend over range{wWeeks >= 1.5 ? ` · ${wChange > 0 ? '+' : wChange < 0 ? '−' : ''}${Math.abs(wChange / wWeeks).toFixed(2)} ${unit}/wk` : ''}
+                </p>
+              </div>
+            )}
+          </div>
+          {!goalNearby && (
+            <p className="text-10 text-gray-400 mt-2">Goal {goalInUnit.toFixed(1)} {unit} is off this chart's scale.</p>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-gray-400">No weight entries in this range.</p>
+      )}
+    </div>
+    ),
+  };
+  const trendCards = visibleCards(settings.prefs?.statsCards, STATS_LAYOUT);
+  const firstRanged = trendCards.find((id) => id !== 'recap');
+  const goalSections: Record<GoalsCardId, ReactNode> = {
+    phases: <GoalPlanCard />,
+    forecast: <GoalForecastCard />,
+    target: <AdaptiveTargetCard />,
+    milestones: <MilestonesCard />,
+  };
+  const goalCards = visibleCards(settings.prefs?.goalsCards, GOALS_LAYOUT);
+
   return (
     <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-4">
@@ -127,7 +297,7 @@ export function StatsTab() {
       <div role="tablist" aria-label="Statistics pages" className="relative grid grid-cols-2 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
         <span
           aria-hidden
-          className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-gray-900 dark:bg-emerald-600 transition-transform duration-300 ease-out"
+          className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
           style={{ transform: page === 'goals' ? 'translateX(100%)' : undefined }}
         />
         {PAGES.map((p) => (
@@ -153,154 +323,18 @@ export function StatsTab() {
         className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
       >
       {page === 'goals' ? (
-        <div className="space-y-4 mt-5">
-          <GoalForecastCard />
-          <AdaptiveTargetCard />
+        <div className="space-y-4 compact:space-y-3 mt-5">
+          {goalCards.map((id) => <div key={id}>{goalSections[id]}</div>)}
         </div>
       ) : (
-      <>
-      <div className="mt-5">
-        <WeeklyRecapCard />
-      </div>
-
-      {/* Range selector (for the charts below) */}
-      <div className="flex gap-2 mt-5 overflow-x-auto no-scrollbar -mx-1 px-1">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            onClick={() => setRange(r.key)}
-            className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-              range === r.key ? 'bg-gray-900 dark:bg-emerald-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800'
-            }`}
-          >
-            {r.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Calories trend */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-5">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
-            <Flame size={16} className="text-orange-500" />
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Calories trend</h2>
-          </div>
-          <span className="text-[11px] text-gray-400">{loggedDays} of {keys.length - 1 || 1} days logged</span>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          {smoothing === 'none' ? 'Each logged day' : `Dots are days · line is the ${lineLabel.toLowerCase()}`}
-        </p>
-        {loggedDays === 0 && !calPending ? (
-          <p className="text-sm text-gray-400 py-6 text-center">No meals logged in this range.</p>
-        ) : (
-          <TrendChart
-            start={keys[0]}
-            end={todayKey}
-            raw={calRaw}
-            line={calLine}
-            rawIsLine={smoothing === 'none'}
-            pending={calPending}
-            pendingLabel="Today so far"
-            partial={partialRaw}
-            partialLabel="kcal · partly logged"
-            reference={{ value: settings.calorieGoal, label: 'Goal' }}
-            domain={calDomain}
-            color="#F97316"
-            format={(v) => Math.round(v).toLocaleString()}
-            rawLabel="kcal that day"
-            lineLabel={lineLabel}
-            ariaLabel={`Calories, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
-          />
-        )}
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Avg/day" value={avgCal ? avgCal.toLocaleString() : '—'} unit="kcal" tone="orange" />
-          <Stat label="Within goal" value={`${daysWithinGoal}/${fullDays}`} unit="days" tone="gray" />
-          <Stat label="Highest" value={highest ? highest.toLocaleString() : '—'} unit="kcal" tone="gray" />
-        </div>
-        {partialRaw.length > 0 && (
-          <p className="text-[10px] text-gray-400 mt-2">
-            {partialRaw.length} partly logged day{partialRaw.length === 1 ? '' : 's'} (under half your goal) left out of these numbers.
-          </p>
-        )}
-      </div>
-
-      {/* Macros breakdown */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
-        <div className="flex items-center gap-2 mb-1">
-          <TrendingUp size={16} className="text-emerald-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Macros breakdown</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
-        <MacroBar
-          protein={perDay(totals.protein)}
-          carbs={perDay(totals.carbs)}
-          fat={perDay(totals.fat)}
-        />
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Protein" value={`${perDay(totals.protein).toFixed(0)}`} unit="g/day" tone="green" />
-          <Stat label="Carbs" value={`${perDay(totals.carbs).toFixed(0)}`} unit="g/day" tone="orange" />
-          <Stat label="Fat" value={`${perDay(totals.fat).toFixed(0)}`} unit="g/day" tone="amber" />
-        </div>
-        {fullDays > 0 && (
-          <p className="text-[11px] text-gray-400 mt-3">
-            Fiber <span className="font-bold text-purple-500">{perDay(totals.fiber).toFixed(0)} g/day</span>
-            {' '}· aim for about {fiberTarget(goal)} g
-          </p>
-        )}
-      </div>
-
-      {/* Weight trend */}
-      <div className="bg-white dark:bg-gray-900 rounded-3xl p-4 shadow-sm border border-gray-50 dark:border-gray-800 mt-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Scale size={16} className="text-blue-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Weight trend</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-3">
-          {smoothing === 'none' ? 'Each weigh-in' : `Dots are weigh-ins · line is the ${lineLabel.toLowerCase()}`}
-        </p>
-        {wRaw.length > 0 ? (
-          <>
-            <TrendChart
-              start={keys[0]}
-              end={todayKey}
-              raw={wRaw}
-              line={wLine}
-              rawIsLine={wLine === wRaw || smoothing === 'none'}
-              reference={goalNearby ? { value: goalInUnit, label: 'Goal' } : undefined}
-              domain={wDomain}
-              color="#3B82F6"
-              format={(v) => v.toFixed(1)}
-              rawLabel={`${unit} weigh-in`}
-              lineLabel={lineLabel}
-                height={160}
-              ariaLabel={`Weight in ${unit}, ${lineLabel.toLowerCase()}, ${formatShortDate(keys[0])} to today`}
-            />
-            <div className="flex items-end justify-between mt-4 pt-3 border-t border-gray-50 dark:border-gray-800">
-              <div>
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">{latestWeigh ? latestWeigh.value.toFixed(1) : '—'}</span>
-                <span className="text-sm text-gray-400 ml-1">{unit}</span>
-                <p className="text-[10px] text-gray-400">latest weigh-in</p>
-              </div>
-              {wLine.length >= 2 && (
-                <div className="text-right">
-                  <p className={`text-sm font-semibold ${Math.sign(wChange) === Math.sign(settings.weeklyWeightTarget) || Math.abs(wChange) < 0.05 ? 'text-emerald-600' : 'text-orange-500'}`}>
-                    {wChange > 0 ? '+' : wChange < 0 ? '−' : ''}{Math.abs(wChange).toFixed(1)} {unit}
-                  </p>
-                  <p className="text-[10px] text-gray-400">
-                    trend over range{wWeeks >= 1.5 ? ` · ${wChange > 0 ? '+' : wChange < 0 ? '−' : ''}${Math.abs(wChange / wWeeks).toFixed(2)} ${unit}/wk` : ''}
-                  </p>
-                </div>
-              )}
+        <div className="space-y-4 compact:space-y-3 mt-5">
+          {trendCards.map((id) => (
+            <div key={id} className={id === firstRanged ? 'space-y-4 compact:space-y-3' : undefined}>
+              {id === firstRanged && rangePicker}
+              {trendSections[id]}
             </div>
-            {!goalNearby && (
-              <p className="text-[10px] text-gray-400 mt-2">Goal {goalInUnit.toFixed(1)} {unit} is off this chart's scale.</p>
-            )}
-          </>
-        ) : (
-          <p className="text-sm text-gray-400">No weight entries in this range.</p>
-        )}
-      </div>
-      </>
+          ))}
+        </div>
       )}
       </div>
       </div>
@@ -318,9 +352,9 @@ function Stat({ label, value, unit, tone }: { label: string; value: string; unit
   }[tone];
   return (
     <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2.5">
-      <p className="text-[10px] text-gray-400 font-medium">{label}</p>
+      <p className="text-10 text-gray-400 font-medium">{label}</p>
       <p className={`text-base font-bold ${toneClass}`}>{value}</p>
-      <p className="text-[9px] text-gray-400">{unit}</p>
+      <p className="text-9 text-gray-400">{unit}</p>
     </div>
   );
 }

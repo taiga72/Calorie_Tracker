@@ -1,5 +1,6 @@
 import { useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Trash2 } from 'lucide-react';
+import { haptic } from '@/lib/appearance';
 
 const REVEAL_PX = 72;
 const DELETE_THRESHOLD_PX = 130;
@@ -54,6 +55,7 @@ export function SwipeToDelete({ onDelete, children, label = 'Delete' }: SwipeToD
       suppressClick.current = true;
       const finalX = baseX + dragX;
       if (finalX < -DELETE_THRESHOLD_PX) {
+        haptic('light');
         onDelete();
       } else {
         setOpen(finalX < -REVEAL_PX / 2);

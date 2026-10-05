@@ -16,6 +16,7 @@ vi.mock('@/lib/supabaseClient', () => ({
 const { storage } = await import('@/lib/storage');
 const { supabase } = await import('@/lib/supabaseClient');
 const { resetPhotoStorageState } = await import('@/lib/photoStorage');
+const { resetPrefsColumnState } = await import('@/lib/storage');
 
 type Result = { data?: unknown; error?: unknown; status?: number };
 
@@ -328,6 +329,40 @@ describe('getSettings / setSettings', () => {
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, calorie_goal: 2000 }), { onConflict: 'user_id' });
   });
 
+  it('saves and loads personalization in the prefs column', async () => {
+    resetPrefsColumnState();
+    const prefs = { calendarCell: 'calories' as const, coachMemory: ['I train Mon/Wed/Fri'] };
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    await storage.setSettings(USER_ID, { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg', geminiApiKey: '', prefs });
+    expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ prefs }), { onConflict: 'user_id' });
+
+    const loaded = makeFrom({ data: { calorie_goal: 2000, goal_weight: 70, weekly_weight_target: 0, weight_unit: 'kg', gemini_api_key: '', calc: null, prefs }, error: null });
+    vi.mocked(supabase.from).mockReturnValue(loaded.from as never);
+    expect((await storage.getSettings(USER_ID)).prefs).toEqual(prefs);
+    expect(storage.prefsSyncAvailable()).toBe(true);
+  });
+
+  it('still saves settings when the prefs column is missing, without it', async () => {
+    resetPrefsColumnState();
+    const missing = { status: 400, error: { code: 'PGRST204', message: "Could not find the 'prefs' column of 'settings' in the schema cache" } };
+    const upsert = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve(missing))
+      .mockImplementation(() => Promise.resolve({ error: null }));
+    vi.mocked(supabase.from).mockReturnValue({ upsert } as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await storage.setSettings(USER_ID, { calorieGoal: 1900, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg', geminiApiKey: '', prefs: { showStreak: false } });
+
+    expect(ok).toBe(true);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0]).not.toHaveProperty('prefs');
+    expect(upsert.mock.calls[1][0]).toMatchObject({ calorie_goal: 1900 });
+    expect(storage.prefsSyncAvailable()).toBe(false);
+    spy.mockRestore();
+    resetPrefsColumnState();
+  });
+
   it('throws and logs on error, rather than silently returning defaults', async () => {
     const { from } = makeFrom({ data: null, error: { message: 'boom' } });
     vi.mocked(supabase.from).mockReturnValue(from as never);
@@ -362,6 +397,40 @@ describe('getProfile / setProfile', () => {
     await storage.setProfile(USER_ID, p);
 
     expect(from.upsert).toHaveBeenCalledWith({ user_id: USER_ID, name: 'Alex', avatar: null }, { onConflict: 'user_id' });
+  });
+
+  it('saves and loads personalization in the prefs column', async () => {
+    resetPrefsColumnState();
+    const prefs = { calendarCell: 'calories' as const, coachMemory: ['I train Mon/Wed/Fri'] };
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    await storage.setSettings(USER_ID, { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg', geminiApiKey: '', prefs });
+    expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ prefs }), { onConflict: 'user_id' });
+
+    const loaded = makeFrom({ data: { calorie_goal: 2000, goal_weight: 70, weekly_weight_target: 0, weight_unit: 'kg', gemini_api_key: '', calc: null, prefs }, error: null });
+    vi.mocked(supabase.from).mockReturnValue(loaded.from as never);
+    expect((await storage.getSettings(USER_ID)).prefs).toEqual(prefs);
+    expect(storage.prefsSyncAvailable()).toBe(true);
+  });
+
+  it('still saves settings when the prefs column is missing, without it', async () => {
+    resetPrefsColumnState();
+    const missing = { status: 400, error: { code: 'PGRST204', message: "Could not find the 'prefs' column of 'settings' in the schema cache" } };
+    const upsert = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve(missing))
+      .mockImplementation(() => Promise.resolve({ error: null }));
+    vi.mocked(supabase.from).mockReturnValue({ upsert } as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const ok = await storage.setSettings(USER_ID, { calorieGoal: 1900, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg', geminiApiKey: '', prefs: { showStreak: false } });
+
+    expect(ok).toBe(true);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0]).not.toHaveProperty('prefs');
+    expect(upsert.mock.calls[1][0]).toMatchObject({ calorie_goal: 1900 });
+    expect(storage.prefsSyncAvailable()).toBe(false);
+    spy.mockRestore();
+    resetPrefsColumnState();
   });
 
   it('throws and logs on error, rather than silently returning defaults', async () => {

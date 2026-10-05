@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { RefreshCw, Check, CloudOff } from 'lucide-react';
+import { haptic } from '@/lib/appearance';
 
 const PULL_THRESHOLD_PX = 72;
 const MAX_PULL_PX = 120;
@@ -49,6 +50,7 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
     setPhase('syncing');
     let ok = true;
     try {
+      haptic('light');
       ok = (await onRefresh()) !== false;
     } catch {
       ok = false;
@@ -170,25 +172,25 @@ export function PullToRefresh({ onRefresh, refreshing, children }: PullToRefresh
               <circle cx="18" cy="18" r={RING_R} fill="none" strokeWidth="2.5" className="stroke-gray-100 dark:stroke-gray-800" />
               <circle
                 cx="18" cy="18" r={RING_R} fill="none" strokeWidth="2.5" strokeLinecap="round"
-                className={phase === 'failed' ? 'stroke-amber-500' : 'stroke-emerald-500'}
+                className={phase === 'failed' ? 'stroke-amber-500' : 'stroke-accent-500'}
                 strokeDasharray={RING_C}
                 strokeDashoffset={syncing ? RING_C * 0.7 : showResult ? 0 : RING_C * (1 - progress)}
                 style={{ transition: dragging ? 'none' : 'stroke-dashoffset .3s ease' }}
               />
             </svg>
             {phase === 'done' ? (
-              <Check size={16} strokeWidth={3} className="text-emerald-600 animate-[popIn_.3s_ease-out]" />
+              <Check size={16} strokeWidth={3} className="text-accent-600 animate-[popIn_.3s_ease-out]" />
             ) : phase === 'failed' ? (
               <CloudOff size={15} className="text-amber-500 animate-[popIn_.3s_ease-out]" />
             ) : (
               <RefreshCw
                 size={15}
-                className={ready || syncing ? 'text-emerald-600' : 'text-gray-400'}
+                className={ready || syncing ? 'text-accent-600' : 'text-gray-400'}
                 style={{ transform: syncing ? undefined : `rotate(${progress * 270}deg)` }}
               />
             )}
           </div>
-          <span className={`text-[10px] font-semibold mt-1.5 ${phase === 'failed' ? 'text-amber-600' : ready || syncing || phase === 'done' ? 'text-emerald-600' : 'text-gray-400'}`}>
+          <span className={`text-10 font-semibold mt-1.5 ${phase === 'failed' ? 'text-amber-600' : ready || syncing || phase === 'done' ? 'text-accent-600' : 'text-gray-400'}`}>
             {label}
           </span>
         </div>

@@ -46,7 +46,7 @@ export function AuthScreen() {
     <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-emerald-600 flex items-center justify-center mb-4 shadow-lg shadow-emerald-600/20">
+          <div className="w-16 h-16 rounded-2xl bg-accent-600 flex items-center justify-center mb-4 shadow-lg shadow-accent-600/20">
             <Flame size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calorie Tracker</h1>
@@ -63,7 +63,7 @@ export function AuthScreen() {
             </div>
           )}
           {info && (
-            <div className="bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 text-xs rounded-xl p-3 mb-4">{info}</div>
+            <div className="bg-accent-50 dark:bg-accent-950 text-accent-700 dark:text-accent-300 text-xs rounded-xl p-3 mb-4">{info}</div>
           )}
           <form onSubmit={onSubmit} className="space-y-3">
             <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
@@ -91,14 +91,14 @@ export function AuthScreen() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-emerald-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[.99] transition-transform"
+              className="w-full bg-accent-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[.99] transition-transform"
             >
               {loading ? <Loader2 size={18} className="animate-spin" /> : mode === 'signin' ? 'Sign in' : 'Create account'}
             </button>
           </form>
           <button
             onClick={switchMode}
-            className="w-full text-center text-xs font-semibold text-emerald-600 mt-4"
+            className="w-full text-center text-xs font-semibold text-accent-600 mt-4"
           >
             {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>

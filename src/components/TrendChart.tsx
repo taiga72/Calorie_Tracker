@@ -22,6 +22,8 @@ interface TrendChartProps {
   partial?: TrendPoint[];
   partialLabel?: string;
   reference?: { value: number; label: string };
+  /** A reference that changes over time (e.g. goal phases), drawn as steps. */
+  referenceSteps?: { points: TrendPoint[]; label: string };
   domain: [number, number];
   color: string;
   format: (v: number) => string;
@@ -57,7 +59,7 @@ function useWidth<T extends HTMLElement>() {
  * unreadable past a week.
  */
 export function TrendChart({
-  start, end, raw, line, rawIsLine = false, pending, pendingLabel = 'So far', partial = [], partialLabel = 'Partly logged', reference, domain, color, format,
+  start, end, raw, line, rawIsLine = false, pending, pendingLabel = 'So far', partial = [], partialLabel = 'Partly logged', reference, referenceSteps, domain, color, format,
   rawLabel, lineLabel, height = 170, ariaLabel,
 }: TrendChartProps) {
   const [wrapRef, width] = useWidth<HTMLDivElement>();
@@ -135,7 +137,7 @@ export function TrendChart({
         tabIndex={0}
         onKeyDown={onKey}
         onBlur={() => setActive(null)}
-        className="block outline-none focus-visible:ring-2 ring-emerald-500/40 rounded-lg"
+        className="block outline-none focus-visible:ring-2 ring-accent-500/40 rounded-lg"
         style={{ touchAction: 'pan-y' }}
       >
         {/* Recessive grid: solid hairlines, muted labels. */}
@@ -176,6 +178,24 @@ export function TrendChart({
             </text>
           </g>
         )}
+
+        {referenceSteps && referenceSteps.points.length > 0 && (() => {
+          const pts = referenceSteps.points;
+          const clampY = (v: number) => yFor(Math.min(hi, Math.max(lo, v)));
+          const d = pts.map((p, i) => {
+            const x = xFor(p.date);
+            const y = clampY(p.value);
+            return i === 0 ? `M${x.toFixed(1)},${y.toFixed(1)}` : `H${x.toFixed(1)} V${y.toFixed(1)}`;
+          }).join(' ') + ` H${(PAD.left + plotW).toFixed(1)}`;
+          return (
+            <g>
+              <path d={d} fill="none" className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1} />
+              <text x={PAD.left + 3} y={clampY(pts[0].value) - 4} fontSize={9} paintOrder="stroke" strokeWidth={3} className="fill-gray-400 stroke-white dark:stroke-gray-900">
+                {referenceSteps.label}
+              </text>
+            </g>
+          );
+        })()}
 
         {/* Daily values: light dots behind the trend. */}
         {raw.map((p) => (
@@ -229,7 +249,7 @@ export function TrendChart({
       {active && (
         <div
           role="status"
-          className="pointer-events-none absolute top-0 w-[170px] rounded-xl bg-white/95 dark:bg-gray-800/95 shadow-md border border-gray-100 dark:border-gray-700 px-2.5 py-1.5 text-[11px]"
+          className="pointer-events-none absolute top-0 w-[170px] rounded-xl bg-white/95 dark:bg-gray-800/95 shadow-md border border-gray-100 dark:border-gray-700 px-2.5 py-1.5 text-11"
           style={{ left: tipLeft }}
         >
           <p className="text-gray-400 font-medium">

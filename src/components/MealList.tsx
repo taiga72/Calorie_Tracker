@@ -4,6 +4,7 @@ import { MealPhoto } from '@/components/MealPhoto';
 import { PinMealButton } from '@/components/PinMealButton';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { isOverGoal } from '@/lib/goal';
+import { calorieGoalOn } from '@/lib/goalPlan';
 import { Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
 import type { MealEntry, MealType, MealCalorieSplit } from '@/types';
 
@@ -12,10 +13,15 @@ const MEAL_ICON: Record<MealType, typeof Coffee> = {
   Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
 };
 
-/** The per-meal calorie budget from the setup wizard / Settings, if set. */
-function mealBudget(split: MealCalorieSplit | undefined, type: MealType): number | null {
+/**
+ * The per-meal calorie budget from the setup wizard / Settings, if set —
+ * as a share of that day's goal, so it follows goal phases and weekday goals.
+ */
+function mealBudget(split: MealCalorieSplit | undefined, type: MealType, dayGoal: number): number | null {
   const v = split?.[type.toLowerCase() as keyof MealCalorieSplit];
-  return v && v > 0 ? v : null;
+  if (!split || !v || v <= 0) return null;
+  const total = split.breakfast + split.lunch + split.dinner + split.snack;
+  return total > 0 ? Math.round((v / total) * dayGoal / 10) * 10 : v;
 }
 
 /**
@@ -27,6 +33,7 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
   const { settings, addMeal, deleteMeal } = useStore();
   const { requestUndo } = useUndoToast();
   const split = settings.calc?.suggestedMealSplit;
+  const dayGoal = meals.length > 0 ? calorieGoalOn(settings, meals[0].date) : settings.calorieGoal;
 
   const groups = MEAL_ORDER
     .map((type) => ({ type, meals: meals.filter((m) => m.mealType === type) }))
@@ -39,14 +46,14 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 compact:space-y-2">
       {groups.map(({ type, meals: group }) => {
         const Icon = MEAL_ICON[type];
         const typeCals = Math.round(group.reduce((a, b) => a + b.calories, 0));
-        const budget = mealBudget(split, type);
+        const budget = mealBudget(split, type, dayGoal);
         return (
-          <div key={type} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800">
+          <div key={type} className="card card-sm overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 compact:py-2 border-b border-gray-50 dark:border-gray-800">
               <Icon size={15} className="text-gray-400" />
               <span className="text-sm font-bold text-gray-900 dark:text-white">{type}</span>
               <span className="text-xs text-gray-400 ml-auto">
@@ -67,28 +74,28 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
                 const thumb = m.imageDatas?.[0] || m.imageData;
                 return (
                   <SwipeToDelete key={m.id} onDelete={() => onDeleteMeal(m)}>
-                    <div className="flex items-center gap-3 py-2.5">
+                    <div className="flex items-center gap-3 py-2.5 compact:py-1.5">
                       {thumb ? (
                         <div className="relative flex-shrink-0">
-                          <MealPhoto src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
+                          <MealPhoto src={thumb} alt="meal" className="w-11 h-11 compact:w-9 compact:h-9 rounded-2xl object-cover" />
                           {m.imageDatas && m.imageDatas.length > 1 && (
-                            <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
+                            <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-9 font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
                           )}
                         </div>
                       ) : (
-                        <div className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
+                        <div className="w-11 h-11 compact:w-9 compact:h-9 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
                           <Utensils size={16} className="text-gray-300" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
-                        <p className="text-[11px] text-gray-400 mt-0.5">
+                        <p className="text-11 text-gray-400 mt-0.5">
                           <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
                           {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
                         </p>
                       </div>
                       <PinMealButton meal={m} />
-                      <button onClick={() => onEdit(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
+                      <button onClick={() => onEdit(m)} className="flex-shrink-0 text-gray-300 hover:text-accent-600 transition-colors p-1" aria-label="Edit meal">
                         <Pencil size={14} />
                       </button>
                     </div>

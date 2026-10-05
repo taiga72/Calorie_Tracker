@@ -2,7 +2,8 @@ import type { MealEntry, Settings, WeightEntry } from '@/types';
 import type { WeeklyRecap } from '@/lib/weeklyRecap';
 import { resolveApiKey, RateLimitError } from '@/lib/gemini';
 import { kgToUnit } from '@/lib/units';
-import { rangeKeys, toKey, formatShortDate } from '@/lib/dateUtils';
+import { rangeKeys, toKey, formatShortDate, logicalNow } from '@/lib/dateUtils';
+import { calorieGoalOn, phaseOn, proteinTarget, sortedPhases, weeklyTargetOn } from '@/lib/goalPlan';
 
 const PRIMARY_MODEL = 'gemini-3.5-flash';
 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
@@ -31,7 +32,7 @@ interface GeminiErrorBody {
 
 function buildContextJson(ctx: CoachContext): string {
   const { settings, meals, weights } = ctx;
-  const keys = rangeKeys(new Date(), 7);
+  const keys = rangeKeys(logicalNow(), 7);
   const recentMeals = keys.map((k) => {
     const dayMeals = meals.filter((m) => m.date === k);
     if (!dayMeals.length) return { date: k, logged: false };
@@ -58,12 +59,21 @@ function buildContextJson(ctx: CoachContext): string {
       weight: Number(kgToUnit(w.weight, settings.weightUnit).toFixed(1)),
     }));
 
+  const today = keys[keys.length - 1];
+  const weeklyTarget = weeklyTargetOn(settings, today);
+  const phase = phaseOn(settings, today);
+  const latestWeight = [...weights].sort((a, b) => a.date.localeCompare(b.date)).pop();
   const profile = {
     unit: settings.weightUnit,
-    dailyCalorieGoal: settings.calorieGoal,
+    dailyCalorieGoalToday: calorieGoalOn(settings, today),
+    // Goals can differ by day (phases, weekday adjustments): each day's goal.
+    calorieGoalByDay: Object.fromEntries(keys.map((k) => [k, calorieGoalOn(settings, k)])),
+    currentPhase: phase ? { name: phase.name, since: phase.start } : null,
+    upcomingPhases: sortedPhases(settings).filter((p) => p.start > today).map((p) => ({ name: p.name, start: p.start, calorieGoal: p.calorieGoal })),
     goalWeight: Number(kgToUnit(settings.goalWeight, settings.weightUnit).toFixed(1)),
-    weeklyWeightTarget: Number(kgToUnit(Math.abs(settings.weeklyWeightTarget), settings.weightUnit).toFixed(2)),
-    goalDirection: settings.weeklyWeightTarget < 0 ? 'lose' : settings.weeklyWeightTarget > 0 ? 'gain' : 'maintain',
+    weeklyWeightTarget: Number(kgToUnit(Math.abs(weeklyTarget), settings.weightUnit).toFixed(2)),
+    goalDirection: weeklyTarget < 0 ? 'lose' : weeklyTarget > 0 ? 'gain' : 'maintain',
+    proteinTargetGrams: proteinTarget(settings, latestWeight?.weight),
     bmr: settings.calc?.bmr ?? null,
     tdee: settings.calc?.tdee ?? null,
     dailyDeficit: settings.calc?.dailyDeficit ?? null,
@@ -74,7 +84,9 @@ function buildContextJson(ctx: CoachContext): string {
     suggestedMealSplit: settings.calc?.suggestedMealSplit ?? null,
   };
 
-  return JSON.stringify({ profile, recentMeals, recentWeights }, null, 2);
+  // Facts the user asked the coach to always keep in mind.
+  const memory = settings.prefs?.coachMemory?.filter((m) => m.trim()) ?? [];
+  return JSON.stringify({ profile, ...(memory.length ? { userNotes: memory } : {}), recentMeals, recentWeights }, null, 2);
 }
 
 const COACH_SYSTEM_PROMPT = `You are an encouraging, knowledgeable AI nutrition and fitness coach inside a calorie-tracking app.
@@ -82,6 +94,7 @@ The user's profile and their past 7 days of meal/weight logs are provided as a J
 Give structured, warm, and actionable advice tailored to their actual data. Reference their real numbers when relevant.
 Keep answers concise (3-5 sentences) unless the user asks for detail. Use plain language, no medical diagnoses, no prescribing. If they could be doing better, frame it positively.
 Never invent stats that contradict the provided context. If data is missing, say so and give general guidance.
+If userNotes are given, they are facts the user wants you to always keep in mind (schedule, preferences, conditions): respect them.
 Write plain text: no markdown, asterisks, backticks or headings. For a list, put each point on its own line starting with "- ".`;
 
 export interface CoachMessage {
@@ -192,7 +205,7 @@ const WEEKLY_SYSTEM_PROMPT = `You are an AI nutrition coach writing a short end-
 Write 2–3 short sentences of plain text. No markdown at all: no asterisks, backticks, bold, headings, bullet points or emoji.
 - Start with what went well, citing a real number.
 - Then one specific, practical focus for the weekend and the week ahead based on the numbers (e.g. protein, days over goal, logging consistency).
-Be warm and direct. Don't repeat every number; don't invent data.
+Be warm and direct. Don't repeat every number; don't invent data. If userNotes are given, keep them in mind.
 partialDays are days with under half the goal logged, probably not fully logged: they are left out of avgCalories and daysOnTarget (which is out of countedDays). If there are any, a gentle nudge to log whole days fits.`;
 
 /**
@@ -231,10 +244,11 @@ export function cleanCoachText(text: string, { keepLines = false }: { keepLines?
 export async function getWeeklySummary(apiKey: string, recap: WeeklyRecap, settings: Settings): Promise<string> {
   const key = resolveApiKey(apiKey);
   const context = {
-    calorieGoal: settings.calorieGoal,
+    // recap.calorieGoal: the week's average daily goal.
     weightGoal: Number(kgToUnit(settings.goalWeight, settings.weightUnit).toFixed(1)),
-    weeklyWeightTarget: Number(kgToUnit(settings.weeklyWeightTarget, settings.weightUnit).toFixed(2)),
+    weeklyWeightTarget: Number(kgToUnit(weeklyTargetOn(settings, recap.weekEnd), settings.weightUnit).toFixed(2)),
     weightUnit: settings.weightUnit,
+    ...(settings.prefs?.coachMemory?.length ? { userNotes: settings.prefs.coachMemory } : {}),
     ...recap,
     weightChange: recap.weightChangeKg === null ? null : Number(kgToUnit(recap.weightChangeKg, settings.weightUnit).toFixed(1)),
     weightChangeKg: undefined,

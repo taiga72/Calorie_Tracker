@@ -5,7 +5,7 @@ export function SupabaseSetupScreen() {
     <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-gray-900 dark:bg-emerald-600 flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-2xl bg-gray-900 dark:bg-accent-600 flex items-center justify-center mb-4">
             <Database size={28} className="text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white text-center">Connect Supabase</h1>

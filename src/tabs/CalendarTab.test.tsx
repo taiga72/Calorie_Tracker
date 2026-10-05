@@ -24,11 +24,12 @@ function meal(calories: number): MealEntry {
 const today = toKey(new Date());
 
 let days: Record<string, DaySummary>;
+let settings: Settings = DEFAULT_SETTINGS;
 
 vi.mock('@/store', () => ({
   useStore: () => ({
     getDay: (key: string) => days[key] ?? emptyDay(key),
-    settings: DEFAULT_SETTINGS,
+    settings,
     meals: [],
     profile: DEFAULT_PROFILE,
     addMeal: vi.fn(),
@@ -106,6 +107,20 @@ describe('CalendarTab heatmap', () => {
     days = {};
     renderCalendar();
     expect(cellFor(d).className).not.toMatch(/bg-(emerald|rose|blue)-50/);
+  });
+
+  it('can show only the colour, or only calories', () => {
+    const d = fromTodayDayNumber();
+    days = { [today]: { ...emptyDay(today), meals: [meal(1500)], totalCalories: 1500, weight: { date: today, weight: 70, createdAt: 1 } } };
+    settings = { ...DEFAULT_SETTINGS, prefs: { calendarCell: 'color' } };
+    const { unmount } = renderCalendar();
+    expect(cellFor(d).textContent).toBe(d);
+    unmount();
+    settings = { ...DEFAULT_SETTINGS, prefs: { calendarCell: 'calories' } };
+    renderCalendar();
+    expect(cellFor(d).textContent).toContain('1500 kcal');
+    expect(cellFor(d).textContent).not.toContain('kg');
+    settings = DEFAULT_SETTINGS;
   });
 
   it('renders the legend explaining the colors', () => {
