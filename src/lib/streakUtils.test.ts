@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { calculateStreak, shouldShowStreakPopup, getEncouragingMessage } from '@/lib/streakUtils';
+import { calculateStreak, shouldShowStreakPopup, isStreakMilestone, getEncouragingMessage } from '@/lib/streakUtils';
 import { toKey, addDays } from '@/lib/dateUtils';
 import type { MealEntry } from '@/types';
 
@@ -79,24 +79,29 @@ describe('shouldShowStreakPopup', () => {
     localStorage.clear();
   });
 
-  it('returns false for a non-positive streak', () => {
+  it('only celebrates milestones', () => {
     expect(shouldShowStreakPopup(0)).toBe(false);
-    expect(shouldShowStreakPopup(-1)).toBe(false);
+    expect(shouldShowStreakPopup(1)).toBe(false);
+    expect(shouldShowStreakPopup(5)).toBe(false);
+    expect(shouldShowStreakPopup(7)).toBe(true);
+    expect([3, 14, 21, 30, 50, 75, 100, 150].every((n) => isStreakMilestone(n))).toBe(true);
+    expect([2, 8, 31, 120].some((n) => isStreakMilestone(n))).toBe(false);
   });
 
-  it('returns true the first time it is checked today and records the date', () => {
-    expect(shouldShowStreakPopup(3)).toBe(true);
-    expect(localStorage.getItem('cc_streak_seen')).toBe(toKey(NOW));
-  });
-
-  it('returns false on a second call the same day', () => {
+  it('shows a milestone once', () => {
     expect(shouldShowStreakPopup(3)).toBe(true);
     expect(shouldShowStreakPopup(3)).toBe(false);
   });
 
-  it('returns true again once the day changes', () => {
-    expect(shouldShowStreakPopup(3)).toBe(true);
+  it("doesn't repeat it the next morning, before today is logged", () => {
+    expect(shouldShowStreakPopup(7, true)).toBe(true);
     vi.setSystemTime(addDays(NOW, 1));
+    expect(shouldShowStreakPopup(7, false)).toBe(false);
+  });
+
+  it('celebrates the same milestone again in a later streak', () => {
+    expect(shouldShowStreakPopup(3)).toBe(true);
+    vi.setSystemTime(addDays(NOW, 20));
     expect(shouldShowStreakPopup(3)).toBe(true);
   });
 
@@ -107,7 +112,7 @@ describe('shouldShowStreakPopup', () => {
     const setSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('boom');
     });
-    expect(shouldShowStreakPopup(1)).toBe(true);
+    expect(shouldShowStreakPopup(3)).toBe(true);
     getSpy.mockRestore();
     setSpy.mockRestore();
   });

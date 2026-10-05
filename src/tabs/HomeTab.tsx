@@ -1,37 +1,41 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '@/store';
-import { toKey, formatHeaderDate, relativeDayLabel } from '@/lib/dateUtils';
+import { toKey, addDays, formatHeaderDate, relativeDayLabel } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { LogModal } from '@/modals/LogModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
-import { SwipeToDelete } from '@/components/SwipeToDelete';
-import { MealPhoto } from '@/components/MealPhoto';
-import { PinMealButton } from '@/components/PinMealButton';
+import { MealList } from '@/components/MealList';
 import { useGoalForecast } from '@/lib/useGoalForecast';
 import { formatForecastDate } from '@/lib/forecast';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
 import { recapPeriod, showRecapOnHome } from '@/lib/weeklyRecap';
-import { useUndoToast } from '@/components/UndoToastProvider';
-import { Scale, Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
+import { isOverGoal, isPartialDay } from '@/lib/goal';
+import { fiberTarget, macroTargets } from '@/lib/macros';
+import { calculateStreak } from '@/lib/streakUtils';
+import { Scale, Flame } from 'lucide-react';
 import type { MealEntry } from '@/types';
 
-const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
-const MEAL_ICON: Record<string, typeof Coffee> = {
-  Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
-};
-
 export function HomeTab() {
-  const { getDay, settings, addMeal, deleteMeal, profile, weights, refresh, refreshing } = useStore();
-  const { requestUndo } = useUndoToast();
+  const { getDay, settings, meals, profile, weights, refresh, refreshing } = useStore();
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
   const todayKey = toKey(new Date());
   const day = getDay(todayKey);
-  const remaining = Math.max(settings.calorieGoal - day.totalCalories, 0);
-  const pct = Math.round((day.totalCalories / Math.max(settings.calorieGoal, 1)) * 100);
-  const overTarget = day.totalCalories > settings.calorieGoal;
-  const overAmount = Math.round(day.totalCalories - settings.calorieGoal);
+  const goal = settings.calorieGoal;
+  const remaining = Math.max(goal - day.totalCalories, 0);
+  // Up to 5% over still counts as on target (see lib/goal).
+  const overTarget = isOverGoal(day.totalCalories, goal);
+  const overAmount = Math.round(day.totalCalories - goal);
+  const macros = macroTargets(settings);
+  const streak = useMemo(() => calculateStreak(meals).count, [meals]);
+  // The last 7 finished days, fully logged ones only — the ring already
+  // shows today, so this is the bigger picture.
+  const weekAvg = useMemo(() => {
+    const totals = Array.from({ length: 7 }, (_, i) => getDay(toKey(addDays(new Date(), -(i + 1)))).totalCalories)
+      .filter((c) => c > 0 && !isPartialDay(c, goal));
+    return totals.length ? Math.round(totals.reduce((a, b) => a + b, 0) / totals.length) : null;
+  }, [getDay, goal]);
   // `weights` is kept sorted ascending by date, so the last entry is the most
   // recent one logged — not necessarily today's, which is what the card
   // should actually show (see "why is the app not showing the saved weight").
@@ -44,16 +48,6 @@ export function HomeTab() {
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const displayName = profile.name.trim() || 'Friend';
 
-  const mealsByType = MEAL_ORDER.map((type) => ({
-    type, meals: day.meals.filter((m) => m.mealType === type),
-  })).filter((g) => g.meals.length > 0);
-
-  const onDeleteMeal = (meal: MealEntry) => {
-    deleteMeal(meal.id);
-    const { id, createdAt, ...rest } = meal;
-    requestUndo('Meal deleted', () => addMeal(rest));
-  };
-
   return (
     <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-28">
@@ -61,10 +55,18 @@ export function HomeTab() {
         {profile.avatar && (
           <img src={profile.avatar} alt="avatar" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
         )}
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-sm text-gray-400 font-medium truncate">{formatHeaderDate(new Date())}</p>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5 truncate">{greeting}, {displayName}</h1>
         </div>
+        {streak > 0 && (
+          <span
+            className="flex-shrink-0 self-start mt-1 inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 px-2.5 py-1 text-xs font-bold"
+            aria-label={`${streak} day logging streak`}
+          >
+            <Flame size={13} /> {streak}
+          </span>
+        )}
       </div>
 
       {/* Balanced Dashboard Grid (Calories Left, Weight + Macros Right) */}
@@ -83,11 +85,11 @@ export function HomeTab() {
           <div className="my-auto py-2 flex justify-center">
             <CalorieRing
               value={day.totalCalories}
-              goal={settings.calorieGoal}
+              goal={goal}
               size={108}
               color={overTarget ? '#F43F5E' : '#F97316'}
               label={`${Math.round(day.totalCalories)}`}
-              sublabel={`of ${settings.calorieGoal}`}
+              sublabel={`of ${goal}`}
             />
           </div>
           <div className="w-full space-y-1 pt-2 border-t border-gray-50 dark:border-gray-800 text-[11px]">
@@ -96,15 +98,22 @@ export function HomeTab() {
                 <span className="text-rose-400">Over target</span>
                 <span className="font-bold text-rose-600">+{overAmount} kcal</span>
               </div>
+            ) : overAmount > 0 ? (
+              <div className="flex justify-between">
+                <span className="text-gray-400">On target</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">+{overAmount} kcal</span>
+              </div>
             ) : (
               <div className="flex justify-between">
                 <span className="text-gray-400">Remaining</span>
-                <span className="font-semibold text-gray-700 dark:text-gray-200">{Math.round(remaining)} kcal</span>
+                <span className="font-semibold text-gray-700 dark:text-gray-200">{Math.round(remaining).toLocaleString()} kcal</span>
               </div>
             )}
             <div className="flex justify-between">
-              <span className="text-gray-400">Progress</span>
-              <span className={`font-semibold ${overTarget ? 'text-rose-600' : 'text-orange-500'}`}>{pct}%</span>
+              <span className="text-gray-400">7-day avg</span>
+              <span className={`font-semibold ${weekAvg !== null && isOverGoal(weekAvg, goal) ? 'text-rose-600' : 'text-orange-500'}`}>
+                {weekAvg !== null ? `${weekAvg.toLocaleString()} kcal` : '—'}
+              </span>
             </div>
           </div>
         </div>
@@ -149,30 +158,13 @@ export function HomeTab() {
               <span className="text-[9px] font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
               <span className="text-[8px] font-semibold text-gray-300">g</span>
             </div>
-            <MacroProgress
-              label="Protein"
-              value={day.totalProtein}
-              target={settings.calc?.recommendedMacros?.protein ?? 128}
-              color="bg-emerald-500"
-              track="bg-emerald-50 dark:bg-emerald-950"
-              text="text-emerald-600"
-            />
-            <MacroProgress
-              label="Carbs"
-              value={day.totalCarbs}
-              target={settings.calc?.recommendedMacros?.carbs ?? 182}
-              color="bg-orange-400"
-              track="bg-orange-50 dark:bg-orange-950"
-              text="text-orange-500"
-            />
-            <MacroProgress
-              label="Fat"
-              value={day.totalFat}
-              target={settings.calc?.recommendedMacros?.fat ?? 46}
-              color="bg-amber-300"
-              track="bg-amber-50 dark:bg-amber-950"
-              text="text-amber-500"
-            />
+            <MacroProgress label="Protein" value={day.totalProtein} target={macros?.protein} color="bg-emerald-500" track="bg-emerald-50 dark:bg-emerald-950" text="text-emerald-600" />
+            <MacroProgress label="Carbs" value={day.totalCarbs} target={macros?.carbs} color="bg-orange-400" track="bg-orange-50 dark:bg-orange-950" text="text-orange-500" />
+            <MacroProgress label="Fat" value={day.totalFat} target={macros?.fat} color="bg-amber-300" track="bg-amber-50 dark:bg-amber-950" text="text-amber-500" />
+            <MacroProgress label="Fiber" value={day.totalFiber || 0} target={fiberTarget(goal)} color="bg-purple-400" track="bg-purple-50 dark:bg-purple-950" text="text-purple-500" />
+            {!macros && (
+              <p className="text-[9px] text-gray-400 leading-tight mt-0.5">Set macro targets in Settings</p>
+            )}
           </div>
 
         </div>
@@ -191,61 +183,14 @@ export function HomeTab() {
         <span className="text-sm font-semibold text-emerald-600">{day.meals.length}</span>
       </div>
 
-      {mealsByType.length === 0 ? (
+      {day.meals.length === 0 ? (
         <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 text-center border border-gray-50 dark:border-gray-800 mt-3">
           <p className="text-sm text-gray-400">No meals logged yet.</p>
           <p className="text-xs text-gray-300 mt-1">Tap the + button to log your first meal.</p>
         </div>
       ) : (
-        <div className="space-y-3 mt-3">
-          {mealsByType.map(({ type, meals }) => {
-            const Icon = MEAL_ICON[type];
-            const typeCals = meals.reduce((a, b) => a + b.calories, 0);
-            return (
-              <div key={type} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800">
-                  <Icon size={15} className="text-gray-400" />
-                  <span className="text-sm font-bold text-gray-900 dark:text-white">{type}</span>
-                  <span className="text-xs text-gray-400 ml-auto">• {Math.round(typeCals)} kcal</span>
-                </div>
-                <div className="px-4 divide-y divide-gray-50">
-                  {meals.map((m) => {
-                    const itemNames = m.items.map((i) => i.name).join(', ');
-                    const thumb = m.imageDatas?.[0] || m.imageData;
-                    return (
-                      <SwipeToDelete key={m.id} onDelete={() => onDeleteMeal(m)}>
-                        <div className="flex items-center gap-3 py-2.5">
-                          {thumb ? (
-                            <div className="relative flex-shrink-0">
-                              <MealPhoto src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
-                              {m.imageDatas && m.imageDatas.length > 1 && (
-                                <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                              <Utensils size={16} className="text-gray-300" />
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
-                            <p className="text-[11px] text-gray-400 mt-0.5">
-                              <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
-                              {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
-                            </p>
-                          </div>
-                          <PinMealButton meal={m} />
-                          <button onClick={() => setEditing(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
-                            <Pencil size={14} />
-                          </button>
-                        </div>
-                      </SwipeToDelete>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
+        <div className="mt-3">
+          <MealList meals={day.meals} onEdit={setEditing} />
         </div>
       )}
 
@@ -257,22 +202,26 @@ export function HomeTab() {
 }
 
 function MacroProgress({ label, value, target, color, track, text }: {
-  label: string; value: number; target: number; color: string; track: string; text: string;
+  label: string; value: number; target?: number; color: string; track: string; text: string;
 }) {
-  const safeTarget = Math.max(target, 1);
-  const pct = Math.min(Math.round((value / safeTarget) * 100), 100);
+  // No target set: show the grams eaten, without a made-up goal to fill.
+  const pct = target ? Math.min(Math.round((value / Math.max(target, 1)) * 100), 100) : 0;
   return (
     <div className="mb-1 last:mb-0">
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-[10px] font-medium text-gray-500">{label}</span>
         <span className={`text-[10px] font-bold ${text}`}>
           {Math.round(value)}
-          <span className="text-gray-300 font-normal">/{Math.round(target)}</span>
+          {target ? <span className="text-gray-300 font-normal">/{Math.round(target)}</span> : <span className="text-gray-300 font-normal"> g</span>}
         </span>
       </div>
-      <div className={`h-1.5 w-full rounded-full overflow-hidden ${track}`}>
-        <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
-      </div>
+      {target ? (
+        <div className={`h-1.5 w-full rounded-full overflow-hidden ${track}`}>
+          <div className={`h-full rounded-full ${color} transition-all duration-500`} style={{ width: `${pct}%` }} />
+        </div>
+      ) : (
+        <div className="h-1.5" />
+      )}
     </div>
   );
 }

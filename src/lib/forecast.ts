@@ -1,5 +1,6 @@
 import type { MealEntry, WeightEntry } from '@/types';
 import { addDays, fromKey, toKey } from '@/lib/dateUtils';
+import { isPartialDay } from '@/lib/goal';
 
 /** Roughly the energy in 1 kg of body weight change. */
 export const KCAL_PER_KG = 7700;
@@ -77,9 +78,11 @@ export function goalForecast(weights: WeightEntry[], goalKg: number, today = new
 }
 
 export type AdaptiveTarget =
-  | { status: 'not-enough-data'; loggedDays: number; neededDays: number; hasWeightTrend: boolean }
+  | { status: 'not-enough-data'; loggedDays: number; neededDays: number; hasWeightTrend: boolean; partialDays: number }
   | {
       status: 'ready';
+      /** Partly logged days (see lib/goal) left out of the average. */
+      partialDays: number;
       /** Maintenance calories implied by what was eaten vs. how weight moved. */
       tdee: number;
       avgIntake: number;
@@ -97,9 +100,17 @@ const MIN_GOAL_KCAL = 1200;
  * Estimates real maintenance calories from the last three weeks: average
  * intake on logged days, minus the energy the weight trend says was stored
  * (or plus what was burned). Today is left out since it's still in progress,
- * and unlogged days are skipped rather than counted as zero.
+ * and unlogged days are skipped rather than counted as zero. With a calorie
+ * goal, partly logged days are skipped too: a day with only breakfast logged
+ * would otherwise pull the maintenance estimate down.
  */
-export function adaptiveTarget(meals: MealEntry[], weights: WeightEntry[], weeklyTargetKg: number, today = new Date()): AdaptiveTarget {
+export function adaptiveTarget(
+  meals: MealEntry[],
+  weights: WeightEntry[],
+  weeklyTargetKg: number,
+  today = new Date(),
+  calorieGoal?: number,
+): AdaptiveTarget {
   const startKey = toKey(addDays(today, -ADAPTIVE_WINDOW_DAYS));
   const endKey = toKey(addDays(today, -1));
   const perDay = new Map<string, number>();
@@ -107,18 +118,20 @@ export function adaptiveTarget(meals: MealEntry[], weights: WeightEntry[], weekl
     if (m.date < startKey || m.date > endKey) continue;
     perDay.set(m.date, (perDay.get(m.date) ?? 0) + m.calories);
   }
-  const intakes = [...perDay.values()].filter((c) => c > 0);
+  const logged = [...perDay.values()].filter((c) => c > 0);
+  const intakes = calorieGoal ? logged.filter((c) => !isPartialDay(c, calorieGoal)) : logged;
+  const partialDays = logged.length - intakes.length;
   const trend = weightTrend(weights, addDays(today, -1), ADAPTIVE_WINDOW_DAYS, 10);
 
   if (intakes.length < MIN_LOGGED_DAYS || !trend) {
-    return { status: 'not-enough-data', loggedDays: intakes.length, neededDays: MIN_LOGGED_DAYS, hasWeightTrend: !!trend };
+    return { status: 'not-enough-data', loggedDays: intakes.length, neededDays: MIN_LOGGED_DAYS, hasWeightTrend: !!trend, partialDays };
   }
 
   const avgIntake = intakes.reduce((a, b) => a + b, 0) / intakes.length;
   const tdee = avgIntake - trend.slopeKgPerDay * KCAL_PER_KG;
   // Way outside a human range means the logs don't reflect what was eaten.
   if (tdee < 1000 || tdee > 5000) {
-    return { status: 'not-enough-data', loggedDays: intakes.length, neededDays: MIN_LOGGED_DAYS, hasWeightTrend: true };
+    return { status: 'not-enough-data', loggedDays: intakes.length, neededDays: MIN_LOGGED_DAYS, hasWeightTrend: true, partialDays };
   }
   const suggestedGoal = Math.max(MIN_GOAL_KCAL, Math.round((tdee + (weeklyTargetKg * KCAL_PER_KG) / 7) / 10) * 10);
   return {
@@ -126,6 +139,7 @@ export function adaptiveTarget(meals: MealEntry[], weights: WeightEntry[], weekl
     tdee: Math.round(tdee),
     avgIntake: Math.round(avgIntake),
     loggedDays: intakes.length,
+    partialDays,
     weeklyChangeKg: trend.slopeKgPerDay * 7,
     suggestedGoal,
   };

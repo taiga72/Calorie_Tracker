@@ -8,6 +8,9 @@ import { MacroBar } from '@/components/MacroBar';
 import { GoalForecastCard, AdaptiveTargetCard } from '@/components/GoalInsights';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
+import { PullToRefresh } from '@/components/PullToRefresh';
+import { isOverGoal, isPartialDay } from '@/lib/goal';
+import { fiberTarget } from '@/lib/macros';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
 
 type Page = 'trends' | 'goals';
@@ -25,7 +28,7 @@ const RANGES: { key: Range; label: string; days: number }[] = [
 ];
 
 export function StatsTab() {
-  const { getDay, weights, settings } = useStore();
+  const { getDay, weights, settings, refresh, refreshing } = useStore();
   const [range, setRange] = useState<Range>('7d');
   const [page, setPage] = useState<Page>('trends');
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
@@ -38,29 +41,41 @@ export function StatsTab() {
 
   // Calories: only finished, logged days count. An unlogged day is a gap
   // (not a 0 kcal day), and today — still in progress — is shown on its own.
+  // Partly logged days (under half the goal) are drawn faintly but kept out
+  // of the line and the numbers, so a forgotten dinner isn't a "great day".
+  const goal = settings.calorieGoal;
   const loggedDayList = useMemo(
     () => keys.filter((k) => k !== todayKey).map((k) => getDay(k)).filter((d) => d.meals.length > 0),
     [keys, todayKey, getDay],
   );
-  const calRaw = useMemo(() => loggedDayList.map((d) => ({ date: d.date, value: d.totalCalories })), [loggedDayList]);
+  const fullDayList = useMemo(() => loggedDayList.filter((d) => !isPartialDay(d.totalCalories, goal)), [loggedDayList, goal]);
+  const partialRaw = useMemo(
+    () => loggedDayList.filter((d) => isPartialDay(d.totalCalories, goal)).map((d) => ({ date: d.date, value: d.totalCalories })),
+    [loggedDayList, goal],
+  );
+  const calRaw = useMemo(() => fullDayList.map((d) => ({ date: d.date, value: d.totalCalories })), [fullDayList]);
   const calLine = useMemo(() => trendLine(calRaw, smoothing), [calRaw, smoothing]);
   const todaySoFar = getDay(todayKey);
   const calPending = todaySoFar.meals.length > 0 ? { date: todayKey, value: todaySoFar.totalCalories } : null;
+  // Fitted to the real days only: one 400 kcal partial day would squash the
+  // rest into a thin band. Partial days below the axis still read out on hover.
   const calDomain = useMemo(
-    () => fitDomain(calRaw.map((p) => p.value), { minSpan: 600, include: [settings.calorieGoal] }),
-    [calRaw, settings.calorieGoal],
+    () => fitDomain((calRaw.length ? calRaw : partialRaw).map((p) => p.value), { minSpan: 600, include: [goal] }),
+    [calRaw, partialRaw, goal],
   );
 
   const loggedDays = loggedDayList.length;
-  const avgCal = loggedDays ? Math.round(calRaw.reduce((a, b) => a + b.value, 0) / loggedDays) : 0;
+  const fullDays = fullDayList.length;
+  const avgCal = fullDays ? Math.round(calRaw.reduce((a, b) => a + b.value, 0) / fullDays) : 0;
   const highest = calRaw.reduce((a, b) => Math.max(a, b.value), 0);
-  const daysWithinGoal = calRaw.filter((p) => p.value <= settings.calorieGoal).length;
+  const daysWithinGoal = calRaw.filter((p) => !isOverGoal(p.value, goal)).length;
 
-  // Macros averaged over the same logged days.
-  const totals = useMemo(() => loggedDayList.reduce(
-    (acc, d) => ({ protein: acc.protein + d.totalProtein, carbs: acc.carbs + d.totalCarbs, fat: acc.fat + d.totalFat }),
-    { protein: 0, carbs: 0, fat: 0 },
-  ), [loggedDayList]);
+  // Macros averaged over the same fully logged days.
+  const totals = useMemo(() => fullDayList.reduce(
+    (acc, d) => ({ protein: acc.protein + d.totalProtein, carbs: acc.carbs + d.totalCarbs, fat: acc.fat + d.totalFat, fiber: acc.fiber + (d.totalFiber || 0) }),
+    { protein: 0, carbs: 0, fat: 0, fiber: 0 },
+  ), [fullDayList]);
+  const perDay = (v: number) => v / Math.max(fullDays, 1);
 
   // Weight: weigh-ins as dots, a smoothed trend through them, and an axis
   // fitted to the data (from 0 kg, every line looked flat).
@@ -103,6 +118,7 @@ export function StatsTab() {
   const edgeDrag = (page === 'trends' && dragX > 0) || (page === 'goals' && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
 
   return (
+    <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-4">
       <p className="text-sm text-gray-400 font-medium">{page === 'trends' ? 'Your trends' : 'Where you\'re headed'}</p>
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Statistics</h1>
@@ -174,7 +190,7 @@ export function StatsTab() {
         <p className="text-xs text-gray-400 mb-3">
           {smoothing === 'none' ? 'Each logged day' : `Dots are days · line is the ${lineLabel.toLowerCase()}`}
         </p>
-        {calRaw.length === 0 && !calPending ? (
+        {loggedDays === 0 && !calPending ? (
           <p className="text-sm text-gray-400 py-6 text-center">No meals logged in this range.</p>
         ) : (
           <TrendChart
@@ -185,6 +201,8 @@ export function StatsTab() {
             rawIsLine={smoothing === 'none'}
             pending={calPending}
             pendingLabel="Today so far"
+            partial={partialRaw}
+            partialLabel="kcal · partly logged"
             reference={{ value: settings.calorieGoal, label: 'Goal' }}
             domain={calDomain}
             color="#F97316"
@@ -196,9 +214,14 @@ export function StatsTab() {
         )}
         <div className="grid grid-cols-3 gap-2 mt-4">
           <Stat label="Avg/day" value={avgCal ? avgCal.toLocaleString() : '—'} unit="kcal" tone="orange" />
-          <Stat label="Within goal" value={`${daysWithinGoal}/${loggedDays}`} unit="days" tone="gray" />
+          <Stat label="Within goal" value={`${daysWithinGoal}/${fullDays}`} unit="days" tone="gray" />
           <Stat label="Highest" value={highest ? highest.toLocaleString() : '—'} unit="kcal" tone="gray" />
         </div>
+        {partialRaw.length > 0 && (
+          <p className="text-[10px] text-gray-400 mt-2">
+            {partialRaw.length} partly logged day{partialRaw.length === 1 ? '' : 's'} (under half your goal) left out of these numbers.
+          </p>
+        )}
       </div>
 
       {/* Macros breakdown */}
@@ -209,15 +232,21 @@ export function StatsTab() {
         </div>
         <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
         <MacroBar
-          protein={totals.protein / Math.max(loggedDays, 1)}
-          carbs={totals.carbs / Math.max(loggedDays, 1)}
-          fat={totals.fat / Math.max(loggedDays, 1)}
+          protein={perDay(totals.protein)}
+          carbs={perDay(totals.carbs)}
+          fat={perDay(totals.fat)}
         />
         <div className="grid grid-cols-3 gap-2 mt-4">
-          <Stat label="Protein" value={`${(totals.protein / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="green" />
-          <Stat label="Carbs" value={`${(totals.carbs / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="orange" />
-          <Stat label="Fat" value={`${(totals.fat / Math.max(loggedDays, 1)).toFixed(0)}`} unit="g/day" tone="amber" />
+          <Stat label="Protein" value={`${perDay(totals.protein).toFixed(0)}`} unit="g/day" tone="green" />
+          <Stat label="Carbs" value={`${perDay(totals.carbs).toFixed(0)}`} unit="g/day" tone="orange" />
+          <Stat label="Fat" value={`${perDay(totals.fat).toFixed(0)}`} unit="g/day" tone="amber" />
         </div>
+        {fullDays > 0 && (
+          <p className="text-[11px] text-gray-400 mt-3">
+            Fiber <span className="font-bold text-purple-500">{perDay(totals.fiber).toFixed(0)} g/day</span>
+            {' '}· aim for about {fiberTarget(goal)} g
+          </p>
+        )}
       </div>
 
       {/* Weight trend */}
@@ -276,6 +305,7 @@ export function StatsTab() {
       </div>
       </div>
     </div>
+    </PullToRefresh>
   );
 }
 

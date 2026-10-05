@@ -15,6 +15,12 @@ interface TrendChartProps {
   /** e.g. today's not-yet-finished total — a hollow dot, not part of the line. */
   pending?: TrendPoint | null;
   pendingLabel?: string;
+  /**
+   * Values that don't count toward the trend (partly logged days): faint
+   * hollow dots where they fit the axis; off it, they still read out on hover.
+   */
+  partial?: TrendPoint[];
+  partialLabel?: string;
   reference?: { value: number; label: string };
   domain: [number, number];
   color: string;
@@ -51,7 +57,7 @@ function useWidth<T extends HTMLElement>() {
  * unreadable past a week.
  */
 export function TrendChart({
-  start, end, raw, line, rawIsLine = false, pending, pendingLabel = 'So far', reference, domain, color, format,
+  start, end, raw, line, rawIsLine = false, pending, pendingLabel = 'So far', partial = [], partialLabel = 'Partly logged', reference, domain, color, format,
   rawLabel, lineLabel, height = 170, ariaLabel,
 }: TrendChartProps) {
   const [wrapRef, width] = useWidth<HTMLDivElement>();
@@ -71,12 +77,13 @@ export function TrendChart({
   const xTicks = useMemo(() => dateTicks(start, end, width < 360 ? 5 : 7), [start, end, width]);
 
   const rawByDate = useMemo(() => new Map(raw.map((p) => [p.date, p.value])), [raw]);
+  const partialByDate = useMemo(() => new Map(partial.map((p) => [p.date, p.value])), [partial]);
   // Every date the crosshair can stop on, in order.
   const stops = useMemo(() => {
-    const set = new Set<string>([...raw.map((p) => p.date), ...line.map((p) => p.date)]);
+    const set = new Set<string>([...raw.map((p) => p.date), ...line.map((p) => p.date), ...partial.map((p) => p.date)]);
     if (pending) set.add(pending.date);
     return [...set].sort();
-  }, [raw, line, pending]);
+  }, [raw, line, partial, pending]);
 
   const linePath = line.map((p, i) => `${i ? 'L' : 'M'}${xFor(p.date).toFixed(1)},${yFor(p.value).toFixed(1)}`).join(' ');
   const last = line[line.length - 1];
@@ -114,6 +121,7 @@ export function TrendChart({
   // The trend at any day (between its points), so every readout has it.
   const activeLine = active ? valueAt(line, active) : undefined;
   const activePending = active && pending?.date === active ? pending.value : undefined;
+  const activePartial = active ? partialByDate.get(active) : undefined;
   const tipX = active ? xFor(active) : 0;
   const tipLeft = Math.min(Math.max(tipX - 85, 0), width - 170);
 
@@ -174,6 +182,10 @@ export function TrendChart({
           <circle key={`r${p.date}`} cx={xFor(p.date)} cy={yFor(p.value)} r={dotR} fill={color} fillOpacity={rawIsLine ? 1 : 0.28} />
         ))}
 
+        {partial.filter((p) => p.value >= lo && p.value <= hi).map((p) => (
+          <circle key={`p${p.date}`} cx={xFor(p.date)} cy={yFor(p.value)} r={dotR} fill="none" stroke={color} strokeOpacity={0.45} strokeWidth={1.2} />
+        ))}
+
         <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
 
         {pending && pending.value >= lo && pending.value <= hi && (
@@ -195,6 +207,7 @@ export function TrendChart({
             <line x1={tipX} x2={tipX} y1={PAD.top} y2={PAD.top + plotH} className="stroke-gray-300 dark:stroke-gray-600" strokeWidth={1} />
             {activeLine !== undefined && <circle cx={tipX} cy={yFor(activeLine)} r={4} fill={color} className="stroke-white dark:stroke-gray-900" strokeWidth={2} />}
             {activeRaw !== undefined && <circle cx={tipX} cy={yFor(activeRaw)} r={3} fill={color} />}
+            {activePartial !== undefined && activePartial >= lo && activePartial <= hi && <circle cx={tipX} cy={yFor(activePartial)} r={3} fill="none" stroke={color} strokeWidth={1.5} />}
           </g>
         )}
 
@@ -224,6 +237,7 @@ export function TrendChart({
           </p>
           {activePending !== undefined && <Row color={color} value={format(activePending)} label={pendingLabel} dashed />}
           {activeRaw !== undefined && <Row color={color} value={format(activeRaw)} label={rawLabel} faint={!rawIsLine} />}
+          {activePartial !== undefined && <Row color={color} value={format(activePartial)} label={partialLabel} faint dashed />}
           {activeLine !== undefined && !rawIsLine && <Row color={color} value={format(activeLine)} label={lineLabel} />}
         </div>
       )}

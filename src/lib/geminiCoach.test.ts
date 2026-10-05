@@ -18,3 +18,12 @@ describe('cleanCoachText', () => {
     expect(cleanCoachText('Aim for 120–130 g protein/day.')).toBe('Aim for 120–130 g protein/day.');
   });
 });
+
+describe('cleanCoachText for chat replies', () => {
+  it('strips markdown but keeps lines and lists', () => {
+    const reply = '**Good question!** Here is the plan:\n\n* Eat `150 g` protein\n- Walk daily\n1. Sleep 8 hours\n\n\n\nYou got this.';
+    expect(cleanCoachText(reply, { keepLines: true })).toBe(
+      'Good question! Here is the plan:\n\n• Eat 150 g protein\n• Walk daily\n1. Sleep 8 hours\n\nYou got this.',
+    );
+  });
+});

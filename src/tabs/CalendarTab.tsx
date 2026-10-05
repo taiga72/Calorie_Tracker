@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DayDetailModal } from '@/modals/DayDetailModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
+import { dayStatus } from '@/lib/goal';
 
 export function CalendarTab() {
   const { getDay, settings, refresh, refreshing } = useStore();
@@ -79,6 +80,7 @@ export function CalendarTab() {
       <div className="px-5 flex items-center justify-center gap-4 mt-2 flex-wrap">
         <Legend color="bg-emerald-50 dark:bg-emerald-950" label="Within goal" />
         <Legend color="bg-rose-50 dark:bg-rose-950" label="Over goal" />
+        <Legend color="bg-amber-50 dark:bg-amber-950/60" label="Partly logged" />
         <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
       </div>
 
@@ -114,12 +116,15 @@ export function CalendarTab() {
           const day = getDay(key);
           const d = fromKey(key);
           const isCur = isToday(key);
-          const hasMeals = day.meals.length > 0;
-          const overTarget = hasMeals && day.totalCalories > settings.calorieGoal;
           // A quick-scan heatmap of goal adherence, so trends read at a
-          // glance instead of relying on the tiny numbers alone.
-          const cellTint = hasMeals
-            ? overTarget ? 'bg-rose-50 dark:bg-rose-950' : 'bg-emerald-50 dark:bg-emerald-950'
+          // glance instead of relying on the tiny numbers alone. Today is
+          // still going, so it's never "partly logged".
+          const status = day.meals.length > 0
+            ? dayStatus(day.totalCalories, settings.calorieGoal, { inProgress: isCur || key > toKey(new Date()) })
+            : 'empty';
+          const cellTint = status === 'over' ? 'bg-rose-50 dark:bg-rose-950'
+            : status === 'within' ? 'bg-emerald-50 dark:bg-emerald-950'
+            : status === 'partial' ? 'bg-amber-50 dark:bg-amber-950/60'
             : day.weight ? 'bg-blue-50 dark:bg-blue-950' : '';
           return (
             <button

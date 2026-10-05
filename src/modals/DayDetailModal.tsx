@@ -5,14 +5,10 @@ import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
-import { SwipeToDelete } from '@/components/SwipeToDelete';
-import { MealPhoto } from '@/components/MealPhoto';
-import { PinMealButton } from '@/components/PinMealButton';
-import { useUndoToast } from '@/components/UndoToastProvider';
-import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, Coffee, Sun, Moon, Cookie, Utensils, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MealList } from '@/components/MealList';
+import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MealEntry } from '@/types';
 
-const MEAL_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 const TURN_OUT_MS = 170;
 
 function prefersReducedMotion(): boolean {
@@ -23,10 +19,6 @@ function prefersReducedMotion(): boolean {
 function formatDayShort(key: string): string {
   return fromKey(key).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
 }
-const MEAL_ICON: Record<string, typeof Coffee> = {
-  Breakfast: Coffee, Lunch: Sun, Dinner: Moon, Snack: Cookie,
-};
-
 interface DayDetailModalProps {
   dateKey: string | null;
   onClose: () => void;
@@ -35,8 +27,7 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalProps) {
-  const { getDay, settings, addMeal, deleteMeal, loadPhotos } = useStore();
-  const { requestUndo } = useUndoToast();
+  const { getDay, settings, loadPhotos } = useStore();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
@@ -76,16 +67,6 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
   useEffect(() => {
     if (mealIdsKey) void loadPhotos(mealIdsKey.split(','));
   }, [mealIdsKey, loadPhotos]);
-
-  const mealsByType = day ? MEAL_ORDER.map((type) => ({
-    type, meals: day.meals.filter((m) => m.mealType === type),
-  })).filter((g) => g.meals.length > 0) : [];
-
-  const onDeleteMeal = (meal: MealEntry) => {
-    deleteMeal(meal.id);
-    const { id, createdAt, ...rest } = meal;
-    requestUndo('Meal deleted', () => addMeal(rest));
-  };
 
   return (
     <>
@@ -184,56 +165,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
             {day.meals.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-4">No meals logged this day.</p>
             ) : (
-              <div className="space-y-3">
-                {mealsByType.map(({ type, meals }) => {
-                  const Icon = MEAL_ICON[type];
-                  const typeCals = meals.reduce((a, b) => a + b.calories, 0);
-                  return (
-                    <div key={type} className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-50 dark:border-gray-800 overflow-hidden">
-                      <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-50 dark:border-gray-800">
-                        <Icon size={15} className="text-gray-400" />
-                        <span className="text-sm font-bold text-gray-900 dark:text-white">{type}</span>
-                        <span className="text-xs text-gray-400 ml-auto">• {Math.round(typeCals).toLocaleString()} kcal</span>
-                      </div>
-                      <div className="px-4 divide-y divide-gray-50 dark:divide-gray-800">
-                        {meals.map((m) => {
-                          const itemNames = m.items.map((i) => i.name).join(', ');
-                          const thumb = m.imageDatas?.[0] || m.imageData;
-                          return (
-                            <SwipeToDelete key={m.id} onDelete={() => onDeleteMeal(m)}>
-                              <div className="flex items-center gap-3 py-2.5">
-                                {thumb ? (
-                                  <div className="relative flex-shrink-0">
-                                    <MealPhoto src={thumb} alt="meal" className="w-11 h-11 rounded-2xl object-cover" />
-                                    {m.imageDatas && m.imageDatas.length > 1 && (
-                                      <span className="absolute -bottom-1 -right-1 bg-black/60 text-white text-[9px] font-bold rounded-full px-1.5 py-0.5">+{m.imageDatas.length - 1}</span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div className="w-11 h-11 rounded-2xl bg-gray-100 dark:bg-gray-800 flex items-center justify-center flex-shrink-0">
-                                    <Utensils size={16} className="text-gray-300" />
-                                  </div>
-                                )}
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
-                                  <p className="text-[11px] text-gray-400 mt-0.5">
-                                    <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
-                                    {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
-                                  </p>
-                                </div>
-                                <PinMealButton meal={m} />
-                                <button onClick={() => setEditing(m)} className="flex-shrink-0 text-gray-300 hover:text-emerald-600 transition-colors p-1" aria-label="Edit meal">
-                                  <Pencil size={14} />
-                                </button>
-                              </div>
-                            </SwipeToDelete>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              <MealList meals={day.meals} onEdit={setEditing} />
             )}
           </div>
           </div>

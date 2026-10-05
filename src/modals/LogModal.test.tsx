@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
-import type { PinnedMeal, Settings } from '@/types';
+import type { MealEntry, PinnedMeal, Settings } from '@/types';
 
 const estimateMeal = vi.fn();
 vi.mock('@/lib/gemini', () => ({
@@ -18,12 +18,13 @@ const pinMeal = vi.fn();
 const unpinMeal = vi.fn((id: string) => { pinned = pinned.filter((p) => p.id !== id); });
 const restorePin = vi.fn((pin: PinnedMeal) => { pinned = [pin, ...pinned]; });
 const updatePin = vi.fn();
+const updateMeal = vi.fn();
 
 vi.mock('@/store', () => ({
   useStore: () => ({
     settings: SETTINGS,
     addMeal,
-    updateMeal: vi.fn(),
+    updateMeal,
     logWeight: vi.fn(),
     logWeightForDate: vi.fn(),
     deleteWeight: vi.fn(),
@@ -294,5 +295,28 @@ describe('LogModal voice input', () => {
     delete (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition;
     renderLog();
     expect(screen.queryByLabelText('Speak your meal')).not.toBeInTheDocument();
+  });
+});
+
+describe('LogModal editing a meal', () => {
+  const meal: MealEntry = {
+    id: 'm1', date: '2026-10-01', mealType: 'Lunch',
+    items: [{ name: 'Rice bowl', calories: 600, protein: 30, carbs: 80, fat: 15, fiber: 6 }],
+    calories: 600, protein: 30, carbs: 80, fat: 15, fiber: 6, reasoning: '', createdAt: 1,
+  };
+  const renderEdit = () => render(<UndoToastProvider><LogModal open onClose={vi.fn()} editMeal={meal} /></UndoToastProvider>);
+
+  it('keeps the day unless it is changed', () => {
+    renderEdit();
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateMeal).toHaveBeenCalledWith('m1', expect.not.objectContaining({ date: expect.anything() }));
+  });
+
+  it('moves the meal to another day', () => {
+    renderEdit();
+    fireEvent.change(screen.getByLabelText('Meal date'), { target: { value: '2026-09-30' } });
+    expect(screen.getByText(/Will move to/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateMeal).toHaveBeenCalledWith('m1', expect.objectContaining({ date: '2026-09-30', mealType: 'Lunch' }));
   });
 });

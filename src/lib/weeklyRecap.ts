@@ -1,6 +1,7 @@
 import type { MealEntry, Settings, WeightEntry } from '@/types';
 import { addDays, fromKey, toKey } from '@/lib/dateUtils';
 import { normalizeItemName } from '@/lib/pinnedMeals';
+import { isOverGoal, isPartialDay } from '@/lib/goal';
 
 export interface WeeklyRecap {
   /**
@@ -14,12 +15,19 @@ export interface WeeklyRecap {
   /** Days in the period so far (7 for a full week, 5 on a Friday). */
   periodDays: number;
   loggedDays: number;
-  /** Average over logged days only (unlogged days aren't zero-calorie days). */
+  /**
+   * Finished days under half the goal (see lib/goal): shown in the count of
+   * logged days, but left out of the average and the goal count.
+   */
+  partialDays: number;
+  /** Average over fully logged days (unlogged days aren't zero-calorie days). */
   avgCalories: number;
   /** Change vs. the week before, when that week was logged too. */
   avgCaloriesDelta: number | null;
-  /** Logged days at or under the calorie goal (the calendar's "within goal"). */
+  /** Fully logged days within the goal (the calendar's "within goal"). */
   daysOnTarget: number;
+  /** Fully logged days: what daysOnTarget is out of. */
+  countedDays: number;
   avgProtein: number;
   proteinTarget: number | null;
   daysProteinHit: number;
@@ -77,15 +85,22 @@ function displayName(n: string) {
 /** The recap week's numbers (see recapPeriod), or null when nothing was logged. */
 export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], settings: Settings, today = new Date()): WeeklyRecap | null {
   const { start, end, mode } = recapPeriod(today);
-  const days = dailyTotals(meals, start, end);
-  if (days.length === 0) return null;
+  const goal = settings.calorieGoal;
+  const logged = dailyTotals(meals, start, end);
+  if (logged.length === 0) return null;
+  // Today (in this-week mode) is still going, so it's never "partly logged".
+  const todayKey = toKey(today);
+  const isFull = ([date, d]: [string, { calories: number }]) => date === todayKey || !isPartialDay(d.calories, goal);
+  // If every day so far is partial, fall back to them rather than show nothing.
+  const full = logged.filter(isFull);
+  const days = full.length > 0 ? full : logged;
 
   const avg = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
   const avgCalories = Math.round(avg(days.map(([, d]) => d.calories)));
 
   const prevStart = toKey(addDays(fromKey(start), -7));
   const prevEnd = toKey(addDays(fromKey(start), -1));
-  const prevDays = dailyTotals(meals, prevStart, prevEnd);
+  const prevDays = dailyTotals(meals, prevStart, prevEnd).filter(isFull);
   const avgCaloriesDelta = prevDays.length ? avgCalories - Math.round(avg(prevDays.map(([, d]) => d.calories))) : null;
 
   const proteinTarget = settings.calc?.recommendedMacros?.protein ?? null;
@@ -117,7 +132,7 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
     .map((f) => ({ name: displayName(f.label), count: f.count }));
 
   // "Best" = closest to the goal without going over.
-  const under = days.filter(([, d]) => d.calories <= settings.calorieGoal);
+  const under = full.filter(([, d]) => d.calories <= goal);
   const best = under.sort((a, b) => b[1].calories - a[1].calories)[0];
 
   return {
@@ -125,10 +140,12 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
     weekStart: start,
     weekEnd: end,
     periodDays: Math.round((fromKey(end).getTime() - fromKey(start).getTime()) / 86_400_000) + 1,
-    loggedDays: days.length,
+    loggedDays: logged.length,
+    partialDays: logged.length - full.length,
     avgCalories,
     avgCaloriesDelta,
-    daysOnTarget: days.filter(([, d]) => d.calories <= settings.calorieGoal).length,
+    daysOnTarget: full.filter(([, d]) => !isOverGoal(d.calories, goal)).length,
+    countedDays: full.length,
     avgProtein: Math.round(avg(days.map(([, d]) => d.protein))),
     proteinTarget,
     daysProteinHit: proteinTarget ? days.filter(([, d]) => d.protein >= proteinTarget * 0.9).length : 0,

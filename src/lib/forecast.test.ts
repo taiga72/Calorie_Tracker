@@ -122,6 +122,15 @@ describe('adaptiveTarget', () => {
     expect(noWeights).toMatchObject({ status: 'not-enough-data', loggedDays: 21, hasWeightTrend: false });
   });
 
+  it('leaves partly logged days out when given the calorie goal', () => {
+    const meals = [...threeWeeksOfMeals(2000).slice(0, 15), ...Array.from({ length: 6 }, (_, i) => mealOn(daysAgo(16 + i), 500))];
+    const weights = windowWeights(80, 0);
+    const r = adaptiveTarget(meals, weights, 0, TODAY, 2000);
+    expect(r).toMatchObject({ status: 'ready', avgIntake: 2000, loggedDays: 15, partialDays: 6 });
+    // Without the goal they'd count and drag the average down.
+    expect(adaptiveTarget(meals, weights, 0, TODAY)).toMatchObject({ status: 'ready', avgIntake: 1571 });
+  });
+
   it('refuses implausible results from incomplete logging', () => {
     const weights = windowWeights(80, 0);
     expect(adaptiveTarget(threeWeeksOfMeals(400), weights, 0, TODAY).status).toBe('not-enough-data');

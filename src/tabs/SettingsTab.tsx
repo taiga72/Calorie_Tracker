@@ -21,7 +21,7 @@ import {
 export function SettingsTab() {
   const {
     settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
-    lastSyncedAt, refreshing, refresh, online, pendingCount, pinsSyncEnabled,
+    lastSyncedAt, refreshing, pinsSyncEnabled,
   } = useStore();
   const { user, signOut } = useAuth();
   const { preference: themePreference, setPreference: setThemePreference } = useTheme();
@@ -537,22 +537,12 @@ export function SettingsTab() {
         </button>
       </div>
 
-      <button
-        onClick={() => refresh()}
-        disabled={refreshing}
-        className="w-full flex items-center justify-center gap-1.5 text-[11px] text-gray-400 mt-6 py-2 disabled:opacity-60"
-      >
+      {/* Syncing itself is pull-to-refresh and the status pill at the top;
+          this just says when it last happened. */}
+      <p className="flex items-center justify-center gap-1.5 text-[11px] text-gray-400 mt-6 py-2">
         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-        {refreshing ? 'Syncing…' : lastSyncedAt ? `Synced ${formatRelativeTime(lastSyncedAt)} — tap to sync now` : 'Tap to sync now'}
-      </button>
-      {(!online || pendingCount > 0) && (
-        <p className="text-center text-[11px] text-amber-600 dark:text-amber-400 -mt-1">
-          {!online ? 'Offline — ' : ''}
-          {pendingCount > 0
-            ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} saved on this device, waiting to sync`
-            : 'changes will be saved on this device and synced later'}
-        </p>
-      )}
+        {refreshing ? 'Syncing…' : lastSyncedAt ? `Last synced ${formatRelativeTime(lastSyncedAt).replace(/^Just/, 'just')}` : 'Not synced yet'}
+      </p>
       {!pinsSyncEnabled && (
         <p className="text-center text-[11px] text-gray-400 mt-1 px-4">
           Pinned meals are only on this device. Re-run supabase/schema.sql in Supabase to sync them across devices.
