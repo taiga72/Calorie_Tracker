@@ -116,3 +116,17 @@ create policy "Users update their own meal photos" on storage.objects
 drop policy if exists "Users delete their own meal photos" on storage.objects;
 create policy "Users delete their own meal photos" on storage.objects
   for delete using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- Lets a signed-in user delete their own account (Settings → Account).
+-- Their rows go with it (every table cascades on auth.users); the app
+-- removes their photos from Storage first.
+create or replace function public.delete_my_account()
+returns void
+language sql
+security definer
+set search_path = public, auth
+as $$
+  delete from auth.users where id = auth.uid();
+$$;
+revoke all on function public.delete_my_account() from public, anon;
+grant execute on function public.delete_my_account() to authenticated;

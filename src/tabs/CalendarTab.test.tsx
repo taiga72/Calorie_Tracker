@@ -25,12 +25,13 @@ const today = toKey(new Date());
 
 let days: Record<string, DaySummary>;
 let settings: Settings = DEFAULT_SETTINGS;
+let allMeals: MealEntry[] = [];
 
 vi.mock('@/store', () => ({
   useStore: () => ({
     getDay: (key: string) => days[key] ?? emptyDay(key),
     settings,
-    meals: [],
+    meals: allMeals,
     profile: DEFAULT_PROFILE,
     addMeal: vi.fn(),
     updateMeal: vi.fn(),
@@ -58,6 +59,22 @@ function renderCalendar() {
 function cellFor(dayNumber: string): HTMLElement {
   return screen.getByText(dayNumber).closest('button')!;
 }
+
+describe('CalendarTab meal search', () => {
+  it('finds past meals and opens their day', () => {
+    days = {};
+    const ramen: MealEntry = { ...meal(650), id: 'r1', date: '2026-09-12', items: [{ name: 'Tonkotsu ramen', calories: 650, protein: 30, carbs: 70, fat: 25, fiber: 3 }] };
+    allMeals = [ramen, { ...meal(400), id: 'o1', date: '2026-09-20', items: [{ name: 'Oats', calories: 400, protein: 10, carbs: 60, fat: 8, fiber: 6 }] }];
+    renderCalendar();
+    fireEvent.click(screen.getByText('Search your meals'));
+    fireEvent.change(screen.getByLabelText('Search meals'), { target: { value: 'ramen' } });
+    expect(screen.getByText('Tonkotsu ramen')).toBeInTheDocument();
+    expect(screen.queryByText('Oats')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Open Sep 12'));
+    expect(screen.getByText(formatHeaderDate(new Date(2026, 8, 12)))).toBeInTheDocument();
+    allMeals = [];
+  });
+});
 
 describe('CalendarTab heatmap', () => {
   it('tints a day under its calorie goal green', () => {

@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
-import { useAuth } from '@/auth';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
@@ -11,6 +10,7 @@ import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
 import { AppearanceSection } from '@/components/AppearanceSection';
+import { AccountSection, DeleteAccountButton } from '@/components/AccountSection';
 import { LayoutSection } from '@/components/LayoutSection';
 import { GoalPlanSection } from '@/components/GoalPlanSection';
 import { CoachMemorySection } from '@/components/CoachMemory';
@@ -19,7 +19,7 @@ import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, LogOut, RefreshCw,
+  ChevronDown, ChevronUp, Save, RefreshCw,
 } from 'lucide-react';
 
 export function SettingsTab() {
@@ -27,7 +27,6 @@ export function SettingsTab() {
     settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
     lastSyncedAt, refreshing, pinsSyncEnabled, prefsSyncEnabled,
   } = useStore();
-  const { user, signOut } = useAuth();
   const activePhase = phaseOn(settings, todayKey());
   const [, setTick] = useState(0);
 
@@ -494,20 +493,7 @@ export function SettingsTab() {
         </div>
       </div>
 
-      {/* Account */}
-      <div className="card p-5 mt-4">
-        <div className="flex items-center gap-2 mb-3">
-          <User size={18} className="text-accent-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
-        <button
-          onClick={() => signOut()}
-          className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform"
-        >
-          <LogOut size={16} /> Sign out
-        </button>
-      </div>
+      <AccountSection />
 
       {/* Danger Zone */}
       <div className="card p-5 border-red-100 dark:border-red-900 mt-4">
@@ -516,7 +502,7 @@ export function SettingsTab() {
           <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Permanently delete all meal logs, weight history, and reset settings to defaults. This cannot be undone.
+          Clear all data deletes your meal logs and weight history and resets settings, keeping the account. Delete account removes everything, including the account. Neither can be undone.
         </p>
         <button
           onClick={() => setConfirmOpen(true)}
@@ -524,6 +510,7 @@ export function SettingsTab() {
         >
           <Trash2 size={16} /> Clear All Data
         </button>
+        <DeleteAccountButton />
       </div>
 
       {/* Syncing itself is pull-to-refresh and the status pill at the top;

@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 import { useStore } from '@/store';
 import { Segmented, Toggle } from '@/components/AppearanceSection';
 import { GOALS_LAYOUT, HOME_LAYOUT, STATS_LAYOUT, homeSummaryPrefs, resolveLayout, toLayout, type LayoutDef, type LayoutItem } from '@/lib/layout';
-import { LayoutGrid, ChevronUp, ChevronDown } from 'lucide-react';
+import { useUndoToast } from '@/components/UndoToastProvider';
+import { LayoutGrid, ChevronUp, ChevronDown, RotateCcw } from 'lucide-react';
 import type { CalendarCellContent, CardLayout } from '@/types';
 
 /** Settings → Layout: which cards Home and Statistics show, in what order, and what calendar days show. */
@@ -10,12 +11,25 @@ export function LayoutSection() {
   const { settings, updatePrefs } = useStore();
   const prefs = settings.prefs ?? {};
   const summary = homeSummaryPrefs(prefs);
+  const { requestUndo } = useUndoToast();
+  const LAYOUT_KEYS = ['homeCards', 'homeSummary', 'showStreak', 'statsCards', 'goalsCards', 'calendarCell'] as const;
+  const customized = LAYOUT_KEYS.some((k) => prefs[k] !== undefined);
+  const reset = () => {
+    const before = Object.fromEntries(LAYOUT_KEYS.map((k) => [k, prefs[k]]));
+    updatePrefs(Object.fromEntries(LAYOUT_KEYS.map((k) => [k, undefined])));
+    requestUndo('Layout reset', () => updatePrefs(before));
+  };
 
   return (
     <div className="card p-5 mt-4">
       <div className="flex items-center gap-2 mb-1">
         <LayoutGrid size={18} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Layout</h2>
+        {customized && (
+          <button onClick={reset} className="ml-auto flex items-center gap-1 text-11 font-semibold text-gray-400 hover:text-accent-600">
+            <RotateCcw size={12} /> Reset to default
+          </button>
+        )}
       </div>
       <p className="text-xs text-gray-400 mb-4">Show, hide and reorder cards.</p>
 

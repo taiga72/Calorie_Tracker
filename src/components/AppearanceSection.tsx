@@ -1,17 +1,32 @@
 import type { ReactNode } from 'react';
 import { useTheme, type ThemePreference } from '@/lib/theme';
-import { ACCENTS, haptic, type Appearance } from '@/lib/appearance';
-import { Sun, Moon, MonitorSmartphone, Check, Palette } from 'lucide-react';
+import { ACCENTS, DEFAULT_APPEARANCE, haptic, type Appearance } from '@/lib/appearance';
+import { useUndoToast } from '@/components/UndoToastProvider';
+import { Sun, Moon, MonitorSmartphone, Check, Palette, RotateCcw } from 'lucide-react';
 
 /** Settings → Appearance: theme plus the look-and-feel options (kept on this device). */
 export function AppearanceSection() {
   const { preference, setPreference, appearance: a, setAppearance } = useTheme();
+  const { requestUndo } = useUndoToast();
+  const isDefault = preference === 'system' && (Object.keys(DEFAULT_APPEARANCE) as (keyof Appearance)[])
+    .every((k) => k === 'syncAcrossDevices' || a[k] === DEFAULT_APPEARANCE[k]);
+  const reset = () => {
+    const before = { appearance: a, preference };
+    setAppearance({ ...DEFAULT_APPEARANCE, syncAcrossDevices: a.syncAcrossDevices });
+    setPreference('system');
+    requestUndo('Appearance reset', () => { setAppearance(before.appearance); setPreference(before.preference); });
+  };
 
   return (
     <div className="card p-5 mt-4">
       <div className="flex items-center gap-2 mb-4">
         <Palette size={18} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Appearance</h2>
+        {!isDefault && (
+          <button onClick={reset} className="ml-auto flex items-center gap-1 text-11 font-semibold text-gray-400 hover:text-accent-600">
+            <RotateCcw size={12} /> Reset to default
+          </button>
+        )}
       </div>
 
       <Segmented<ThemePreference>
@@ -110,6 +125,12 @@ export function AppearanceSection() {
             setAppearance({ haptics });
             if (haptics) setTimeout(() => haptic('success'), 0);
           }}
+        />
+        <Toggle
+          label="Same look on all my devices"
+          sub="Theme, colour, text size and the rest follow your account"
+          on={a.syncAcrossDevices}
+          onChange={(syncAcrossDevices) => setAppearance({ syncAcrossDevices })}
         />
       </div>
     </div>

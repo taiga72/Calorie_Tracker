@@ -20,6 +20,8 @@ export interface Appearance {
   darkStyle: DarkStyle;
   seasonal: boolean;
   haptics: boolean;
+  /** Use the same look on every device signed in to the account. */
+  syncAcrossDevices: boolean;
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
@@ -31,6 +33,7 @@ export const DEFAULT_APPEARANCE: Appearance = {
   darkStyle: 'gray',
   seasonal: false,
   haptics: true,
+  syncAcrossDevices: true,
 };
 
 /** Swatches for the picker (the 600 shade, as in buttons). */
@@ -63,6 +66,7 @@ export function parseAppearance(raw: unknown): Appearance {
     darkStyle: pick(o.darkStyle, ['gray', 'black'] as const, d.darkStyle),
     seasonal: typeof o.seasonal === 'boolean' ? o.seasonal : d.seasonal,
     haptics: typeof o.haptics === 'boolean' ? o.haptics : d.haptics,
+    syncAcrossDevices: typeof o.syncAcrossDevices === 'boolean' ? o.syncAcrossDevices : d.syncAcrossDevices,
   };
 }
 

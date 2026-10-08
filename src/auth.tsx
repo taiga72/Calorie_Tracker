@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import { isAuthRetryableFetchError, type Session, type User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabaseClient';
+import { deleteAllPhotos } from '@/lib/photoStorage';
 
 /**
  * - pending: not confirmed yet, but this device's last user is shown from
@@ -18,6 +19,15 @@ interface AuthValue {
   signUp: (email: string, password: string) => Promise<string | null>;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  /** Emails a password-reset link that opens this app. */
+  sendPasswordReset: (email: string) => Promise<string | null>;
+  /** True after opening a password-reset link: the app asks for a new password. */
+  recovering: boolean;
+  updatePassword: (password: string) => Promise<string | null>;
+  /** Supabase emails a confirmation link to the new address before it switches. */
+  updateEmail: (email: string) => Promise<string | null>;
+  /** Deletes the account and everything in it (needs supabase/schema.sql's delete_my_account). */
+  deleteAccount: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthValue | null>(null);
@@ -61,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [provisionalUser, setProvisionalUser] = useState<User | null>(readLastUser);
   const [status, setStatus] = useState<AuthStatus>('pending');
   const [loading, setLoading] = useState(() => readLastUser() === null);
+  const [recovering, setRecovering] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
       setSession(newSession);
       if (newSession) {
         rememberUser(newSession.user);
@@ -112,8 +124,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const sendPasswordReset: AuthValue['sendPasswordReset'] = async (email) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
+    return error?.message ?? null;
+  };
+
+  const updatePassword: AuthValue['updatePassword'] = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (!error) setRecovering(false);
+    return error?.message ?? null;
+  };
+
+  const updateEmail: AuthValue['updateEmail'] = async (email) => {
+    const { error } = await supabase.auth.updateUser({ email }, { emailRedirectTo: window.location.origin });
+    return error?.message ?? null;
+  };
+
+  const deleteAccount: AuthValue['deleteAccount'] = async () => {
+    const userId = session?.user.id;
+    if (!userId) return 'You need to be online and signed in to delete your account.';
+    // Photos live in Storage, outside the tables the account deletion cascades to.
+    await deleteAllPhotos(userId);
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) {
+      const missing = error.code === 'PGRST202' || error.code === '42883';
+      return missing
+        ? 'Account deletion isn\'t set up yet: re-run supabase/schema.sql in Supabase, then try again.'
+        : error.message;
+    }
+    // Drop this account's caches (offline snapshot, queued changes, chat…).
+    try {
+      Object.keys(localStorage).filter((k) => k.includes(userId)).forEach((k) => localStorage.removeItem(k));
+    } catch {
+      // ignore
+    }
+    await signOut();
+    return null;
+  };
+
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? provisionalUser, status, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{
+      session, user: session?.user ?? provisionalUser, status, loading, signUp, signIn, signOut,
+      sendPasswordReset, recovering, updatePassword, updateEmail, deleteAccount,
+    }}>
       {children}
     </AuthContext.Provider>
   );

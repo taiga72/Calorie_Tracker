@@ -14,3 +14,7 @@
 6. Restart the dev server (`npm run dev`) after adding the `.env` file so Vite picks up the new variables.
 
 That's it — the app will show a sign-in/sign-up screen, and all meals, weights, settings, and profile data will be stored in your Supabase project instead of the browser's localStorage.
+
+## Password reset and email changes
+
+Reset and email-change links bring people back to the app. In **Authentication → URL Configuration**, set the **Site URL** to the app's address (e.g. your Vercel URL) and add it under **Redirect URLs**, or the links will point to `localhost`.

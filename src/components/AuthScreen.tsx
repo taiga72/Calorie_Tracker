@@ -2,10 +2,10 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/auth';
 import { Flame, Loader2, Mail, Lock, AlertCircle } from 'lucide-react';
 
-type Mode = 'signin' | 'signup';
+type Mode = 'signin' | 'signup' | 'reset';
 
 export function AuthScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, sendPasswordReset } = useAuth();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,6 +17,18 @@ export function AuthScreen() {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    if (mode === 'reset') {
+      if (!email.trim()) { setError('Enter your email.'); return; }
+      setLoading(true);
+      try {
+        const err = await sendPasswordReset(email.trim());
+        if (err) setError(err);
+        else setInfo('If there is an account for that email, a reset link is on its way. Open it on this device to choose a new password.');
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     if (!email.trim() || !password) {
       setError('Enter your email and password.');
       return;
@@ -36,8 +48,8 @@ export function AuthScreen() {
     }
   };
 
-  const switchMode = () => {
-    setMode((m) => (m === 'signin' ? 'signup' : 'signin'));
+  const switchMode = (next?: Mode) => {
+    setMode((m) => next ?? (m === 'signin' ? 'signup' : 'signin'));
     setError(null);
     setInfo(null);
   };
@@ -51,7 +63,7 @@ export function AuthScreen() {
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calorie Tracker</h1>
           <p className="text-sm text-gray-400 mt-1">
-            {mode === 'signin' ? 'Sign in to sync your data' : 'Create an account to get started'}
+            {mode === 'signin' ? 'Sign in to sync your data' : mode === 'signup' ? 'Create an account to get started' : "We'll email you a link to set a new password"}
           </p>
         </div>
 
@@ -77,6 +89,7 @@ export function AuthScreen() {
                 className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none"
               />
             </div>
+            {mode !== 'reset' && (
             <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
               <Lock size={16} className="text-gray-400 flex-shrink-0" />
               <input
@@ -88,19 +101,25 @@ export function AuthScreen() {
                 className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none"
               />
             </div>
+            )}
+            {mode === 'signin' && (
+              <button type="button" onClick={() => switchMode('reset')} className="block ml-auto text-11 font-semibold text-gray-400 hover:text-accent-600">
+                Forgot password?
+              </button>
+            )}
             <button
               type="submit"
               disabled={loading}
               className="w-full bg-accent-600 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 disabled:opacity-50 active:scale-[.99] transition-transform"
             >
-              {loading ? <Loader2 size={18} className="animate-spin" /> : mode === 'signin' ? 'Sign in' : 'Create account'}
+              {loading ? <Loader2 size={18} className="animate-spin" /> : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send reset link'}
             </button>
           </form>
           <button
-            onClick={switchMode}
+            onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}
             className="w-full text-center text-xs font-semibold text-accent-600 mt-4"
           >
-            {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+            {mode === 'signin' ? "Don't have an account? Sign up" : mode === 'signup' ? 'Already have an account? Sign in' : 'Back to sign in'}
           </button>
         </div>
       </div>

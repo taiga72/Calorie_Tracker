@@ -5,7 +5,8 @@ import {
   daysInMonth, firstWeekdayOfMonth, addMonths, addDays, isToday, logicalNow, todayKey,
 } from '@/lib/dateUtils';
 import { fmtWeight } from '@/lib/units';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { MealSearchModal } from '@/components/MealSearch';
 import { DayDetailModal } from '@/modals/DayDetailModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
@@ -16,6 +17,7 @@ export function CalendarTab() {
   const { getDay, settings, refresh, refreshing } = useStore();
   const [cursor, setCursor] = useState(() => logicalNow());
   const [selected, setSelected] = useState<string | null>(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
 
   const changeMonth = (delta: 1 | -1) => {
@@ -83,7 +85,17 @@ export function CalendarTab() {
         </button>
       </div>
 
-      <div className="px-5 flex items-center justify-center gap-4 mt-2 flex-wrap">
+      {/* Looks like a search field; opens the meal search. */}
+      <div className="px-4 mt-3">
+        <button
+          onClick={() => setSearchOpen(true)}
+          className="w-full flex items-center gap-2 bg-white/80 dark:bg-gray-900/80 border border-gray-200/70 dark:border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-400 text-left"
+        >
+          <Search size={15} /> Search your meals
+        </button>
+      </div>
+
+      <div className="px-5 flex items-center justify-center gap-4 mt-3 flex-wrap">
         <Legend color="bg-emerald-50 dark:bg-emerald-950" label="Within goal" />
         <Legend color="bg-rose-50 dark:bg-rose-950" label="Over goal" />
         <Legend color="bg-amber-50 dark:bg-amber-950/60" label="Partly logged" />
@@ -163,6 +175,16 @@ export function CalendarTab() {
       </div>
       </div>
 
+      <MealSearchModal
+        open={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onOpenDay={(key) => {
+          setSearchOpen(false);
+          const d = fromKey(key);
+          setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+          setSelected(key);
+        }}
+      />
       <DayDetailModal dateKey={selected} onClose={() => setSelected(null)} onNavigate={navigateDay} />
     </div>
     </PullToRefresh>
