@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
-import { useAuth } from '@/auth';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv } from '@/lib/csv';
@@ -11,6 +10,8 @@ import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
 import { AppearanceSection } from '@/components/AppearanceSection';
+import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
+import { AccountSection, DeleteAccountButton } from '@/components/AccountSection';
 import { LayoutSection } from '@/components/LayoutSection';
 import { GoalPlanSection } from '@/components/GoalPlanSection';
 import { CoachMemorySection } from '@/components/CoachMemory';
@@ -19,15 +20,41 @@ import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, LogOut, RefreshCw,
+  ChevronDown, ChevronUp, Save, RefreshCw,
 } from 'lucide-react';
 
+type Page = 'goals' | 'look' | 'account';
+const PAGES: { key: Page; label: string; sub: string }[] = [
+  { key: 'goals', label: 'Goals', sub: 'Your plan and habits' },
+  { key: 'look', label: 'Look', sub: 'Make it yours' },
+  { key: 'account', label: 'Account', sub: 'Profile, data and sign-in' },
+];
+
 export function SettingsTab() {
+  const [page, setPage] = useState<Page>('goals');
+  const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
+  const goToPage = (next: Page) => {
+    if (next === page) return;
+    const order = PAGES.map((x) => x.key);
+    setSlideFrom(order.indexOf(next) > order.indexOf(page) ? 'right' : 'left');
+    setPage(next);
+  };
+  const step = (d: 1 | -1) => {
+    const order = PAGES.map((x) => x.key);
+    const next = order[order.indexOf(page) + d];
+    if (next) goToPage(next);
+  };
+  // Swipe between pages; fields, sliders and rows keep their own gestures.
+  const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
+    onSwipeLeft: () => step(1),
+    onSwipeRight: () => step(-1),
+    ignoreSelector: 'input, textarea, select, [data-swipe-row]',
+  });
+
   const {
     settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
     lastSyncedAt, refreshing, pinsSyncEnabled, prefsSyncEnabled,
   } = useStore();
-  const { user, signOut } = useAuth();
   const activePhase = phaseOn(settings, todayKey());
   const [, setTick] = useState(0);
 
@@ -205,72 +232,40 @@ export function SettingsTab() {
 
   return (
     <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">Personalize your plan</p>
+      <p className="text-sm text-gray-400 font-medium">{PAGES.find((x) => x.key === page)!.sub}</p>
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Settings</h1>
 
-      {/* Profile card */}
-      <div className="card p-5 mt-5">
-        <div className="flex items-center gap-2 mb-4">
-          <User size={18} className="text-accent-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile</h2>
-        </div>
-        <div className="flex flex-col items-center mb-4">
+      {/* Page switcher (also swipeable), like Statistics */}
+      <div role="tablist" aria-label="Settings pages" className="relative grid grid-cols-3 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+        <span
+          aria-hidden
+          className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/3)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
+          style={{ transform: `translateX(${PAGES.findIndex((x) => x.key === page) * 100}%)` }}
+        />
+        {PAGES.map((x) => (
           <button
-            onClick={() => avatarRef.current?.click()}
-            className="relative w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
+            key={x.key}
+            role="tab"
+            aria-selected={page === x.key}
+            onClick={() => goToPage(x.key)}
+            className={`relative z-10 py-2 rounded-full text-xs font-semibold transition-colors ${page === x.key ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}
           >
-            {avatar ? (
-              <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
-            ) : (
-              <Camera size={24} className="text-gray-400" />
-            )}
+            {x.label}
           </button>
-          <input
-            ref={avatarRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickAvatar(f); e.target.value = ''; }}
-          />
-          <button
-            onClick={() => avatarRef.current?.click()}
-            className="text-xs font-semibold text-accent-600 mt-2"
-          >
-            {avatar ? 'Change photo' : 'Upload photo'}
-          </button>
-          {avatar && (
-            <button
-              onClick={() => setAvatar(undefined)}
-              className="text-xs text-gray-400 mt-1"
-            >
-              Remove
-            </button>
-          )}
-        </div>
-        <Field label="Display name">
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Your name"
-              maxLength={40}
-              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
-            />
-          </div>
-        </Field>
-        <button
-          onClick={onSaveProfile}
-          className="w-full bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
-        >
-          {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
-        </button>
+        ))}
       </div>
 
-      <AppearanceSection />
-
-      <LayoutSection />
-
+      <div
+        {...swipeHandlers}
+        className="touch-pan-y min-h-[60vh]"
+        style={{ transform: dragX ? `translateX(${dragX * 0.3}px)` : undefined, transition: dragX ? 'none' : 'transform .2s ease' }}
+      >
+      <div
+        key={page}
+        className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
+      >
+      {page === 'goals' && (
+        <>
       {/* Wizard banner — only for new users who haven't completed setup */}
       {!setupComplete && (
         <button
@@ -465,11 +460,86 @@ export function SettingsTab() {
         )}
       </div>
 
+
       <GoalPlanSection />
 
       <CoachMemorySection />
 
       <RemindersSection />
+
+        </>
+      )}
+      {page === 'look' && (
+        <>
+      <AppearanceSection />
+
+      <LayoutSection />
+
+        </>
+      )}
+      {page === 'account' && (
+        <>
+      {/* Profile card */}
+      <div className="card p-5 mt-5">
+        <div className="flex items-center gap-2 mb-4">
+          <User size={18} className="text-accent-600" />
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile</h2>
+        </div>
+        <div className="flex flex-col items-center mb-4">
+          <button
+            onClick={() => avatarRef.current?.click()}
+            className="relative w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center overflow-hidden active:scale-95 transition-transform"
+          >
+            {avatar ? (
+              <img src={avatar} alt="avatar" className="w-full h-full object-cover" />
+            ) : (
+              <Camera size={24} className="text-gray-400" />
+            )}
+          </button>
+          <input
+            ref={avatarRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPickAvatar(f); e.target.value = ''; }}
+          />
+          <button
+            onClick={() => avatarRef.current?.click()}
+            className="text-xs font-semibold text-accent-600 mt-2"
+          >
+            {avatar ? 'Change photo' : 'Upload photo'}
+          </button>
+          {avatar && (
+            <button
+              onClick={() => setAvatar(undefined)}
+              className="text-xs text-gray-400 mt-1"
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        <Field label="Display name">
+          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name"
+              maxLength={40}
+              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
+            />
+          </div>
+        </Field>
+        <button
+          onClick={onSaveProfile}
+          className="w-full bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
+        >
+          {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
+        </button>
+      </div>
+
+
+      <AccountSection />
 
       {/* Backup & Export */}
       <div className="card p-5 mt-4">
@@ -494,20 +564,6 @@ export function SettingsTab() {
         </div>
       </div>
 
-      {/* Account */}
-      <div className="card p-5 mt-4">
-        <div className="flex items-center gap-2 mb-3">
-          <User size={18} className="text-accent-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
-        </div>
-        <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
-        <button
-          onClick={() => signOut()}
-          className="w-full flex items-center justify-center gap-2 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold py-3 rounded-xl text-sm active:scale-[.99] transition-transform"
-        >
-          <LogOut size={16} /> Sign out
-        </button>
-      </div>
 
       {/* Danger Zone */}
       <div className="card p-5 border-red-100 dark:border-red-900 mt-4">
@@ -516,7 +572,7 @@ export function SettingsTab() {
           <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Permanently delete all meal logs, weight history, and reset settings to defaults. This cannot be undone.
+          Clear all data deletes your meal logs and weight history and resets settings, keeping the account. Delete account removes everything, including the account. Neither can be undone.
         </p>
         <button
           onClick={() => setConfirmOpen(true)}
@@ -524,6 +580,7 @@ export function SettingsTab() {
         >
           <Trash2 size={16} /> Clear All Data
         </button>
+        <DeleteAccountButton />
       </div>
 
       {/* Syncing itself is pull-to-refresh and the status pill at the top;
@@ -547,6 +604,12 @@ export function SettingsTab() {
           Photo storage isn't set up, so photos are saved inside each meal (slower to load). Re-run supabase/schema.sql in Supabase to enable it.
         </p>
       )}
+
+
+        </>
+      )}
+      </div>
+      </div>
 
       <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
 

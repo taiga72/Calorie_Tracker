@@ -122,6 +122,8 @@ export interface Prefs {
   milestones?: Milestone[];
   /** Things the coach should always keep in mind. */
   coachMemory?: string[];
+  /** The look (accent, text size, theme…) when it follows the account; see lib/appearance. */
+  appearance?: Record<string, unknown>;
 }
 
 export interface DaySummary {

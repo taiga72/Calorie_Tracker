@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { StoreProvider, useStore } from '@/store';
 import { AuthProvider, useAuth } from '@/auth';
 import { AuthScreen } from '@/components/AuthScreen';
+import { SetPasswordScreen } from '@/components/SetPasswordScreen';
 import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import { ThemeProvider } from '@/lib/theme';
@@ -23,6 +24,7 @@ import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
 import { newlyAchieved } from '@/lib/milestones';
 import { todayKey } from '@/lib/dateUtils';
 import { MilestoneModal } from '@/components/Milestones';
+import { AppearanceSync } from '@/components/AppearanceSync';
 import { Loader2, AlertTriangle, X, CloudOff, RefreshCw } from 'lucide-react';
 import type { Milestone, TabKey } from '@/types';
 
@@ -46,7 +48,7 @@ function App() {
 }
 
 function AuthGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, recovering } = useAuth();
   // The splash covers the auth check; once signed in, AppInner keeps it up
   // until the data has loaded.
   useSplashReady(!loading && !user);
@@ -55,6 +57,11 @@ function AuthGate() {
 
   if (!user) {
     return <AuthScreen />;
+  }
+
+  // Opened from a password-reset email: set the new password first.
+  if (recovering) {
+    return <SetPasswordScreen />;
   }
 
   return (
@@ -156,6 +163,7 @@ function AppInner() {
       <BottomNav active={tab} onChange={setTab} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
       <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />
+      <AppearanceSync />
       <MilestoneModal milestone={celebrate} onClose={() => setCelebrate(null)} />
       {/* One celebration at a time: the streak waits for the milestone. */}
       <StreakModal
