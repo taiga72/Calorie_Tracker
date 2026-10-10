@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { estimateMeal, resolveApiKey, RateLimitError, fileToBase64 } from '@/lib/gemini';
+import { estimateMeal, estimateItem, resolveApiKey, RateLimitError, fileToBase64 } from '@/lib/gemini';
 
 function mockResponse(status: number, jsonBody: unknown, headers: Record<string, string> = {}) {
   return {
@@ -365,5 +365,28 @@ describe('fileToBase64', () => {
     const file = new File(['data'], 'photo.heic', { type: 'image/heic' });
     const result = await fileToBase64(file);
     expect(result.mimeType).toBe('image/jpeg');
+  });
+});
+
+describe('estimateItem', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('returns one item named as described, summing anything split up, with the rest only as context', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(geminiTextResponse({
+      mealType: 'Dinner',
+      items: [
+        { name: 'Chicken breast', calories: 300, protein: 56, carbs: 0, fat: 6.5, fiber: 0 },
+        { name: 'Oil', calories: 40, protein: 0, carbs: 0, fat: 4.5, fiber: 0 },
+      ],
+      calories: 340, protein: 56, carbs: 0, fat: 11, fiber: 0, reasoning: '',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const item = await estimateItem('user-key', '  200 g grilled chicken ', ['Rice 1 cup']);
+
+    expect(item).toEqual({ name: '200 g grilled chicken', calories: 340, protein: 56, carbs: 0, fat: 11, fiber: 0 });
+    const prompt = JSON.stringify(JSON.parse(fetchMock.mock.calls[0][1].body));
+    expect(prompt).toContain('ONLY this single food item');
+    expect(prompt).toContain('Rice 1 cup');
   });
 });

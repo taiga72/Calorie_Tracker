@@ -130,6 +130,29 @@ export async function estimateMeal(
   return callWithFallback(key, body);
 }
 
+/**
+ * Re-estimates one food from a meal (e.g. "200 g grilled chicken, not 100 g")
+ * without touching the rest. The other foods are passed as context only.
+ */
+export async function estimateItem(apiKey: string, description: string, otherItems: string[] = []): Promise<FoodItem> {
+  const context = otherItems.length ? ` For context only, it was eaten with: ${otherItems.join(', ')} — do not include those.` : '';
+  const parsed = await estimateMeal(
+    apiKey,
+    `Estimate ONLY this single food item and return it as exactly one item: ${description.trim()}.${context}`,
+  );
+  const total = (sel: (i: FoodItem) => number) => parsed.items.reduce((a, b) => a + (Number(sel(b)) || 0), 0);
+  const fromItems = parsed.items.length > 0;
+  const round1 = (n: number) => +n.toFixed(1);
+  return {
+    name: description.trim(),
+    calories: Math.round(fromItems ? total((i) => i.calories) : parsed.calories),
+    protein: round1(fromItems ? total((i) => i.protein) : parsed.protein),
+    carbs: round1(fromItems ? total((i) => i.carbs) : parsed.carbs),
+    fat: round1(fromItems ? total((i) => i.fat) : parsed.fat),
+    fiber: round1(fromItems ? total((i) => i.fiber) : parsed.fiber),
+  };
+}
+
 interface ApiError extends Error {
   status?: number; // HTTP status, or 0 for a network-level (fetch) failure
 }
