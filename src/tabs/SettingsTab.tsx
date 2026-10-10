@@ -10,6 +10,7 @@ import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
 import { AppearanceSection } from '@/components/AppearanceSection';
+import { useUndoToast } from '@/components/UndoToastProvider';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
 import { AccountSection, DeleteAccountButton } from '@/components/AccountSection';
 import { LayoutSection } from '@/components/LayoutSection';
@@ -20,7 +21,7 @@ import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
-  ChevronDown, ChevronUp, Save, RefreshCw,
+  ChevronDown, ChevronUp, Save, RefreshCw, Info,
 } from 'lucide-react';
 
 type Page = 'goals' | 'look' | 'account';
@@ -31,6 +32,7 @@ const PAGES: { key: Page; label: string; sub: string }[] = [
 ];
 
 export function SettingsTab() {
+  const { notify } = useUndoToast();
   const [page, setPage] = useState<Page>('goals');
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
   const goToPage = (next: Page) => {
@@ -208,16 +210,16 @@ export function SettingsTab() {
       try {
         const parsed = JSON.parse(reader.result as string) as BackupPayload;
         if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.meals)) {
-          alert('Invalid backup file.');
+          notify("That file isn't a Calorie Tracker backup.", 'error');
           return;
         }
         importBackup(parsed);
-        alert('Backup restored successfully.');
+        notify('Backup restored.');
       } catch {
-        alert('Could not read this backup file.');
+        notify("Couldn't read this backup file.", 'error');
       }
     };
-    reader.onerror = () => alert('Failed to read file.');
+    reader.onerror = () => notify("Couldn't open the file.", 'error');
     reader.readAsText(file);
   };
 
@@ -315,20 +317,32 @@ export function SettingsTab() {
           <>
             {/* Summary pills — always visible */}
             <div className="grid grid-cols-4 gap-2 mb-1">
-              <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="BMR" value={calc!.bmr} />
-              <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="TDEE" value={calc!.tdee} />
+              <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="At rest" value={calc!.bmr} />
+              <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="Daily burn" value={calc!.tdee} />
               <SummaryStat
                 icon={<TrendingDown size={12} className={liveDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
-                label="Deficit"
+                label={liveDeficit > 0 ? 'Surplus' : 'Deficit'}
                 value={liveDeficit > 0 ? `+${liveDeficit}` : liveDeficit}
               />
               <SummaryStat
                 icon={<Target size={12} className="text-accent-600" />}
-                label="Goal"
+                label="Goal by"
                 value={liveGoalDate ? new Date(liveGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 isText
               />
             </div>
+            {/* What the numbers mean, in plain words. */}
+            <details className="mb-1 mt-2 group">
+              <summary className="list-none [&::-webkit-details-marker]:hidden flex items-center justify-center gap-1 text-11 font-semibold text-gray-400 cursor-pointer">
+                <Info size={12} /> What do these mean?
+              </summary>
+              <dl className="mt-2 space-y-1.5 text-11 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                <div><dt className="inline font-semibold text-gray-700 dark:text-gray-200">At rest</dt> <dd className="inline">— calories your body burns doing nothing at all (BMR).</dd></div>
+                <div><dt className="inline font-semibold text-gray-700 dark:text-gray-200">Daily burn</dt> <dd className="inline">— what you burn on a normal day, including movement (TDEE). Eating this much keeps your weight steady.</dd></div>
+                <div><dt className="inline font-semibold text-gray-700 dark:text-gray-200">{liveDeficit > 0 ? 'Surplus' : 'Deficit'}</dt> <dd className="inline">— how far your daily goal is {liveDeficit > 0 ? 'above' : 'below'} your daily burn; that gap is what changes your weight.</dd></div>
+                <div><dt className="inline font-semibold text-gray-700 dark:text-gray-200">Goal by</dt> <dd className="inline">— when you'd reach your goal weight at this pace.</dd></div>
+              </dl>
+            </details>
 
             {/* Toggle button */}
             <button
@@ -681,7 +695,7 @@ function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; la
     <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 text-center">
       <div className="flex items-center justify-center gap-1 mb-0.5">
         {icon}
-        <p className="text-9 font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
+        <p className="text-9 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">{label}</p>
       </div>
       <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-11' : 'text-sm'}`}>{value}</p>
     </div>

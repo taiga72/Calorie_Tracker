@@ -4,6 +4,7 @@ import { estimateItem, RateLimitError } from '@/lib/gemini';
 import { haptic } from '@/lib/appearance';
 import { Sparkles, Loader2, X } from 'lucide-react';
 import type { FoodItem } from '@/types';
+import { friendlyAiError } from '@/lib/aiErrors';
 
 /**
  * A ✨ button on one food in a meal: describe or correct just that food
@@ -28,7 +29,7 @@ export function ItemReestimate({ item, others, onApply }: { item: FoodItem; othe
     } catch (e) {
       setError(e instanceof RateLimitError
         ? `Too many requests — try again in about ${e.retryAfterSec}s.`
-        : e instanceof Error ? e.message : 'Something went wrong.');
+        : friendlyAiError(e));
     } finally {
       setLoading(false);
     }
@@ -41,7 +42,7 @@ export function ItemReestimate({ item, others, onApply }: { item: FoodItem; othe
         onClick={() => { setText(item.name); setError(null); setOpen(true); }}
         aria-label={`Re-estimate ${item.name || 'this item'}`}
         title="Re-estimate this item"
-        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-accent-600 hover:bg-accent-50 dark:hover:bg-accent-950 transition-colors"
+        className="flex-shrink-0 w-10 h-10 -m-1 flex items-center justify-center rounded-lg text-accent-600 hover:bg-accent-50 dark:hover:bg-accent-950 transition-colors"
       >
         <Sparkles size={15} />
       </button>

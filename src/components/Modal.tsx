@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { trackSheet } from '@/lib/sheetHistory';
 
 interface ModalProps {
   open: boolean;
@@ -16,6 +17,9 @@ const FLICK_MIN_PX = 40;
 const AXIS_LOCK_PX = 8;
 // Dragging that starts in these keeps its normal behavior (typing, selecting
 // text, scrubbing a chart).
+// Less than this and it's a browser toolbar changing, not a keyboard.
+const KEYBOARD_MIN_PX = 120;
+const TYPABLE = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, [contenteditable="true"]';
 const NO_DRAG = 'input, textarea, select, [contenteditable="true"], [data-chart]';
 
 export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
@@ -81,6 +85,12 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
     };
   }, [open]);
 
+  // The phone's back button / back-swipe closes the sheet (see lib/sheetHistory).
+  useEffect(() => {
+    if (!open) return;
+    return trackSheet(() => onCloseRef.current());
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -91,6 +101,27 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
       document.body.style.overflow = '';
     };
   }, [open, onClose]);
+
+  // iPhone: the on-screen keyboard covers the bottom of the page without
+  // resizing it, so lift the sheet above the keyboard and keep it to the
+  // visible height.
+  const [keyboard, setKeyboard] = useState<{ inset: number; height: number } | null>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!open || !vv) return;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      setKeyboard(inset > KEYBOARD_MIN_PX ? { inset, height: vv.height } : null);
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setKeyboard(null);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) { setDragY(0); setDragging(false); dragStartY.current = null; }
@@ -109,6 +140,14 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
     if (dragStartY.current === null) return;
     setDragY(Math.max(0, e.clientY - dragStartY.current));
   };
+  // Once the keyboard has slid up, bring the field being typed in into view.
+  const onFocusIn = (e: ReactFocusEvent) => {
+    const el = e.target as HTMLElement;
+    if (!el.matches?.(TYPABLE)) return;
+    setTimeout(() => {
+      if (document.activeElement === el) el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    }, 300);
+  };
   const onDragEnd = () => {
     if (dragY > DISMISS_THRESHOLD_PX) onClose();
     setDragY(0);
@@ -117,7 +156,12 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
   };
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center"
+      style={keyboard ? { bottom: keyboard.inset } : undefined}
+    >
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         style={{ opacity: 1 - Math.min(dragY / 300, 0.6) }}
@@ -125,10 +169,12 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
       />
       <div
         ref={sheetRef}
+        onFocus={onFocusIn}
         className={`relative w-full ${maxWidth} bg-[#F8F9FA] dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto overflow-x-hidden overscroll-contain animate-[slideUp_.25s_ease]`}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transition: dragging ? 'none' : 'transform .2s ease',
+          maxHeight: keyboard ? keyboard.height - 8 : undefined,
         }}
       >
         <div

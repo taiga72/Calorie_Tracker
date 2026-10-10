@@ -37,7 +37,7 @@ export function CoachMemoryEditor({ compact = false }: { compact?: boolean }) {
               <button
                 onClick={() => updatePrefs({ coachMemory: notes.filter((_, j) => j !== i) })}
                 aria-label={`Forget "${n}"`}
-                className="text-gray-300 hover:text-red-500 -mr-1 p-0.5"
+                className="text-gray-400 hover:text-red-500 -m-2 p-2 rounded-full"
               >
                 <X size={14} />
               </button>

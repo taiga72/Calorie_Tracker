@@ -170,4 +170,16 @@ describe('Modal swipe down to close (touch)', () => {
     fireEvent.touchEnd(body, { touches: [] });
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it('scrolls a focused field into view once the keyboard is up', () => {
+    vi.useFakeTimers();
+    const spy = vi.fn();
+    Element.prototype.scrollIntoView = spy;
+    render(<Modal open onClose={vi.fn()}><input aria-label="name" /></Modal>);
+    const input = screen.getByLabelText('name');
+    input.focus();
+    vi.advanceTimersByTime(350);
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
+    vi.useRealTimers();
+  });
 });

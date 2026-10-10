@@ -28,7 +28,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               >
                 <Icon
                   size={22}
-                  className={isActive ? 'text-accent-600' : 'text-gray-300 dark:text-gray-600'}
+                  className={isActive ? 'text-accent-600' : 'text-gray-400 dark:text-gray-600'}
                   strokeWidth={isActive ? 2.5 : 2}
                 />
                 <span className={`text-10 font-semibold ${isActive ? 'text-accent-600' : 'text-gray-400 dark:text-gray-500'}`}>
