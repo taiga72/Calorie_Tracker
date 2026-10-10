@@ -5,7 +5,7 @@ import { kgToUnit } from '@/lib/units';
 import { rangeKeys, toKey, formatShortDate, logicalNow } from '@/lib/dateUtils';
 import { calorieGoalOn, phaseOn, proteinTarget, sortedPhases, weeklyTargetOn } from '@/lib/goalPlan';
 
-const PRIMARY_MODEL = 'gemini-3.5-flash';
+const PRIMARY_MODEL = 'gemini-3.6-flash';
 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
 const RETRY_DELAY_MS = 1000;

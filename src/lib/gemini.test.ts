@@ -66,7 +66,7 @@ describe('estimateMeal', () => {
     expect(result.items).toHaveLength(1);
     expect(result.calories).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.5-flash:generateContent');
+    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.6-flash:generateContent');
   });
 
   it('sends the API key in both the query string and the x-goog-api-key header', async () => {
@@ -298,8 +298,8 @@ describe('estimateMeal', () => {
     const result = await estimateMeal('user-key', 'salmon');
     expect(result.mealType).toBe('Dinner');
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.5-flash:generateContent');
-    expect(fetchMock.mock.calls[1][0]).toContain('gemini-3.5-flash:generateContent');
+    expect(fetchMock.mock.calls[0][0]).toContain('gemini-3.6-flash:generateContent');
+    expect(fetchMock.mock.calls[1][0]).toContain('gemini-3.6-flash:generateContent');
   }, 8000);
 
   it('falls back to the secondary model after the primary is exhausted on repeated 503s', async () => {
