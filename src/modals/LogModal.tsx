@@ -11,6 +11,7 @@ import { useSpeechInput } from '@/lib/useSpeechInput';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
 import { PinEditor } from '@/components/PinEditor';
 import { MealPhoto } from '@/components/MealPhoto';
+import { ItemReestimate } from '@/components/ItemReestimate';
 import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic } from 'lucide-react';
 import { haptic } from '@/lib/appearance';
@@ -518,18 +519,27 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           <details className="group mb-3">
             <summary className="flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 py-2.5 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors list-none [&::-webkit-details-marker]:hidden">
               <ChevronDown size={16} className="transition-transform group-open:rotate-180" />
-              Advanced item breakdown ({editItems.length} items)
+              {editItems.length > 1 ? `Items (${editItems.length}) — edit or re-estimate each` : 'Item details'}
             </summary>
             <div className="space-y-2 mt-2">
               {editItems.map((it, i) => (
                 <div key={i} className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex flex-wrap items-center gap-2 mb-2">
                     <input
                       type="text"
                       value={it.name}
                       onChange={(e) => updateItem(i, { name: e.target.value })}
                       placeholder="Food item (e.g. 100g cooked white rice)"
-                      className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+                      className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+                    />
+                    <ItemReestimate
+                      item={it}
+                      others={editItems.filter((_, j) => j !== i).map((x) => x.name)}
+                      onApply={(next) => {
+                        updateItem(i, next);
+                        const totals = sumItems(editItems.map((x, j) => (j === i ? next : x)));
+                        setTotalCalInput(String(Math.round(totals.calories)));
+                      }}
                     />
                     <button
                       onClick={() => removeItem(i)}
@@ -588,11 +598,22 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
             <div className="space-y-2 mb-3">
               {result.items.map((it, i) => (
-                <div key={i} className="bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-50 dark:border-gray-800">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{it.name}</p>
-                  <p className="text-11 text-orange-500 font-semibold mt-0.5">
-                    {Math.round(it.calories)} kcal · P {it.protein.toFixed(1)}g · C {it.carbs.toFixed(0)}g · F {it.fat.toFixed(1)}g
-                  </p>
+                <div key={i} className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-50 dark:border-gray-800">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{it.name}</p>
+                    <p className="text-11 text-orange-500 font-semibold mt-0.5">
+                      {Math.round(it.calories)} kcal · P {it.protein.toFixed(1)}g · C {it.carbs.toFixed(0)}g · F {it.fat.toFixed(1)}g
+                    </p>
+                  </div>
+                  <ItemReestimate
+                    item={it}
+                    others={result.items.filter((_, j) => j !== i).map((x) => x.name)}
+                    onApply={(next) => setResult((r) => {
+                      if (!r) return r;
+                      const items = r.items.map((x, j) => (j === i ? next : x));
+                      return { ...r, items, ...sumItems(items) };
+                    })}
+                  />
                 </div>
               ))}
             </div>

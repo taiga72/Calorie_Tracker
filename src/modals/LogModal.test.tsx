@@ -4,8 +4,10 @@ import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { MealEntry, PinnedMeal, Settings } from '@/types';
 
 const estimateMeal = vi.fn();
+const estimateItem = vi.fn();
 vi.mock('@/lib/gemini', () => ({
   estimateMeal: (...args: unknown[]) => estimateMeal(...args),
+  estimateItem: (...args: unknown[]) => estimateItem(...args),
   compressImage: vi.fn(),
   RateLimitError: class RateLimitError extends Error {},
 }));
@@ -318,5 +320,47 @@ describe('LogModal editing a meal', () => {
     expect(screen.getByText(/Will move to/)).toBeInTheDocument();
     fireEvent.click(screen.getByText('Save changes'));
     expect(updateMeal).toHaveBeenCalledWith('m1', expect.objectContaining({ date: '2026-09-30', mealType: 'Lunch' }));
+  });
+});
+
+describe('LogModal re-estimating one item', () => {
+  const twoItems: MealEntry = {
+    id: 'm2', date: '2026-10-01', mealType: 'Dinner',
+    items: [
+      { name: 'Rice 1 cup', calories: 200, protein: 4, carbs: 45, fat: 0.5, fiber: 1 },
+      { name: 'Chicken 100g', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
+    ],
+    calories: 365, protein: 35, carbs: 45, fat: 4.1, fiber: 1, reasoning: '', createdAt: 1,
+  };
+
+  it('re-estimates just that item in a saved meal, keeping the others', async () => {
+    estimateItem.mockResolvedValueOnce({ name: 'Chicken 200g', calories: 330, protein: 62, carbs: 0, fat: 7.2, fiber: 0 });
+    render(<UndoToastProvider><LogModal open onClose={vi.fn()} editMeal={twoItems} /></UndoToastProvider>);
+    fireEvent.click(screen.getByText(/Items \(2\)/));
+    fireEvent.click(screen.getByLabelText('Re-estimate Chicken 100g'));
+    fireEvent.change(screen.getByLabelText('Describe this item'), { target: { value: 'Chicken 200g' } });
+    await act(async () => { fireEvent.click(screen.getByText('Estimate')); });
+
+    expect(estimateItem).toHaveBeenCalledWith('', 'Chicken 200g', ['Rice 1 cup']);
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateMeal).toHaveBeenCalledWith('m2', expect.objectContaining({
+      calories: 530,
+      items: [twoItems.items[0], expect.objectContaining({ name: 'Chicken 200g', calories: 330 })],
+    }));
+  });
+
+  it('re-estimates one item of a new AI result before saving', async () => {
+    estimateMeal.mockResolvedValueOnce({ mealType: 'Dinner', items: twoItems.items, calories: 365, protein: 35, carbs: 45, fat: 4.1, fiber: 1, reasoning: '' });
+    estimateItem.mockResolvedValueOnce({ name: 'Brown rice 1.5 cups', calories: 330, protein: 7, carbs: 69, fat: 2.6, fiber: 5 });
+    renderLog();
+    fireEvent.click(screen.getByText('Text'));
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200g/), { target: { value: 'rice and chicken' } });
+    await act(async () => { fireEvent.click(screen.getByText(/Estimate with AI|Analyze|Estimate/)); });
+    fireEvent.click(screen.getByLabelText('Re-estimate Rice 1 cup'));
+    fireEvent.change(screen.getByLabelText('Describe this item'), { target: { value: 'Brown rice 1.5 cups' } });
+    await act(async () => { fireEvent.click(screen.getAllByText('Estimate').pop()!); });
+
+    expect(screen.getByText('Brown rice 1.5 cups')).toBeInTheDocument();
+    expect(screen.getByText('495 kcal')).toBeInTheDocument(); // 330 + 165
   });
 });
