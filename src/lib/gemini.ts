@@ -4,7 +4,7 @@ import type { MealType, FoodItem } from '@/types';
 const ENV_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
 // Use a valid current Gemini model name
-const MODEL = 'gemini-3.5-flash';
+const MODEL = 'gemini-3.6-flash';
 const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 const VERSION = 'v1beta';
 const RETRY_DELAY_MS = 1200;
