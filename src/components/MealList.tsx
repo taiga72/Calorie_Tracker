@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '@/store';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
 import { MealPhoto } from '@/components/MealPhoto';
@@ -5,7 +6,7 @@ import { PinMealButton } from '@/components/PinMealButton';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { isOverGoal } from '@/lib/goal';
 import { calorieGoalOn } from '@/lib/goalPlan';
-import { Coffee, Sun, Moon, Cookie, Pencil, Utensils } from 'lucide-react';
+import { Coffee, Sun, Moon, Cookie, Pencil, Utensils, ChevronRight } from 'lucide-react';
 import type { MealEntry, MealType, MealCalorieSplit } from '@/types';
 
 const MEAL_ORDER: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -32,6 +33,12 @@ function mealBudget(split: MealCalorieSplit | undefined, type: MealType, dayGoal
 export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal: MealEntry) => void }) {
   const { settings, addMeal, deleteMeal } = useStore();
   const { requestUndo } = useUndoToast();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const toggle = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const split = settings.calc?.suggestedMealSplit;
   const dayGoal = meals.length > 0 ? calorieGoalOn(settings, meals[0].date) : settings.calorieGoal;
 
@@ -93,12 +100,35 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
                           <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
                           {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
                         </p>
+                        {m.items.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => toggle(m.id)}
+                            aria-expanded={expanded.has(m.id)}
+                            className="mt-0.5 flex items-center gap-0.5 text-10 font-semibold text-gray-400 hover:text-accent-600"
+                          >
+                            <ChevronRight size={11} className={`transition-transform ${expanded.has(m.id) ? 'rotate-90' : ''}`} />
+                            {m.items.length} items
+                          </button>
+                        )}
                       </div>
                       <PinMealButton meal={m} />
                       <button onClick={() => onEdit(m)} className="flex-shrink-0 text-gray-300 hover:text-accent-600 transition-colors p-1" aria-label="Edit meal">
                         <Pencil size={14} />
                       </button>
                     </div>
+                    {/* Each food on its own, to pin just that one. */}
+                    {m.items.length > 1 && expanded.has(m.id) && (
+                      <ul className="pb-2.5 pl-14 compact:pl-12 space-y-1">
+                        {m.items.map((it, i) => (
+                          <li key={i} className="flex items-center gap-2">
+                            <span className="flex-1 min-w-0 text-xs text-gray-600 dark:text-gray-300 truncate">{it.name}</span>
+                            <span className="text-11 text-gray-400 flex-shrink-0">{Math.round(it.calories)} kcal</span>
+                            <PinMealButton item={it} mealType={m.mealType} size={13} />
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </SwipeToDelete>
                 );
               })}

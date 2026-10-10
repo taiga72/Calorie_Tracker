@@ -12,6 +12,7 @@ import { SwipeToDelete } from '@/components/SwipeToDelete';
 import { PinEditor } from '@/components/PinEditor';
 import { MealPhoto } from '@/components/MealPhoto';
 import { ItemReestimate } from '@/components/ItemReestimate';
+import { PinMealButton } from '@/components/PinMealButton';
 import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic } from 'lucide-react';
 import { haptic } from '@/lib/appearance';
@@ -532,6 +533,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                       placeholder="Food item (e.g. 100g cooked white rice)"
                       className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
                     />
+                    {editItems.length > 1 && it.name.trim() && (
+                      <PinMealButton item={it} mealType={mealType === 'auto' ? (editMeal?.mealType ?? 'Snack') : mealType} size={15} />
+                    )}
                     <ItemReestimate
                       item={it}
                       others={editItems.filter((_, j) => j !== i).map((x) => x.name)}
@@ -605,6 +609,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                       {Math.round(it.calories)} kcal · P {it.protein.toFixed(1)}g · C {it.carbs.toFixed(0)}g · F {it.fat.toFixed(1)}g
                     </p>
                   </div>
+                  {result.items.length > 1 && <PinMealButton item={it} mealType={result.mealType} size={15} />}
                   <ItemReestimate
                     item={it}
                     others={result.items.filter((_, j) => j !== i).map((x) => x.name)}

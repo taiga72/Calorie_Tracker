@@ -227,3 +227,27 @@ describe('HomeTab pinning a logged meal', () => {
     expect(unpinMeal).toHaveBeenCalledWith('p9');
   });
 });
+
+describe('HomeTab pinning one food from a meal', () => {
+  const combo: MealEntry = {
+    id: 'c1', date: toKey(new Date()), mealType: 'Dinner',
+    items: [
+      { name: 'Grilled chicken', calories: 330, protein: 62, carbs: 0, fat: 7, fiber: 0 },
+      { name: 'Rice', calories: 205, protein: 4, carbs: 45, fat: 0.4, fiber: 0.6 },
+    ],
+    calories: 535, protein: 66, carbs: 45, fat: 7.4, fiber: 0.6, reasoning: '', createdAt: 1,
+  };
+
+  it('lists the foods and pins just the one tapped, with undo', () => {
+    getDay.mockImplementation((key: string) => ({ ...emptyDay(key), meals: [combo], totalCalories: 535 }));
+    renderHomeTab();
+    fireEvent.click(screen.getByText('2 items'));
+    fireEvent.click(screen.getByLabelText('Pin Grilled chicken'));
+
+    expect(pinMeal).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Grilled chicken', mealType: 'Dinner', calories: 330, protein: 62, items: [combo.items[0]],
+    }));
+    fireEvent.click(screen.getByText('Undo'));
+    expect(unpinMeal).toHaveBeenCalledWith('p1');
+  });
+});
