@@ -35,7 +35,7 @@ export function PinMealButton(props: PinTarget & { size?: number }) {
       onClick={onClick}
       aria-label={props.item ? `${existing ? 'Unpin' : 'Pin'} ${what}` : existing ? 'Unpin meal' : 'Pin meal'}
       aria-pressed={!!existing}
-      className={`flex-shrink-0 p-1 transition-colors ${existing ? 'text-accent-600' : 'text-gray-300 hover:text-accent-600'}`}
+      className={`flex-shrink-0 p-2.5 -m-1.5 rounded-full transition-colors ${existing ? 'text-accent-600' : 'text-gray-400 hover:text-accent-600'}`}
     >
       <Pin size={props.size ?? 14} className={existing ? 'fill-current' : ''} />
     </button>

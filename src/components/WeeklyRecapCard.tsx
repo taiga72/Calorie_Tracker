@@ -63,7 +63,7 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
           <button
             onClick={() => { dismissRecap(recap.weekStart); onDismiss(); }}
             aria-label="Dismiss weekly recap"
-            className="ml-auto text-gray-300 hover:text-gray-500 p-1 -m-1"
+            className="ml-auto text-gray-400 hover:text-gray-500 p-1 -m-1"
           >
             <X size={16} />
           </button>

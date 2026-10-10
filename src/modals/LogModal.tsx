@@ -5,7 +5,7 @@ import { useUndoToast } from '@/components/UndoToastProvider';
 import { estimateMeal, compressImage, RateLimitError, type ParsedMeal } from '@/lib/gemini';
 import { fromKey, formatHeaderDate, isToday, todayKey } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
-import { findDuplicatePin, pinFromMeal } from '@/lib/pinnedMeals';
+import { defaultPinName, findDuplicatePin, pinFromMeal } from '@/lib/pinnedMeals';
 import { photoToDataUrl } from '@/lib/photoStorage';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { SwipeToDelete } from '@/components/SwipeToDelete';
@@ -16,6 +16,8 @@ import { PinMealButton } from '@/components/PinMealButton';
 import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
 import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic } from 'lucide-react';
 import { haptic } from '@/lib/appearance';
+import { lastLogMethod, mealTypeForTime, rememberLogMethod, type LogMethod } from '@/lib/logPrefs';
+import { friendlyAiError } from '@/lib/aiErrors';
 
 type Mode = 'food' | 'weight';
 type FoodInput = 'text' | 'image' | 'both';
@@ -52,8 +54,8 @@ interface LogModalProps {
 }
 
 export function LogModal({ open, onClose, targetDate, editMeal, weightDate, initialMode }: LogModalProps) {
-  const { settings, addMeal, updateMeal, logWeight, logWeightForDate, deleteWeight, weights, pinned, pinMeal, unpinMeal, updatePin, restorePin } = useStore();
-  const { requestUndo } = useUndoToast();
+  const { settings, addMeal, updateMeal, deleteMeal, logWeight, logWeightForDate, deleteWeight, weights, pinned, pinMeal, unpinMeal, updatePin, restorePin } = useStore();
+  const { requestUndo, notify } = useUndoToast();
   const isEdit = !!editMeal;
   const isWeightEdit = !!weightDate;
   const existingWeight = isWeightEdit ? weights.find((w) => w.date === weightDate) : undefined;
@@ -66,6 +68,15 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const [mealType, setMealType] = useState<MealType | 'auto'>('auto');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // AI failures can be retried in place.
+  const [retry, setRetry] = useState<(() => void) | null>(null);
+  // How the last meal was logged: the sheet opens ready for that.
+  const [method, setMethod] = useState<LogMethod | null>(null);
+  const usedVoice = useRef(false);
+  /** The time-of-day meal type is only a guess until the user taps one. */
+  const typePicked = useRef(false);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+  const pinnedFirst = method === null || method === 'pinned';
   const [rateLimitSecs, setRateLimitSecs] = useState<number | null>(null);
   const [result, setResult] = useState<ParsedMeal | null>(null);
   const [weightVal, setWeightVal] = useState('');
@@ -83,6 +94,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const onMic = () => {
     if (speech.listening) { speech.stop(); return; }
     textBeforeSpeech.current = text.trim();
+    usedVoice.current = true;
     speech.start();
   };
   const fileRef = useRef<HTMLInputElement>(null);
@@ -135,11 +147,22 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   }, [open, editMeal, weightDate, initialMode]);
 
   const reset = () => {
+    usedVoice.current = false;
     setText(''); setImagePreviews([]); setImageB64s([]);
-    setMealType('auto'); setError(null); setResult(null);
+    // A new meal for today starts on the meal it most likely is (changeable).
+    typePicked.current = false;
+    setMealType(!targetDate || isToday(targetDate) ? mealTypeForTime() : 'auto'); setError(null); setRetry(null); setResult(null);
+    setMethod(lastLogMethod());
     setFoodInput('text'); setWeightVal(''); setRateLimitSecs(null);
     setEditItems([]); setFromPin(false); setPinOnSave(false); setEditingPin(null);
   };
+
+  // Typed last time: open with the cursor in the box.
+  useEffect(() => {
+    if (!open || editMeal || isWeightEdit || method !== 'text') return;
+    const t = setTimeout(() => textRef.current?.focus({ preventScroll: true }), 350);
+    return () => clearTimeout(t);
+  }, [open, method, editMeal, isWeightEdit]);
 
   const close = () => { speech.stop(); reset(); onClose(); };
 
@@ -165,11 +188,13 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const onEstimate = async () => {
     setError(null);
+    setRetry(null);
     if (foodInput === 'text' && !text.trim()) {
       setError('Describe your meal or attach a photo.');
       return;
     }
     setLoading(true);
+    rememberLogMethod(imageB64s.length > 0 ? 'photo' : usedVoice.current ? 'voice' : 'text');
     try {
       const parsed = await estimateMeal(settings.geminiApiKey, text, imageB64s.length > 0 ? imageB64s : undefined);
       if (mealType !== 'auto') parsed.mealType = mealType;
@@ -181,7 +206,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         setRateLimitSecs(e.retryAfterSec);
       } else {
         setRateLimitSecs(null);
-        setError(e instanceof Error ? e.message : 'Something went wrong.');
+        setError(friendlyAiError(e));
+        setRetry(() => () => void onEstimate());
       }
     } finally {
       setLoading(false);
@@ -192,7 +218,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     if (!result) return;
     haptic('success');
     if (pinOnSave) pinMeal(pinFromMeal(result));
-    addMeal({
+    const id = addMeal({
       date: targetDate || todayKey(),
       mealType: result.mealType,
       items: result.items,
@@ -204,6 +230,10 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       reasoning: result.reasoning,
       imageDatas: imagePreviews.length > 0 ? imagePreviews : undefined,
     });
+    // Confirm it landed (the sheet just closes otherwise), with a way back.
+    const what = result.items.length > 1 ? result.mealType.toLowerCase() : defaultPinName(result.items, result.mealType);
+    const short = what.length > 18 ? `${what.slice(0, 17).trimEnd()}…` : what;
+    if (id) requestUndo(`Logged ${short} · ${Math.round(result.calories)} kcal`, () => deleteMeal(id));
     close();
   };
 
@@ -236,6 +266,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
   const onReestimate = async () => {
     setError(null);
+    setRetry(null);
     if (!editNote.trim() && imagePreviews.length === 0) {
       setError('Add a note or photo to re-estimate.');
       return;
@@ -256,7 +287,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         setRateLimitSecs(e.retryAfterSec);
       } else {
         setRateLimitSecs(null);
-        setError(e instanceof Error ? e.message : 'Something went wrong.');
+        setError(friendlyAiError(e));
+        setRetry(() => () => void onReestimate());
       }
     } finally {
       setLoading(false);
@@ -297,6 +329,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     haptic('success');
     if (weightDate) logWeightForDate(v, weightDate);
     else logWeight(v);
+    notify(`Weight saved · ${v} ${settings.weightUnit}`);
     close();
   };
 
@@ -327,11 +360,12 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   // Re-logs a pinned meal — no Gemini call. It lands in the normal result
   // view so it can still be reviewed (or redone) before saving.
   const onPickPinned = (pin: PinnedMeal) => {
+    rememberLogMethod('pinned');
     setError(null);
     setFromPin(true);
     setPinOnSave(false);
     setResult({
-      mealType: mealType === 'auto' ? pin.mealType : mealType,
+      mealType: mealType === 'auto' || !typePicked.current ? pin.mealType : mealType,
       items: pin.items.map((i) => ({ ...i })),
       calories: pin.calories,
       protein: pin.protein,
@@ -357,7 +391,10 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       {error && (
         <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mb-4">
           <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
-          <span>{error}</span>
+          <span className="flex-1">{error}</span>
+          {retry && !loading && (
+            <button onClick={() => retry()} className="flex-shrink-0 font-semibold underline">Try again</button>
+          )}
         </div>
       )}
 
@@ -548,7 +585,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                     <button
                       onClick={() => removeItem(i)}
                       disabled={editItems.length <= 1}
-                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-30 transition-colors"
+                      className="flex-shrink-0 w-10 h-10 -m-1 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950 disabled:opacity-30 transition-colors"
                       aria-label="Remove item"
                     >
                       <Trash2 size={16} />
@@ -676,8 +713,10 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           </div>
         ) : (
           /* ---- Input view ---- */
-          <div>
-            <div className="mb-4">
+          <div className="flex flex-col">
+            {/* Pinned meals first for people who mostly re-log pins; below the
+                input for those who usually type, talk or snap. */}
+            <div className={pinnedFirst ? 'mb-4' : 'order-last mt-5'}>
               <div className="flex items-center gap-1.5 mb-2">
                 <Pin size={13} className="text-gray-400" />
                 <p className="text-xs font-semibold text-gray-400">
@@ -704,7 +743,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                           <button
                             onClick={() => setEditingPin(pin)}
                             aria-label={`Edit ${pin.name}`}
-                            className="flex-shrink-0 px-3 py-2.5 text-gray-300 hover:text-accent-600 transition-colors"
+                            className="flex-shrink-0 px-3 py-2.5 text-gray-400 hover:text-accent-600 transition-colors"
                           >
                             <Pencil size={14} />
                           </button>
@@ -715,6 +754,15 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 </div>
               )}
             </div>
+
+            {method === 'photo' && imagePreviews.length === 0 && (
+              <button
+                onClick={() => fileRef.current?.click()}
+                className="w-full mb-3 flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-accent-300 dark:border-accent-800 bg-accent-50/60 dark:bg-accent-950/40 text-accent-700 dark:text-accent-300 py-5 text-sm font-semibold active:scale-[.99] transition-transform"
+              >
+                <Camera size={20} /> Take or choose a photo
+              </button>
+            )}
 
             {/* Input type toggle */}
             <div className="flex gap-2 mb-3">
@@ -756,6 +804,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
             <div className="relative">
               <textarea
+                ref={textRef}
                 value={text}
                 onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
                 placeholder={speech.supported ? 'e.g. grilled chicken breast 200g, brown rice 1 cup — or tap the mic and say it' : 'e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli'}
@@ -769,7 +818,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                   aria-pressed={speech.listening}
                   className={`absolute right-2.5 bottom-3.5 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
                     speech.listening ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-900 text-accent-600 shadow-sm border border-gray-100 dark:border-gray-700'
-                  }`}
+                  } ${method === 'voice' && !speech.listening && !text ? 'ring-2 ring-accent-400 ring-offset-2 ring-offset-gray-50 dark:ring-offset-gray-800' : ''}`}
                 >
                   {speech.listening && <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping" />}
                   <Mic size={18} className="relative" />
@@ -781,9 +830,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
 
             {/* Meal type selector */}
             <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar">
-              <Pill active={mealType === 'auto'} onClick={() => setMealType('auto')}>Auto</Pill>
+              <Pill active={mealType === 'auto'} onClick={() => { typePicked.current = true; setMealType('auto'); }}>Auto</Pill>
               {MEAL_TYPES.map((t) => (
-                <Pill key={t} active={mealType === t} onClick={() => setMealType(t)}>{t}</Pill>
+                <Pill key={t} active={mealType === t} onClick={() => { typePicked.current = true; setMealType(t); }}>{t}</Pill>
               ))}
             </div>
 

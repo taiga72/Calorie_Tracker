@@ -56,7 +56,7 @@ export function MealSearchModal({ open, onClose, onOpenDay }: { open: boolean; o
           className="flex-1 min-w-0 bg-transparent text-sm text-gray-900 dark:text-white outline-none"
         />
         {query && (
-          <button onClick={() => setQuery('')} aria-label="Clear search" className="text-gray-300 hover:text-gray-500"><X size={16} /></button>
+          <button onClick={() => setQuery('')} aria-label="Clear search" className="text-gray-400 hover:text-gray-500"><X size={16} /></button>
         )}
       </div>
 
@@ -78,7 +78,7 @@ export function MealSearchModal({ open, onClose, onOpenDay }: { open: boolean; o
                   {dayLabel(m.date)} · {m.mealType} · <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
                 </p>
               </div>
-              <ChevronRight size={15} className="text-gray-300 flex-shrink-0" />
+              <ChevronRight size={15} className="text-gray-400 flex-shrink-0" />
             </button>
             <button
               onClick={() => logAgain(m)}

@@ -15,7 +15,8 @@ vi.mock('@/lib/gemini', () => ({
 const SETTINGS: Settings = { calorieGoal: 2000, goalWeight: 75, weeklyWeightTarget: -0.3, weightUnit: 'kg', geminiApiKey: '' };
 
 let pinned: PinnedMeal[];
-const addMeal = vi.fn();
+const addMeal = vi.fn<(meal: Omit<MealEntry, 'id' | 'createdAt'>) => string>(() => 'meal-1');
+const deleteMeal = vi.fn();
 const pinMeal = vi.fn();
 const unpinMeal = vi.fn((id: string) => { pinned = pinned.filter((p) => p.id !== id); });
 const restorePin = vi.fn((pin: PinnedMeal) => { pinned = [pin, ...pinned]; });
@@ -26,6 +27,7 @@ vi.mock('@/store', () => ({
   useStore: () => ({
     settings: SETTINGS,
     addMeal,
+    deleteMeal,
     updateMeal,
     logWeight: vi.fn(),
     logWeightForDate: vi.fn(),
@@ -69,6 +71,13 @@ function swipe(row: Element, toX: number) {
 beforeEach(() => {
   pinned = [];
   vi.clearAllMocks();
+  // The meal type is pre-picked from the time of day; pin it to lunchtime.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 9, 10, 12, 30));
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('LogModal pinned meals', () => {
@@ -362,6 +371,50 @@ describe('LogModal re-estimating one item', () => {
 
     expect(screen.getByText('Brown rice 1.5 cups')).toBeInTheDocument();
     expect(screen.getByText('495 kcal')).toBeInTheDocument(); // 330 + 165
+  });
+});
+
+describe('LogModal saving and errors', () => {
+  async function estimateToast() {
+    estimateMeal.mockResolvedValueOnce({
+      mealType: 'Lunch', items: [{ name: 'Tuna sandwich', calories: 420, protein: 28, carbs: 40, fat: 14, fiber: 3 }],
+      calories: 420, protein: 28, carbs: 40, fat: 14, fiber: 3, reasoning: '',
+    });
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken/), { target: { value: 'tuna sandwich' } });
+    fireEvent.click(screen.getByText('Estimate with AI'));
+    await screen.findByText('Save meal');
+  }
+
+  it('confirms the save with a toast whose Undo removes the meal', async () => {
+    renderLog();
+    await estimateToast();
+    fireEvent.click(screen.getByText('Save meal'));
+    expect(screen.getByText(/Logged Tuna sandwich · 420 kcal/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Undo'));
+    expect(deleteMeal).toHaveBeenCalledWith('meal-1');
+  });
+
+  it('pre-picks the meal type from the time of day', () => {
+    renderLog();
+    const lunch = screen.getAllByText('Lunch').find((el) => el.tagName === 'BUTTON')!;
+    expect(lunch.className).toMatch(/accent/);
+  });
+
+  it('shows a plain-language error with Try again', async () => {
+    estimateMeal.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    renderLog();
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken/), { target: { value: 'soup' } });
+    await act(async () => { fireEvent.click(screen.getByText('Estimate with AI')); });
+    expect(await screen.findByText(/connection/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
+
+    estimateMeal.mockResolvedValueOnce({
+      mealType: 'Lunch', items: [{ name: 'Soup', calories: 200, protein: 8, carbs: 20, fat: 9, fiber: 2 }],
+      calories: 200, protein: 8, carbs: 20, fat: 9, fiber: 2, reasoning: '',
+    });
+    await act(async () => { fireEvent.click(screen.getByText('Try again')); });
+    expect(await screen.findByText('Save meal')).toBeInTheDocument();
+    expect(estimateMeal).toHaveBeenCalledTimes(2);
   });
 });
 

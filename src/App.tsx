@@ -25,6 +25,8 @@ import { newlyAchieved } from '@/lib/milestones';
 import { todayKey } from '@/lib/dateUtils';
 import { MilestoneModal } from '@/components/Milestones';
 import { AppearanceSync } from '@/components/AppearanceSync';
+import { WelcomeSheet } from '@/components/WelcomeSheet';
+import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Loader2, AlertTriangle, X, CloudOff, RefreshCw } from 'lucide-react';
 import type { Milestone, TabKey } from '@/types';
 
@@ -73,6 +75,14 @@ function AuthGate() {
   );
 }
 
+const COACH_HINT_KEY = 'cc_coach_hint_seen';
+function readFlag(key: string): boolean {
+  try { return localStorage.getItem(key) === '1'; } catch { return false; }
+}
+function writeFlag(key: string): void {
+  try { localStorage.setItem(key, '1'); } catch { /* ignore */ }
+}
+
 function AppInner() {
   const [tab, setTab] = useState<TabKey>('home');
   const [logOpen, setLogOpen] = useState(false);
@@ -82,6 +92,21 @@ function AppInner() {
   const [streakCount, setStreakCount] = useState(0);
   const { meals, weights, settings, updatePrefs, profile, loading, syncError, dismissSyncError, refresh, refreshing, online, pendingCount } = useStore();
   const [celebrate, setCelebrate] = useState<Milestone | null>(null);
+  // A one-time hint that ✨ is the AI coach.
+  const [coachHint, setCoachHint] = useState(() => !readFlag(COACH_HINT_KEY));
+  const dismissCoachHint = () => { setCoachHint(false); writeFlag(COACH_HINT_KEY); };
+  // First run (no goal set and nothing logged yet): a short welcome. It
+  // stays dismissed once closed.
+  const userId = useAuth().user?.id ?? '';
+  const welcomeKey = `cc_welcome_done:${userId}`;
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  useEffect(() => {
+    if (loading || !userId) return;
+    if (!readFlag(welcomeKey) && !settings.calc && meals.length === 0) setWelcomeOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, userId]);
+  const closeWelcome = () => { setWelcomeOpen(false); writeFlag(welcomeKey); };
   useSplashReady(!loading);
   const reminder = useReminders(!loading);
 
@@ -152,22 +177,38 @@ function AppInner() {
           onDismiss={reminder.dismiss}
         />
       )}
-      <main className="pb-28">
+      {/* Room at the bottom so the last card can scroll clear of the floating buttons. */}
+      <main className="pb-48">
         {tab === 'home' && <HomeTab />}
         {tab === 'stats' && <StatsTab />}
         {tab === 'calendar' && <CalendarTab />}
         {tab === 'settings' && <SettingsTab />}
       </main>
 
-      <FAB onClick={() => openLog('food')} onCoachClick={() => setCoachOpen(true)} />
-      <BottomNav active={tab} onChange={setTab} />
+      <FAB
+        onClick={() => openLog('food')}
+        onCoachClick={() => { dismissCoachHint(); setCoachOpen(true); }}
+        coachHint={coachHint && !welcomeOpen && tab === 'home'}
+        onHintDismiss={() => { dismissCoachHint(); setCoachOpen(true); }}
+      />
+      <BottomNav active={tab} onChange={(t) => { if (coachHint && t !== tab) dismissCoachHint(); setTab(t); }} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
       <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />
       <AppearanceSync />
+      <WelcomeSheet
+        open={welcomeOpen && !wizardOpen && !logOpen}
+        onClose={closeWelcome}
+        name={profile.name.trim()}
+        goalSet={!!settings.calc}
+        mealLogged={meals.length > 0}
+        onSetGoal={() => setWizardOpen(true)}
+        onLogMeal={() => openLog('food')}
+      />
+      <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
       <MilestoneModal milestone={celebrate} onClose={() => setCelebrate(null)} />
       {/* One celebration at a time: the streak waits for the milestone. */}
       <StreakModal
-        open={streakOpen && !celebrate}
+        open={streakOpen && !celebrate && !welcomeOpen}
         onClose={() => setStreakOpen(false)}
         name={profile.name}
         streak={streakCount}

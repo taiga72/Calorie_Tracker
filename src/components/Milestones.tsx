@@ -66,7 +66,7 @@ export function MilestonesCard() {
                   </div>
                 )}
               </div>
-              <button onClick={() => remove(m)} aria-label={`Remove ${milestoneLabel(m, settings)}`} className="text-gray-300 hover:text-red-500 p-1 -mr-1">
+              <button onClick={() => remove(m)} aria-label={`Remove ${milestoneLabel(m, settings)}`} className="text-gray-400 hover:text-red-500 p-2.5 -m-1.5 rounded-full">
                 <Trash2 size={14} />
               </button>
             </div>

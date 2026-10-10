@@ -18,7 +18,7 @@ export function ReminderBanner({ id, onLog, onDismiss }: { id: ReminderId; onLog
           {id === 'weighIn' ? 'Log weight' : `Log ${id.toLowerCase()}`}
         </button>
       </div>
-      <button onClick={onDismiss} aria-label="Dismiss reminder" className="text-gray-300 hover:text-gray-500 p-1 flex-shrink-0">
+      <button onClick={onDismiss} aria-label="Dismiss reminder" className="text-gray-400 hover:text-gray-500 p-1 flex-shrink-0">
         <X size={16} />
       </button>
     </div>

@@ -7,6 +7,7 @@ import { loadCoachChat, saveCoachChat, MAX_HISTORY_SENT } from '@/lib/coachChat'
 import { RateLimitError } from '@/lib/gemini';
 import { CoachMemoryEditor } from '@/components/CoachMemory';
 import { Sparkles, Send, AlertCircle, RefreshCw, RotateCcw, Brain } from 'lucide-react';
+import { friendlyAiError } from '@/lib/aiErrors';
 
 const QUICK_PROMPTS = [
   'Is my calorie deficit right for me?',
@@ -78,7 +79,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
     } catch (err) {
       const msg = err instanceof RateLimitError
         ? `You're sending requests too fast. Please wait about ${err.retryAfterSec}s and try again.`
-        : err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+        : friendlyAiError(err);
       setError(msg);
     } finally {
       setLoading(false);

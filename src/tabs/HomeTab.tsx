@@ -147,7 +147,7 @@ export function HomeTab() {
     <div className="card p-3 flex-1 flex flex-col justify-between">
       <div className="flex items-center justify-between mb-1">
         <span className="text-9 font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
-        <span className="text-8 font-semibold text-gray-300">g</span>
+        <span className="text-8 font-semibold text-gray-400">g</span>
       </div>
       <MacroProgress label="Protein" value={day.totalProtein} target={protein ?? undefined} color="bg-emerald-500" track="bg-emerald-50 dark:bg-emerald-950" text="text-emerald-600" />
       <MacroProgress label="Carbs" value={day.totalCarbs} target={macros?.carbs} color="bg-orange-400" track="bg-orange-50 dark:bg-orange-950" text="text-orange-500" />
@@ -184,7 +184,7 @@ export function HomeTab() {
         {day.meals.length === 0 ? (
           <div className="card card-sm p-6 text-center mt-3">
             <p className="text-sm text-gray-400">No meals logged yet.</p>
-            <p className="text-xs text-gray-300 mt-1">Tap the + button to log your first meal.</p>
+            <p className="text-xs text-gray-400 mt-1">Tap the + button to log your first meal.</p>
           </div>
         ) : (
           <div className="mt-3">
@@ -199,7 +199,7 @@ export function HomeTab() {
 
   return (
     <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
-    <div className="px-5 pt-6 pb-28">
+    <div className="px-5 pt-6 pb-4">
       <div className="flex items-center gap-3">
         {profile.avatar && (
           <img src={profile.avatar} alt="avatar" className="w-11 h-11 rounded-full object-cover flex-shrink-0" />
@@ -243,7 +243,7 @@ function MacroProgress({ label, value, target, color, track, text }: {
         <span className="text-10 font-medium text-gray-500">{label}</span>
         <span className={`text-10 font-bold ${text}`}>
           {Math.round(value)}
-          {target ? <span className="text-gray-300 font-normal">/{Math.round(target)}</span> : <span className="text-gray-300 font-normal"> g</span>}
+          {target ? <span className="text-gray-400 font-normal">/{Math.round(target)}</span> : <span className="text-gray-400 font-normal"> g</span>}
         </span>
       </div>
       {target ? (

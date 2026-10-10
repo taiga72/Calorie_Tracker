@@ -135,7 +135,7 @@ describe('CalendarTab heatmap', () => {
     unmount();
     settings = { ...DEFAULT_SETTINGS, prefs: { calendarCell: 'calories' } };
     renderCalendar();
-    expect(cellFor(d).textContent).toContain('1500 kcal');
+    expect(cellFor(d).textContent).toContain('1.5k');
     expect(cellFor(d).textContent).not.toContain('kg');
     settings = DEFAULT_SETTINGS;
   });

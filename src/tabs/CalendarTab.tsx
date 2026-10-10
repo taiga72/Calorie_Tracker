@@ -100,6 +100,13 @@ export function CalendarTab() {
         <Legend color="bg-rose-50 dark:bg-rose-950" label="Over goal" />
         <Legend color="bg-amber-50 dark:bg-amber-950/60" label="Partly logged" />
         <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
+        {cellContent !== 'color' && (
+          <span className="text-10 text-gray-400 font-medium">
+            {showKcal && <><span className="font-bold text-orange-600 dark:text-orange-300">1.9k</span> = kcal</>}
+            {showKcal && showWeight && ' · '}
+            {showWeight && <><span className="font-bold text-blue-600 dark:text-blue-300">{settings.weightUnit}</span> in blue</>}
+          </span>
+        )}
       </div>
 
       {/* Swipe left/right anywhere on the grid to change months. The grid
@@ -159,13 +166,13 @@ export function CalendarTab() {
               </span>
               <div className="mt-1 w-full space-y-0.5 overflow-hidden">
                 {showKcal && day.totalCalories > 0 && (
-                  <span className="block text-10 font-semibold text-orange-600 dark:text-orange-300 truncate">
-                    {Math.round(day.totalCalories)} kcal
+                  <span className="block text-10 font-semibold text-orange-600 dark:text-orange-300 truncate" aria-label={`${Math.round(day.totalCalories)} kcal`}>
+                    {compactKcal(day.totalCalories)}
                   </span>
                 )}
                 {showWeight && day.weight && (
-                  <span className="block text-10 font-semibold text-blue-600 dark:text-blue-300 truncate">
-                    {fmtWeight(day.weight.weight, settings.weightUnit, 1).split(' ')[0]} {settings.weightUnit}
+                  <span className="block text-10 font-semibold text-blue-600 dark:text-blue-300 truncate" aria-label={fmtWeight(day.weight.weight, settings.weightUnit, 1)}>
+                    {fmtWeight(day.weight.weight, settings.weightUnit, 1).split(' ')[0]}
                   </span>
                 )}
               </div>
@@ -189,6 +196,15 @@ export function CalendarTab() {
     </div>
     </PullToRefresh>
   );
+}
+
+/**
+ * Calories short enough for a narrow day cell: "850", "1.9k". (Weight shows
+ * without its unit; the colours tell them apart.)
+ */
+function compactKcal(kcal: number): string {
+  const n = Math.round(kcal);
+  return n < 1000 ? String(n) : `${(n / 1000).toFixed(n < 9950 ? 1 : 0)}k`;
 }
 
 function Legend({ color, label }: { color: string; label: string }) {

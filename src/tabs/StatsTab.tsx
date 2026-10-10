@@ -165,7 +165,10 @@ export function StatsTab() {
         {smoothing === 'none' ? 'Each logged day' : `Dots are days · line is the ${lineLabel.toLowerCase()}`}
       </p>
       {loggedDays === 0 && !calPending ? (
-        <p className="text-sm text-gray-400 py-6 text-center">No meals logged in this range.</p>
+        <EmptyNote
+          title="No meals in this range yet"
+          text="Log meals for a few days and your calorie trend shows up here, against your goal."
+        />
       ) : (
         <TrendChart
           start={keys[0]}
@@ -206,6 +209,10 @@ export function StatsTab() {
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Macros breakdown</h2>
       </div>
       <p className="text-xs text-gray-400 mb-4">Daily average percentage split</p>
+      {fullDays === 0 ? (
+        <EmptyNote title="Nothing to average yet" text="Your average protein, carbs and fat appear after your first full day of logging." />
+      ) : (
+      <>
       <MacroBar
         protein={perDay(totals.protein)}
         carbs={perDay(totals.carbs)}
@@ -216,6 +223,8 @@ export function StatsTab() {
         <Stat label="Carbs" value={`${perDay(totals.carbs).toFixed(0)}`} unit="g/day" tone="orange" />
         <Stat label="Fat" value={`${perDay(totals.fat).toFixed(0)}`} unit="g/day" tone="amber" />
       </div>
+      </>
+      )}
       {fullDays > 0 && (
         <p className="text-11 text-gray-400 mt-3">
           Fiber <span className="font-bold text-purple-500">{perDay(totals.fiber).toFixed(0)} g/day</span>
@@ -272,7 +281,10 @@ export function StatsTab() {
           )}
         </>
       ) : (
-        <p className="text-sm text-gray-400">No weight entries in this range.</p>
+        <EmptyNote
+          title="No weigh-ins in this range"
+          text="Tap the weight card on Home to log one. A few weigh-ins over a week or two are enough for a trend."
+        />
       )}
     </div>
     ),
@@ -355,6 +367,16 @@ function Stat({ label, value, unit, tone }: { label: string; value: string; unit
       <p className="text-10 text-gray-400 font-medium">{label}</p>
       <p className={`text-base font-bold ${toneClass}`}>{value}</p>
       <p className="text-9 text-gray-400">{unit}</p>
+    </div>
+  );
+}
+
+/** What will appear here, and how to get there — rather than a bare "no data". */
+function EmptyNote({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="text-center py-5 px-3">
+      <p className="text-sm font-semibold text-gray-600 dark:text-gray-300">{title}</p>
+      <p className="text-xs text-gray-400 mt-1 leading-relaxed">{text}</p>
     </div>
   );
 }
