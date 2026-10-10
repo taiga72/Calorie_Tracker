@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { normalizeItemName, findDuplicatePin, pinFromMeal, defaultPinName } from '@/lib/pinnedMeals';
+import { pinFromItem } from '@/lib/pinnedMeals';
 import type { PinnedMeal } from '@/types';
 
 function pin(name: string, calories: number): PinnedMeal {
@@ -50,5 +51,12 @@ describe('pinFromMeal / defaultPinName', () => {
 
   it('falls back to the meal type when items have no names', () => {
     expect(defaultPinName([], 'Snack')).toBe('Snack');
+  });
+});
+
+describe('pinFromItem', () => {
+  it('pins a single food with its own nutrition', () => {
+    const item = { name: 'Greek yogurt', calories: 120, protein: 12, carbs: 6, fat: 4, fiber: 0 };
+    expect(pinFromItem(item, 'Snack')).toEqual({ name: 'Greek yogurt', mealType: 'Snack', items: [item], calories: 120, protein: 12, carbs: 6, fat: 4, fiber: 0 });
   });
 });

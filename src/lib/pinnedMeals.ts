@@ -49,3 +49,16 @@ export function pinFromMeal(meal: Pick<MealEntry, 'mealType' | 'items' | 'calori
     fiber: meal.fiber,
   };
 }
+
+/** One food from a meal, ready to pin on its own (e.g. the chicken from "chicken, rice & salad"). */
+export function pinFromItem(item: FoodItem, mealType: MealEntry['mealType']): Omit<PinnedMeal, 'id' | 'createdAt'> {
+  return pinFromMeal({
+    mealType,
+    items: [item],
+    calories: item.calories,
+    protein: item.protein,
+    carbs: item.carbs,
+    fat: item.fat,
+    fiber: item.fiber,
+  });
+}

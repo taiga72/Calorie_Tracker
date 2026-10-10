@@ -364,3 +364,23 @@ describe('LogModal re-estimating one item', () => {
     expect(screen.getByText('495 kcal')).toBeInTheDocument(); // 330 + 165
   });
 });
+
+describe('LogModal pinning one food', () => {
+  it('pins a single food from a new AI result', async () => {
+    estimateMeal.mockResolvedValueOnce({
+      mealType: 'Lunch',
+      items: [
+        { name: 'Rice 1 cup', calories: 200, protein: 4, carbs: 45, fat: 0.5, fiber: 1 },
+        { name: 'Chicken 100g', calories: 165, protein: 31, carbs: 0, fat: 3.6, fiber: 0 },
+      ],
+      calories: 365, protein: 35, carbs: 45, fat: 4.1, fiber: 1, reasoning: '',
+    });
+    pinMeal.mockReturnValueOnce({ pin: { id: 'px' }, alreadyPinned: false });
+    renderLog();
+    fireEvent.click(screen.getByText('Text'));
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200g/), { target: { value: 'rice and chicken' } });
+    await act(async () => { fireEvent.click(screen.getByText(/Estimate with AI|Analyze|Estimate/)); });
+    fireEvent.click(screen.getByLabelText('Pin Chicken 100g'));
+    expect(pinMeal).toHaveBeenCalledWith(expect.objectContaining({ name: 'Chicken 100g', mealType: 'Lunch', calories: 165 }));
+  });
+});
