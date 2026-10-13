@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { applyPending, loadOutbox, saveOutbox, loadSnapshot, saveSnapshot, type Snapshot, type QueuedOp, type OutboxOp } from '@/lib/offline';
+import { applyPending, enqueue, loadOutbox, saveOutbox, loadSnapshot, saveSnapshot, type Snapshot, type QueuedOp, type OutboxOp } from '@/lib/offline';
 import type { MealEntry, Settings } from '@/types';
 
 const settings: Settings = { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg', geminiApiKey: 'k' };
@@ -63,5 +63,34 @@ describe('snapshot storage', () => {
     expect(loaded.meals[0].imageDatas).toBeUndefined();
     expect(loaded.meals[1].imageDatas).toEqual(['sb:u1/b.jpg']);
     expect(loaded.settings).toEqual(settings);
+  });
+});
+
+describe('enqueue', () => {
+  const ci = (sleep: number): QueuedOp => ({ qid: `c${sleep}`, op: { kind: 'upsertCheckIn', checkin: { date: '2026-10-13', sleep, createdAt: 1 } }, attempts: 0 });
+
+  it('replaces an older queued save of the same row', () => {
+    let q: QueuedOp[] = [];
+    q = enqueue(q, ci(1));
+    q = enqueue(q, ci(2));
+    q = enqueue(q, ci(3));
+    expect(q.map((x) => x.qid)).toEqual(['c3']);
+  });
+
+  it('keeps inserts and deletes, and the order around them', () => {
+    const w = { id: 'w1', date: '2026-10-13', kind: 'cardio' as const, name: 'Run', minutes: 30, calories: 300, createdAt: 1 };
+    let q: QueuedOp[] = [];
+    q = enqueue(q, { qid: 'a', op: { kind: 'upsertWorkout', workout: w }, attempts: 0 });
+    q = enqueue(q, { qid: 'b', op: { kind: 'deleteWorkout', id: 'w1' }, attempts: 0 });
+    q = enqueue(q, { qid: 'c', op: { kind: 'upsertWorkout', workout: w }, attempts: 0 });
+    expect(q.map((x) => x.qid)).toEqual(['b', 'c']);
+    q = enqueue(q, { qid: 'd', op: { kind: 'deleteMeal', id: 'm' }, attempts: 0 });
+    q = enqueue(q, { qid: 'e', op: { kind: 'deleteMeal', id: 'm2' }, attempts: 0 });
+    expect(q.map((x) => x.qid)).toEqual(['b', 'c', 'd', 'e']);
+  });
+
+  it('keeps check-ins for different days apart', () => {
+    const other: QueuedOp = { qid: 'x', op: { kind: 'upsertCheckIn', checkin: { date: '2026-10-12', mood: 3, createdAt: 1 } }, attempts: 0 };
+    expect(enqueue([other], ci(4)).map((x) => x.qid)).toEqual(['x', 'c4']);
   });
 });

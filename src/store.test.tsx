@@ -807,6 +807,20 @@ describe('workouts and check-ins', () => {
     await waitFor(() => expect(db.checkins?.[0]).toMatchObject({ sleep: 4, mood: 2 }));
   });
 
+  it('sends quick check-in taps as one save, not one per tap', async () => {
+    const { result } = await renderStore();
+    vi.mocked(storage.upsertCheckIn).mockClear();
+    act(() => {
+      result.current.saveCheckIn('2026-10-13', { sleep: 4 });
+      result.current.saveCheckIn('2026-10-13', { energy: 3 });
+      result.current.saveCheckIn('2026-10-13', { hunger: 2 });
+      result.current.saveCheckIn('2026-10-13', { mood: 5 });
+    });
+    await waitFor(() => expect(result.current.pendingCount).toBe(0));
+    expect(vi.mocked(storage.upsertCheckIn).mock.calls.length).toBeLessThanOrEqual(2);
+    expect(db.checkins?.find((c) => c.date === '2026-10-13')).toMatchObject({ sleep: 4, energy: 3, hunger: 2, mood: 5 });
+  });
+
   it('keeps them on this device when the tables do not exist yet', async () => {
     db.workouts = null;
     db.checkins = null;
