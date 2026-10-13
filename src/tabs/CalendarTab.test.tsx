@@ -42,7 +42,6 @@ vi.mock('@/store', () => ({
     weights: [] as WeightEntry[],
     pinned: [],
     workouts: [],
-    checkins: [],
     pinMeal: vi.fn(),
     unpinMeal: vi.fn(),
     restorePin: vi.fn(),

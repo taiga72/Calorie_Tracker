@@ -11,7 +11,7 @@ function meal(id: string, calories = 100, photo?: string): MealEntry {
   };
 }
 
-const empty: Snapshot = { meals: [], weights: [], settings, profile: { name: '' }, pinned: [], workouts: [], checkins: [] };
+const empty: Snapshot = { meals: [], weights: [], settings, profile: { name: '' }, pinned: [], workouts: [] };
 const q = (op: OutboxOp): QueuedOp => ({ qid: Math.random().toString(), op, attempts: 0 });
 
 beforeEach(() => localStorage.clear());
@@ -67,7 +67,7 @@ describe('snapshot storage', () => {
 });
 
 describe('enqueue', () => {
-  const ci = (sleep: number): QueuedOp => ({ qid: `c${sleep}`, op: { kind: 'upsertCheckIn', checkin: { date: '2026-10-13', sleep, createdAt: 1 } }, attempts: 0 });
+  const ci = (kg: number): QueuedOp => ({ qid: `c${kg}`, op: { kind: 'upsertWeight', entry: { date: '2026-10-13', weight: kg, createdAt: 1 } }, attempts: 0 });
 
   it('replaces an older queued save of the same row', () => {
     let q: QueuedOp[] = [];
@@ -89,8 +89,8 @@ describe('enqueue', () => {
     expect(q.map((x) => x.qid)).toEqual(['b', 'c', 'd', 'e']);
   });
 
-  it('keeps check-ins for different days apart', () => {
-    const other: QueuedOp = { qid: 'x', op: { kind: 'upsertCheckIn', checkin: { date: '2026-10-12', mood: 3, createdAt: 1 } }, attempts: 0 };
+  it('keeps weights for different days apart', () => {
+    const other: QueuedOp = { qid: 'x', op: { kind: 'upsertWeight', entry: { date: '2026-10-12', weight: 80, createdAt: 1 } }, attempts: 0 };
     expect(enqueue([other], ci(4)).map((x) => x.qid)).toEqual(['x', 'c4']);
   });
 });

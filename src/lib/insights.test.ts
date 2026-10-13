@@ -39,7 +39,7 @@ describe('weekendPattern', () => {
 });
 
 describe('plateau', () => {
-  const base = { workouts: [] as Workout[], checkins: [], settings, today };
+  const base = { workouts: [] as Workout[], settings, today };
 
   it('finds a stall while trying to lose, and suggests the new maintenance', () => {
     const p = plateau({ ...base, meals: days(28, 1950, 1950), weights: flatWeights(24) })!;

@@ -68,7 +68,7 @@ export interface Settings {
 
 // ---- Personalization (Settings.prefs)
 
-export type HomeCardId = 'summary' | 'brief' | 'insights' | 'checkin' | 'quickPins' | 'forecast' | 'milestones' | 'activity' | 'meals';
+export type HomeCardId = 'summary' | 'brief' | 'insights' | 'quickPins' | 'forecast' | 'milestones' | 'activity' | 'meals';
 export type StatsCardId = 'recap' | 'calories' | 'macros' | 'weight';
 export type GoalsCardId = 'insights' | 'phases' | 'forecast' | 'target' | 'habits' | 'milestones';
 
@@ -181,16 +181,5 @@ export interface Workout {
   calories: number;
   sets?: StrengthSet[];
   notes?: string;
-  createdAt: number;
-}
-
-/** How the day felt, each 1 (poor) – 5 (great); hunger 1 (not hungry) – 5 (starving). */
-export interface CheckIn {
-  date: string; // YYYY-MM-DD
-  sleep?: number;
-  energy?: number;
-  hunger?: number;
-  mood?: number;
-  note?: string;
   createdAt: number;
 }

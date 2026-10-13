@@ -22,8 +22,8 @@ const GREETING: CoachMessage = {
 };
 
 export function AICoachModal({ open, onClose, question }: { open: boolean; onClose: () => void; question?: string | null }) {
-  const { meals, weights, settings, workouts, checkins } = useStore();
-  const coachCtx = { settings, meals, weights, workouts, checkins };
+  const { meals, weights, settings, workouts } = useStore();
+  const coachCtx = { settings, meals, weights, workouts };
   const [memoryOpen, setMemoryOpen] = useState(false);
   const memoryCount = settings.prefs?.coachMemory?.length ?? 0;
   const userId = useAuth().user?.id;
