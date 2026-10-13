@@ -28,7 +28,7 @@ describe('habitStreaks', () => {
     meal('2026-10-13', 1800, 125, 10),
     meal('2026-10-14', 600, 40, 5), // today, so far
   ];
-  const byId = (id: string) => habitStreaks({ meals, workouts: [], checkins: [], weights: [], settings, today }).find((h) => h.id === id)!;
+  const byId = (id: string) => habitStreaks({ meals, workouts: [], weights: [], settings, today }).find((h) => h.id === id)!;
 
   it('logging streak includes today', () => {
     expect(byId('logging').current).toBe(4);
@@ -56,14 +56,14 @@ describe('habitStreaks', () => {
       w('2026-10-05', 20), w('2026-10-06', 20), w('2026-10-07', 20), // week of Oct 4: three workouts
       w('2026-10-12', 30), // this week, not yet
     ];
-    const active = habitStreaks({ meals, workouts, checkins: [], weights: [], settings, today }).find((h) => h.id === 'active')!;
+    const active = habitStreaks({ meals, workouts, weights: [], settings, today }).find((h) => h.id === 'active')!;
     expect(active.unit).toBe('week');
     expect(active.current).toBe(2);
     expect(active.recent[active.recent.length - 1]).toBe('open');
   });
 
   it('leaves protein out without a target', () => {
-    const list = habitStreaks({ meals, workouts: [], checkins: [], weights: [], settings: { ...settings, calc: null }, today });
+    const list = habitStreaks({ meals, workouts: [], weights: [], settings: { ...settings, calc: null }, today });
     expect(list.some((h) => h.id === 'protein')).toBe(false);
   });
 });

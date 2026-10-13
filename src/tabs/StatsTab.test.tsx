@@ -8,7 +8,7 @@ const emptyDay = (date: string): DaySummary => ({ date, meals: [], weight: undef
 
 let days: Record<string, DaySummary> = {};
 vi.mock('@/store', () => ({
-  useStore: () => ({ getDay: (k: string) => days[k] ?? emptyDay(k), weights: [], meals: [], workouts: [], checkins: [], settings, updatePrefs: vi.fn(), refresh: vi.fn(), refreshing: false }),
+  useStore: () => ({ getDay: (k: string) => days[k] ?? emptyDay(k), weights: [], meals: [], workouts: [], settings, updatePrefs: vi.fn(), refresh: vi.fn(), refreshing: false }),
 }));
 
 function loggedDay(daysAgo: number, calories: number, fiber = 0): DaySummary {

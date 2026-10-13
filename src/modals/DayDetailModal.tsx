@@ -8,7 +8,6 @@ import { LogModal } from '@/modals/LogModal';
 import { MealList } from '@/components/MealList';
 import { WorkoutList, WorkoutSheet } from '@/components/ActivityCard';
 import { workoutsOn } from '@/lib/workouts';
-import { checkInSummary } from '@/components/CheckInCard';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MealEntry, Workout } from '@/types';
 
@@ -30,7 +29,7 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalProps) {
-  const { getDay, settings, loadPhotos, workouts, checkins } = useStore();
+  const { getDay, settings, loadPhotos, workouts } = useStore();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
@@ -68,7 +67,6 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
         : { transition: 'transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s' };
   const day = dateKey ? getDay(dateKey) : null;
   const dayWorkouts = dateKey ? workoutsOn(workouts, dateKey) : [];
-  const dayCheckIn = dateKey ? checkins.find((c) => c.date === dateKey) : undefined;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
   useEffect(() => {
@@ -193,14 +191,6 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               <div className="card card-sm px-4">
                 <WorkoutList workouts={dayWorkouts} onEdit={setEditingWorkout} />
               </div>
-            )}
-
-            {checkInSummary(dayCheckIn) && (
-              <>
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-5 mb-1">Check-in</h3>
-                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{checkInSummary(dayCheckIn)}</p>
-                {dayCheckIn?.note && <p className="text-11 text-gray-400 mt-0.5 italic">“{dayCheckIn.note}”</p>}
-              </>
             )}
           </div>
           </div>

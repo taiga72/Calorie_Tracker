@@ -19,7 +19,6 @@ import { seasonalTouch } from '@/lib/appearance';
 import { Scale, Flame } from 'lucide-react';
 import { QuickPinsCard } from '@/components/QuickPins';
 import { ActivityCard } from '@/components/ActivityCard';
-import { CheckInCard } from '@/components/CheckInCard';
 import { InsightsCard } from '@/components/InsightsCard';
 import { MilestonesCard } from '@/components/Milestones';
 import { GoalForecastCard } from '@/components/GoalInsights';
@@ -182,7 +181,6 @@ export function HomeTab() {
     ),
     brief: recapVisible ? <WeeklyRecapCard onDismiss={() => setRecapVisible(false)} /> : null,
     insights: <InsightsCard compact />,
-    checkin: <CheckInCard date={todayKey} />,
     activity: <ActivityCard date={todayKey} />,
     quickPins: <QuickPinsCard />,
     forecast: <GoalForecastCard />,

@@ -5,15 +5,15 @@ import { habitStreaks, type HabitStreak } from '@/lib/habits';
 import { logicalNow } from '@/lib/dateUtils';
 
 const EMOJI: Record<HabitStreak['id'], string> = {
-  logging: '📝', withinGoal: '🎯', protein: '🥩', fiber: '🥦', checkin: '💬', active: '🏃',
+  logging: '📝', withinGoal: '🎯', protein: '🥩', fiber: '🥦', active: '🏃',
 };
 
 /** Statistics → Goals: streaks for each habit, with the last two weeks at a glance. */
 export function HabitsCard() {
-  const { meals, workouts, checkins, weights, settings } = useStore();
+  const { meals, workouts, weights, settings } = useStore();
   const habits = useMemo(
-    () => habitStreaks({ meals, workouts, checkins, weights, settings, today: logicalNow() }),
-    [meals, workouts, checkins, weights, settings],
+    () => habitStreaks({ meals, workouts, weights, settings, today: logicalNow() }),
+    [meals, workouts, weights, settings],
   );
 
   return (

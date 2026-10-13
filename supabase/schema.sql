@@ -117,8 +117,8 @@ drop policy if exists "Users delete their own meal photos" on storage.objects;
 create policy "Users delete their own meal photos" on storage.objects
   for delete using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 
--- Workouts and daily check-ins (added later — re-running this file creates
--- them). Until then they stay on each device.
+-- Workouts (added later — re-running this file creates the table). Until
+-- then they stay on each device.
 create table if not exists public.workouts (
   id text primary key,
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -133,27 +133,10 @@ create table if not exists public.workouts (
 );
 create index if not exists workouts_user_date_idx on public.workouts(user_id, date);
 
-create table if not exists public.checkins (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  date text not null,
-  sleep smallint,
-  energy smallint,
-  hunger smallint,
-  mood smallint,
-  note text,
-  created_at bigint not null,
-  primary key (user_id, date)
-);
-
 alter table public.workouts enable row level security;
-alter table public.checkins enable row level security;
 
 drop policy if exists "Users manage their own workouts" on public.workouts;
 create policy "Users manage their own workouts" on public.workouts
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-drop policy if exists "Users manage their own check-ins" on public.checkins;
-create policy "Users manage their own check-ins" on public.checkins
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
 -- Lets a signed-in user delete their own account (Settings → Account).

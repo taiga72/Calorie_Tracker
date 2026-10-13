@@ -1,4 +1,4 @@
-import type { CheckIn, MealEntry, Settings, WeightEntry, Workout } from '@/types';
+import type { MealEntry, Settings, WeightEntry, Workout } from '@/types';
 import { addDays, fromKey, startOfWeek, toKey } from '@/lib/dateUtils';
 import { dayStatus } from '@/lib/goal';
 import { calorieGoalOn, proteinTarget } from '@/lib/goalPlan';
@@ -6,10 +6,10 @@ import { fiberTarget } from '@/lib/macros';
 
 /**
  * Streaks for good habits beyond "logged something": staying within the
- * goal, hitting protein and fiber, checking in, and active weeks.
+ * goal, hitting protein and fiber, and active weeks.
  */
 
-export type HabitId = 'logging' | 'withinGoal' | 'protein' | 'fiber' | 'checkin' | 'active';
+export type HabitId = 'logging' | 'withinGoal' | 'protein' | 'fiber' | 'active';
 
 export interface HabitStreak {
   id: HabitId;
@@ -32,7 +32,6 @@ const RECENT_WEEKS = 8;
 interface Inputs {
   meals: MealEntry[];
   workouts: Workout[];
-  checkins: CheckIn[];
   weights: WeightEntry[];
   settings: Settings;
   today: Date;
@@ -65,7 +64,7 @@ function dayKeysBetween(first: string, last: string): string[] {
   return out;
 }
 
-export function habitStreaks({ meals, workouts, checkins, weights, settings, today }: Inputs): HabitStreak[] {
+export function habitStreaks({ meals, workouts, weights, settings, today }: Inputs): HabitStreak[] {
   const todayKey = toKey(today);
   const totals = new Map<string, { calories: number; protein: number; fiber: number }>();
   for (const m of meals) {
@@ -75,8 +74,7 @@ export function habitStreaks({ meals, workouts, checkins, weights, settings, tod
     t.fiber += m.fiber || 0;
     totals.set(m.date, t);
   }
-  const checked = new Set(checkins.filter((c) => c.sleep || c.energy || c.hunger || c.mood).map((c) => c.date));
-  const firstDates = [...totals.keys(), ...checked, ...workouts.map((w) => w.date)].filter((k) => k <= todayKey).sort();
+  const firstDates = [...totals.keys(), ...workouts.map((w) => w.date)].filter((k) => k <= todayKey).sort();
   const first = firstDates[0] ?? todayKey;
   const days = dayKeysBetween(first < toKey(addDays(today, -(RECENT_DAYS - 1))) ? first : toKey(addDays(today, -(RECENT_DAYS - 1))), todayKey);
 
@@ -106,7 +104,6 @@ export function habitStreaks({ meals, workouts, checkins, weights, settings, tod
       const t = totals.get(k);
       return !!t && t.fiber >= fiberTarget(calorieGoalOn(settings, k)) * 0.95;
     }),
-    dayHabit('checkin', 'Check-in', 'Daily check-in done', (k) => checked.has(k)),
   );
 
   // Active weeks (Sunday–Saturday, like the calendar).

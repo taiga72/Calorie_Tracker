@@ -1,4 +1,4 @@
-import type { CheckIn, MealEntry, Settings, WeightEntry, Workout } from '@/types';
+import type { MealEntry, Settings, WeightEntry, Workout } from '@/types';
 import { addDays, fromKey, toKey } from '@/lib/dateUtils';
 import { isOverGoal, isPartialDay } from '@/lib/goal';
 import { calorieGoalOn, plannedGoalOn, weeklyTargetOn } from '@/lib/goalPlan';
@@ -13,7 +13,6 @@ interface Inputs {
   meals: MealEntry[];
   weights: WeightEntry[];
   workouts: Workout[];
-  checkins: CheckIn[];
   settings: Settings;
   today: Date;
 }
@@ -85,7 +84,7 @@ export function weekendOffsets(shift: { plus: number; minus: number }): number[]
 // ---- Plateau
 
 export interface PlateauCause {
-  id: 'logging' | 'over' | 'weekends' | 'maintenance' | 'training' | 'sleep' | 'water';
+  id: 'logging' | 'over' | 'weekends' | 'maintenance' | 'training' | 'water';
   title: string;
   text: string;
 }
@@ -104,7 +103,7 @@ export const PLATEAU_MIN_DAYS = 21;
 // Less than ~100 g a week either way is "not moving".
 const FLAT_KG_PER_WEEK = 0.1;
 
-export function plateau({ meals, weights, workouts, checkins, settings, today }: Inputs): Plateau | null {
+export function plateau({ meals, weights, workouts, settings, today }: Inputs): Plateau | null {
   const todayKey = toKey(today);
   const target = weeklyTargetOn(settings, todayKey);
   if (!target) return null; // maintaining: a flat weight is the point
@@ -176,14 +175,6 @@ export function plateau({ meals, weights, workouts, checkins, settings, today }:
     });
   }
 
-  const sleep = checkins.filter((c) => c.date >= recentStart && c.sleep).map((c) => c.sleep!);
-  if (sleep.length >= 5 && avg(sleep) < 2.8) {
-    causes.push({
-      id: 'sleep',
-      title: 'Poor sleep',
-      text: 'Your check-ins show mostly poor sleep. Short nights raise hunger and cravings and make the scale noisier.',
-    });
-  }
 
   causes.push({
     id: 'water',

@@ -32,11 +32,11 @@ function hideFor(id: string, days: number): void {
  * when the logs show one. Renders nothing otherwise.
  */
 export function InsightsCard({ compact = false }: { compact?: boolean }) {
-  const { meals, weights, workouts, checkins, settings, updatePrefs } = useStore();
+  const { meals, weights, workouts, settings, updatePrefs } = useStore();
   const { requestUndo } = useUndoToast();
   const today = logicalNow();
   const todayKey = toKey(today);
-  const stall = useMemo(() => plateau({ meals, weights, workouts, checkins, settings, today: logicalNow() }), [meals, weights, workouts, checkins, settings]);
+  const stall = useMemo(() => plateau({ meals, weights, workouts, settings, today: logicalNow() }), [meals, weights, workouts, settings]);
   const weekends = useMemo(() => weekendPattern({ meals, settings, today: logicalNow() }), [meals, settings]);
   const [hidden, setHidden] = useState(() => ({
     plateau: (hiddenUntil('plateau') ?? '') > todayKey,

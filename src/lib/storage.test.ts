@@ -521,8 +521,7 @@ describe('clearAll', () => {
     expect(supabase.from).toHaveBeenCalledWith('profiles');
     expect(supabase.from).toHaveBeenCalledWith('pinned_meals');
     expect(supabase.from).toHaveBeenCalledWith('workouts');
-    expect(supabase.from).toHaveBeenCalledWith('checkins');
-    expect(from.delete).toHaveBeenCalledTimes(7);
+    expect(from.delete).toHaveBeenCalledTimes(6);
     expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
   });
 
