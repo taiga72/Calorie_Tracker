@@ -7,7 +7,7 @@ import { exerciseCreditByDay, setExerciseCredit } from '@/lib/goalPlan';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
-  applyPending, describeOp, isOnline, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
+  applyPending, describeOp, enqueue, isOnline, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
   type OutboxOp, type QueuedOp, type Snapshot,
 } from '@/lib/offline';
 import { useAuth } from '@/auth';
@@ -315,7 +315,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const commit = useCallback((op: OutboxOp) => {
     if (!userId) return;
-    persistQueue(userId, [...queue.current, { qid: makeId(), op, attempts: 0 }]);
+    persistQueue(userId, enqueue(queue.current, { qid: makeId(), op, attempts: 0 }));
     void flush(userId);
   }, [userId, flush, persistQueue]);
 

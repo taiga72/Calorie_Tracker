@@ -20,6 +20,30 @@ export type OutboxOp =
   | { kind: 'deleteWorkout'; id: string }
   | { kind: 'upsertCheckIn'; checkin: CheckIn };
 
+/**
+ * Writes that fully replace the same row: a newer one makes an older queued
+ * one pointless (e.g. four taps on today's check-in are one save, not four).
+ * Null for writes that must all be sent (inserts, patches, deletes).
+ */
+export function supersedeKey(op: OutboxOp): string | null {
+  switch (op.kind) {
+    case 'upsertCheckIn': return `checkin:${op.checkin.date}`;
+    case 'upsertWeight': return `weight:${op.entry.date}`;
+    case 'upsertWorkout': return `workout:${op.workout.id}`;
+    case 'upsertPinned': return `pin:${op.pin.id}`;
+    case 'setSettings': return 'settings';
+    case 'setProfile': return 'profile';
+    default: return null;
+  }
+}
+
+/** The queue with `op` added, dropping any queued write it replaces. */
+export function enqueue(queue: QueuedOp[], item: QueuedOp): QueuedOp[] {
+  const key = supersedeKey(item.op);
+  const kept = key ? queue.filter((q) => supersedeKey(q.op) !== key) : queue;
+  return [...kept, item];
+}
+
 export interface QueuedOp {
   qid: string;
   op: OutboxOp;
