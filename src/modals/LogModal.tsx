@@ -14,12 +14,13 @@ import { MealPhoto } from '@/components/MealPhoto';
 import { ItemReestimate } from '@/components/ItemReestimate';
 import { PinMealButton } from '@/components/PinMealButton';
 import type { MealType, MealEntry, FoodItem, PinnedMeal } from '@/types';
-import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic } from 'lucide-react';
+import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Calendar, Plus, Trash2, ChevronDown, Pin, Pencil, Mic, Dumbbell } from 'lucide-react';
 import { haptic } from '@/lib/appearance';
 import { lastLogMethod, mealTypeForTime, rememberLogMethod, type LogMethod } from '@/lib/logPrefs';
 import { friendlyAiError } from '@/lib/aiErrors';
+import { WorkoutForm } from '@/components/WorkoutForm';
 
-type Mode = 'food' | 'weight';
+type Mode = 'food' | 'weight' | 'exercise';
 type FoodInput = 'text' | 'image' | 'both';
 
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
@@ -384,6 +385,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       {!isEdit && !isWeightEdit && !editingPin && (
         <div className="flex gap-2 mb-4">
           <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
+          <ModeBtn active={mode === 'exercise'} onClick={() => { setMode('exercise'); setError(null); }} Icon={Dumbbell} label="Exercise" />
           <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
         </div>
       )}
@@ -845,6 +847,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </button>
           </div>
         )
+      ) : mode === 'exercise' ? (
+        <WorkoutForm date={targetDate ?? todayKey()} onDone={close} />
       ) : (
         /* ---- Weight mode ---- */
         <div>

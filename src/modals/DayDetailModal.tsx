@@ -6,8 +6,11 @@ import { fmtWeight } from '@/lib/units';
 import { Modal } from '@/components/Modal';
 import { LogModal } from '@/modals/LogModal';
 import { MealList } from '@/components/MealList';
+import { WorkoutList, WorkoutSheet } from '@/components/ActivityCard';
+import { workoutsOn } from '@/lib/workouts';
+import { checkInSummary } from '@/components/CheckInCard';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { MealEntry } from '@/types';
+import type { MealEntry, Workout } from '@/types';
 
 const TURN_OUT_MS = 170;
 
@@ -27,10 +30,12 @@ interface DayDetailModalProps {
 }
 
 export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalProps) {
-  const { getDay, settings, loadPhotos } = useStore();
+  const { getDay, settings, loadPhotos, workouts, checkins } = useStore();
   const [logOpen, setLogOpen] = useState(false);
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [workoutOpen, setWorkoutOpen] = useState(false);
+  const [editingWorkout, setEditingWorkout] = useState<Workout | null>(null);
   const open = dateKey !== null;
   // Turning to another day, like a page: the day follows the finger, slides
   // fully off on release, and the next one slides in from the other edge.
@@ -62,6 +67,8 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
         ? { transform: `translateX(${dragX}px)`, opacity: 1 - Math.min(Math.abs(dragX) / 500, 0.4), transition: 'none' }
         : { transition: 'transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s' };
   const day = dateKey ? getDay(dateKey) : null;
+  const dayWorkouts = dateKey ? workoutsOn(workouts, dateKey) : [];
+  const dayCheckIn = dateKey ? checkins.find((c) => c.date === dateKey) : undefined;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
   useEffect(() => {
@@ -167,6 +174,34 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
             ) : (
               <MealList meals={day.meals} onEdit={setEditing} />
             )}
+
+            {/* Exercise */}
+            <div className="flex items-center justify-between mt-5 mb-1">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                Exercise ({dayWorkouts.length})
+              </h3>
+              <button
+                onClick={() => setWorkoutOpen(true)}
+                className="flex items-center gap-1 text-accent-600 text-xs font-semibold px-2 py-1.5 -mr-2 rounded-full"
+              >
+                <Plus size={14} /> Log exercise
+              </button>
+            </div>
+            {dayWorkouts.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-3">No exercise logged this day.</p>
+            ) : (
+              <div className="card card-sm px-4">
+                <WorkoutList workouts={dayWorkouts} onEdit={setEditingWorkout} />
+              </div>
+            )}
+
+            {checkInSummary(dayCheckIn) && (
+              <>
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mt-5 mb-1">Check-in</h3>
+                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">{checkInSummary(dayCheckIn)}</p>
+                {dayCheckIn?.note && <p className="text-11 text-gray-400 mt-0.5 italic">“{dayCheckIn.note}”</p>}
+              </>
+            )}
           </div>
           </div>
         )}
@@ -176,6 +211,9 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
         <LogModal open={logOpen} onClose={() => setLogOpen(false)} targetDate={dateKey} />
       )}
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
+      {dateKey && (
+        <WorkoutSheet open={workoutOpen || editingWorkout !== null} onClose={() => { setWorkoutOpen(false); setEditingWorkout(null); }} date={dateKey} workout={editingWorkout} />
+      )}
       {dateKey && (
         <LogModal open={weightOpen} onClose={() => setWeightOpen(false)} weightDate={dateKey} initialMode="weight" />
       )}

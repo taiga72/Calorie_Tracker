@@ -15,6 +15,7 @@ import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
 import { LogModal } from '@/modals/LogModal';
 import { AICoachModal } from '@/components/AICoachModal';
+import { OPEN_COACH_EVENT } from '@/lib/coachLauncher';
 import { StreakModal } from '@/modals/StreakModal';
 import { HomeTab } from '@/tabs/HomeTab';
 import { StatsTab } from '@/tabs/StatsTab';
@@ -88,6 +89,15 @@ function AppInner() {
   const [logOpen, setLogOpen] = useState(false);
   const [logMode, setLogMode] = useState<'food' | 'weight'>('food');
   const [coachOpen, setCoachOpen] = useState(false);
+  const [coachQuestion, setCoachQuestion] = useState<string | null>(null);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      setCoachQuestion((e as CustomEvent<string | undefined>).detail ?? null);
+      setCoachOpen(true);
+    };
+    window.addEventListener(OPEN_COACH_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_COACH_EVENT, onOpen);
+  }, []);
   const [streakOpen, setStreakOpen] = useState(false);
   const [streakCount, setStreakCount] = useState(0);
   const { meals, weights, settings, updatePrefs, profile, loading, syncError, dismissSyncError, refresh, refreshing, online, pendingCount } = useStore();
@@ -193,7 +203,7 @@ function AppInner() {
       />
       <BottomNav active={tab} onChange={(t) => { if (coachHint && t !== tab) dismissCoachHint(); setTab(t); }} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
-      <AICoachModal open={coachOpen} onClose={() => setCoachOpen(false)} />
+      <AICoachModal open={coachOpen} onClose={() => { setCoachOpen(false); setCoachQuestion(null); }} question={coachQuestion} />
       <AppearanceSync />
       <WelcomeSheet
         open={welcomeOpen && !wizardOpen && !logOpen}

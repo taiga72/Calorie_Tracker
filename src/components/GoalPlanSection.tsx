@@ -164,6 +164,24 @@ export function GoalPlanSection() {
         </div>
       )}
 
+      {/* Exercise calories */}
+      <div className="mt-4">
+        <Segmented<'0' | '0.5' | '1'>
+          label="Exercise calories"
+          value={String(prefs.exerciseCredit ?? 0) as '0' | '0.5' | '1'}
+          onChange={(v) => updatePrefs({ exerciseCredit: Number(v) })}
+          options={[
+            { value: '0', label: "Don't add" },
+            { value: '0.5', label: 'Add half' },
+            { value: '1', label: 'Add all' },
+          ]}
+        />
+        <p className="text-11 text-gray-400 mt-1.5">
+          Adds calories burned in logged workouts to that day's goal. Your daily burn already counts your usual activity, and
+          burn estimates run high — so "half" is the safer choice if you add any.
+        </p>
+      </div>
+
       {/* Day boundary */}
       <div className="mt-4">
         <p className="text-11 font-semibold text-gray-500 dark:text-gray-400 mb-2">New day starts at</p>

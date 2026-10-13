@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { toKey } from '@/lib/dateUtils';
-import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal, Workout, CheckIn } from '@/types';
 import type { BackupPayload } from '@/lib/storage';
 
 const TEST_USER_ID = 'test-user';
@@ -35,12 +35,14 @@ interface FakeDb {
   settings: Settings;
   profile: Profile;
   pinned: PinnedMeal[];
+  workouts: Workout[] | null;
+  checkins: CheckIn[] | null;
 }
 
 let db: FakeDb;
 
 function resetDb() {
-  db = { meals: [], weights: [], settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, pinned: [] };
+  db = { meals: [], weights: [], settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, pinned: [], workouts: [], checkins: [] };
 }
 resetDb();
 
@@ -95,6 +97,20 @@ vi.mock('@/lib/storage', () => ({
     }),
     deletePinnedMeal: vi.fn(async (_userId: string, id: string) => {
       db.pinned = db.pinned.filter((p) => p.id !== id);
+      return true;
+    }),
+    getWorkouts: vi.fn(async () => db.workouts),
+    upsertWorkout: vi.fn(async (_userId: string, w: Workout) => {
+      if (db.workouts) db.workouts = [w, ...db.workouts.filter((x) => x.id !== w.id)];
+      return true;
+    }),
+    deleteWorkout: vi.fn(async (_userId: string, id: string) => {
+      if (db.workouts) db.workouts = db.workouts.filter((x) => x.id !== id);
+      return true;
+    }),
+    getCheckIns: vi.fn(async () => db.checkins),
+    upsertCheckIn: vi.fn(async (_userId: string, c: CheckIn) => {
+      if (db.checkins) db.checkins = [...db.checkins.filter((x) => x.date !== c.date), c];
       return true;
     }),
     importBackup: vi.fn(async (_userId: string, payload: BackupPayload) => {
@@ -757,5 +773,56 @@ describe('backup export with stored photos', () => {
     let exported!: Awaited<ReturnType<typeof result.current.prepareExport>>;
     await act(async () => { exported = await result.current.prepareExport(); });
     expect(exported.missingPhotos).toBe(true);
+  });
+});
+
+describe('workouts and check-ins', () => {
+  const run = { date: '2026-10-10', kind: 'cardio' as const, name: 'Run', minutes: 30, calories: 300 };
+
+  it('adds, edits, deletes and restores a workout, syncing each change', async () => {
+    const { result } = await renderStore();
+    let id: string | undefined;
+    act(() => { id = result.current.addWorkout(run); });
+    expect(result.current.workouts).toHaveLength(1);
+    await waitFor(() => expect(db.workouts).toHaveLength(1));
+
+    act(() => result.current.updateWorkout(id!, { minutes: 45 }));
+    await waitFor(() => expect(db.workouts?.[0].minutes).toBe(45));
+
+    const saved = result.current.workouts[0];
+    act(() => result.current.deleteWorkout(id!));
+    expect(result.current.workouts).toHaveLength(0);
+    await waitFor(() => expect(db.workouts).toHaveLength(0));
+
+    act(() => result.current.restoreWorkout(saved));
+    await waitFor(() => expect(db.workouts?.[0]).toEqual(saved));
+  });
+
+  it('merges check-in answers for the same day', async () => {
+    const { result } = await renderStore();
+    act(() => result.current.saveCheckIn('2026-10-10', { sleep: 4 }));
+    act(() => result.current.saveCheckIn('2026-10-10', { mood: 2 }));
+    expect(result.current.checkins).toHaveLength(1);
+    expect(result.current.checkins[0]).toMatchObject({ date: '2026-10-10', sleep: 4, mood: 2 });
+    await waitFor(() => expect(db.checkins?.[0]).toMatchObject({ sleep: 4, mood: 2 }));
+  });
+
+  it('keeps them on this device when the tables do not exist yet', async () => {
+    db.workouts = null;
+    db.checkins = null;
+    const { result } = await renderStore();
+    expect(result.current.activitySyncEnabled).toBe(false);
+    act(() => { result.current.addWorkout(run); });
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.workouts).toHaveLength(1);
+  });
+
+  it('includes workouts and check-ins in the backup', async () => {
+    db.workouts = [{ ...run, id: 'w1', createdAt: 1 }];
+    db.checkins = [{ date: '2026-10-10', sleep: 3, createdAt: 1 }];
+    const { result } = await renderStore();
+    const backup = result.current.exportBackup();
+    expect(backup.workouts).toHaveLength(1);
+    expect(backup.checkins).toHaveLength(1);
   });
 });

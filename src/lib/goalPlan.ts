@@ -39,8 +39,35 @@ export function weekdayOffset(settings: Settings, dateKey: string): number {
   return Math.round(offsets[fromKey(dateKey).getDay()] || 0);
 }
 
-export function calorieGoalOn(settings: Settings, dateKey: string): number {
+/** The goal from the plan alone (phase + weekday), before any exercise credit. */
+export function plannedGoalOn(settings: Settings, dateKey: string): number {
   return Math.max(MIN_DAY_GOAL, Math.round(baseGoalOn(settings, dateKey) + weekdayOffset(settings, dateKey)));
+}
+
+// kcal earned back by exercise, by day (Settings → exercise calories). Kept
+// here, like the day-start hour, so every place that judges a day against
+// its goal includes it; the store sets it from the workouts as they change.
+let exerciseCredit: ReadonlyMap<string, number> = new Map();
+
+export function setExerciseCredit(byDay: ReadonlyMap<string, number>): void {
+  exerciseCredit = byDay;
+}
+
+export function exerciseCreditOn(dateKey: string): number {
+  return exerciseCredit.get(dateKey) ?? 0;
+}
+
+/** kcal to add per day: the chosen share of each day's logged exercise. */
+export function exerciseCreditByDay(workouts: { date: string; calories: number }[], share: number | undefined): Map<string, number> {
+  const out = new Map<string, number>();
+  if (!share || share <= 0) return out;
+  for (const w of workouts) out.set(w.date, (out.get(w.date) ?? 0) + w.calories);
+  for (const [k, v] of out) out.set(k, Math.round(v * Math.min(share, 1)));
+  return out;
+}
+
+export function calorieGoalOn(settings: Settings, dateKey: string): number {
+  return plannedGoalOn(settings, dateKey) + exerciseCreditOn(dateKey);
 }
 
 export function weeklyTargetOn(settings: Settings, dateKey: string): number {

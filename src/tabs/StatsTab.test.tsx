@@ -8,7 +8,7 @@ const emptyDay = (date: string): DaySummary => ({ date, meals: [], weight: undef
 
 let days: Record<string, DaySummary> = {};
 vi.mock('@/store', () => ({
-  useStore: () => ({ getDay: (k: string) => days[k] ?? emptyDay(k), weights: [], meals: [], settings, refresh: vi.fn(), refreshing: false }),
+  useStore: () => ({ getDay: (k: string) => days[k] ?? emptyDay(k), weights: [], meals: [], workouts: [], checkins: [], settings, updatePrefs: vi.fn(), refresh: vi.fn(), refreshing: false }),
 }));
 
 function loggedDay(daysAgo: number, calories: number, fiber = 0): DaySummary {
@@ -23,6 +23,9 @@ vi.mock('@/components/GoalInsights', () => ({
   GoalPlanCard: () => <p>Goal plan card</p>,
 }));
 vi.mock('@/components/Milestones', () => ({ MilestonesCard: () => <p>Milestones card</p> }));
+vi.mock('@/components/InsightsCard', () => ({ InsightsCard: () => <p>Insights card</p> }));
+vi.mock('@/components/HabitsCard', () => ({ HabitsCard: () => <p>Habits card</p> }));
+vi.mock('@/components/TrainingPage', () => ({ TrainingPage: () => <p>Training page</p> }));
 
 const { StatsTab } = await import('@/tabs/StatsTab');
 
@@ -79,6 +82,8 @@ describe('StatsTab pages', () => {
     expect(screen.getByText('Calorie target card')).toBeInTheDocument();
     expect(screen.getByText('Milestones card')).toBeInTheDocument();
     expect(screen.getByText('Goal plan card')).toBeInTheDocument();
+    expect(screen.getByText('Insights card')).toBeInTheDocument();
+    expect(screen.getByText('Habits card')).toBeInTheDocument();
     expect(screen.queryByText('30 Days')).not.toBeInTheDocument();
     expect(screen.queryByText('Calories trend')).not.toBeInTheDocument();
   });
@@ -87,6 +92,12 @@ describe('StatsTab pages', () => {
     render(<StatsTab />);
     swipe(screen.getByText('Calories trend'), -120);
     expect(screen.getByText('Goal forecast card')).toBeInTheDocument();
+    swipe(screen.getByText('Goal forecast card'), -120);
+    expect(screen.getByText('Training page')).toBeInTheDocument();
+    // The last page stays put.
+    swipe(screen.getByText('Training page'), -120);
+    expect(screen.getByText('Training page')).toBeInTheDocument();
+    swipe(screen.getByText('Training page'), 120);
     swipe(screen.getByText('Goal forecast card'), 120);
     expect(screen.getByText('Calories trend')).toBeInTheDocument();
   });

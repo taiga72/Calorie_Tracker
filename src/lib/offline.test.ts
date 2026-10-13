@@ -11,7 +11,7 @@ function meal(id: string, calories = 100, photo?: string): MealEntry {
   };
 }
 
-const empty: Snapshot = { meals: [], weights: [], settings, profile: { name: '' }, pinned: [] };
+const empty: Snapshot = { meals: [], weights: [], settings, profile: { name: '' }, pinned: [], workouts: [], checkins: [] };
 const q = (op: OutboxOp): QueuedOp => ({ qid: Math.random().toString(), op, attempts: 0 });
 
 beforeEach(() => localStorage.clear());

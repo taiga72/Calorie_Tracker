@@ -158,13 +158,22 @@ interface ApiError extends Error {
 }
 
 async function callWithFallback(key: string, body: unknown): Promise<ParsedMeal> {
+  return generateJson(key, body, normalizeMeal);
+}
+
+/**
+ * Sends a request that asks for JSON, trying the fallback model when the main
+ * one is busy, and hands the parsed object to `normalize` (which validates it
+ * and may throw).
+ */
+export async function generateJson<T>(key: string, body: unknown, normalize: (raw: unknown) => T): Promise<T> {
   const models = [MODEL, FALLBACK_MODEL];
   let lastErr: Error | null = null;
 
   for (const model of models) {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
-        return await callModel(key, model, body);
+        return normalize(await callModel(key, model, body));
       } catch (err) {
         if (err instanceof RateLimitError) throw err;
         lastErr = err instanceof Error ? err : new Error(String(err));
@@ -182,7 +191,7 @@ async function callWithFallback(key: string, body: unknown): Promise<ParsedMeal>
   throw lastErr ?? new Error('All Gemini model attempts failed.');
 }
 
-async function callModel(key: string, model: string, body: unknown): Promise<ParsedMeal> {
+async function callModel(key: string, model: string, body: unknown): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(endpoint(key, model), {
@@ -227,7 +236,7 @@ async function callModel(key: string, model: string, body: unknown): Promise<Par
 
   if (!textOut) throw new Error('Gemini returned an empty response.');
 
-  let parsed: ParsedMeal | undefined;
+  let parsed: unknown;
   try {
     // With responseMimeType: 'application/json' the text is normally already
     // pure JSON; only fall back to extracting a {...} substring if that fails.
@@ -249,7 +258,11 @@ async function callModel(key: string, model: string, body: unknown): Promise<Par
     }
     throw new Error("Could not parse Gemini's response as JSON.");
   }
+  return parsed;
+}
 
+function normalizeMeal(raw: unknown): ParsedMeal {
+  const parsed = raw as ParsedMeal;
   if (!parsed.items || !Array.isArray(parsed.items)) {
     throw new Error('Gemini response missing items array.');
   }
