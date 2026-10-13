@@ -7,6 +7,9 @@ import { dayIndex, fitDomain, smoothingFor, trendLine, SMOOTHING_LABEL } from '@
 import { MacroBar } from '@/components/MacroBar';
 import { GoalForecastCard, AdaptiveTargetCard, GoalPlanCard } from '@/components/GoalInsights';
 import { MilestonesCard } from '@/components/Milestones';
+import { TrainingPage } from '@/components/TrainingPage';
+import { HabitsCard } from '@/components/HabitsCard';
+import { InsightsCard } from '@/components/InsightsCard';
 import { GOALS_LAYOUT, STATS_LAYOUT, visibleCards } from '@/lib/layout';
 import type { GoalsCardId, StatsCardId } from '@/types';
 import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
@@ -17,11 +20,13 @@ import { baseGoalOn, goalFor, weeklyTargetOn } from '@/lib/goalPlan';
 import { fiberTarget } from '@/lib/macros';
 import { Flame, TrendingUp, Scale } from 'lucide-react';
 
-type Page = 'trends' | 'goals';
+type Page = 'trends' | 'goals' | 'training';
 const PAGES: { key: Page; label: string }[] = [
   { key: 'trends', label: 'Trends' },
   { key: 'goals', label: 'Goals' },
+  { key: 'training', label: 'Training' },
 ];
+const pageIndex = (p: Page) => PAGES.findIndex((x) => x.key === p);
 
 type Range = '7d' | '30d' | '3m' | '1y';
 const RANGES: { key: Range; label: string; days: number }[] = [
@@ -121,17 +126,17 @@ export function StatsTab() {
 
   const goToPage = (next: Page) => {
     if (next === page) return;
-    setSlideFrom(next === 'goals' ? 'right' : 'left');
+    setSlideFrom(pageIndex(next) > pageIndex(page) ? 'right' : 'left');
     setPage(next);
   };
   const { dragX, handlers: swipeHandlers } = useHorizontalSwipe({
-    onSwipeLeft: () => goToPage('goals'),
-    onSwipeRight: () => goToPage('trends'),
+    onSwipeLeft: () => { const n = PAGES[pageIndex(page) + 1]; if (n) goToPage(n.key); },
+    onSwipeRight: () => { const p = PAGES[pageIndex(page) - 1]; if (p) goToPage(p.key); },
     // Dragging across a chart reads its values instead.
     ignoreSelector: '[data-chart]',
   });
   // A little resistance at either end, like the calendar.
-  const edgeDrag = (page === 'trends' && dragX > 0) || (page === 'goals' && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
+  const edgeDrag = (pageIndex(page) === 0 && dragX > 0) || (pageIndex(page) === PAGES.length - 1 && dragX < 0) ? dragX * 0.15 : dragX * 0.4;
 
   // Cards in the order and selection from Settings → Layout. The range
   // picker sits just above the first chart that uses it.
@@ -292,6 +297,8 @@ export function StatsTab() {
   const trendCards = visibleCards(settings.prefs?.statsCards, STATS_LAYOUT);
   const firstRanged = trendCards.find((id) => id !== 'recap');
   const goalSections: Record<GoalsCardId, ReactNode> = {
+    insights: <InsightsCard />,
+    habits: <HabitsCard />,
     phases: <GoalPlanCard />,
     forecast: <GoalForecastCard />,
     target: <AdaptiveTargetCard />,
@@ -302,15 +309,15 @@ export function StatsTab() {
   return (
     <PullToRefresh onRefresh={refresh} refreshing={refreshing}>
     <div className="px-5 pt-6 pb-4">
-      <p className="text-sm text-gray-400 font-medium">{page === 'trends' ? 'Your trends' : 'Where you\'re headed'}</p>
+      <p className="text-sm text-gray-400 font-medium">{page === 'trends' ? 'Your trends' : page === 'goals' ? 'Where you\'re headed' : 'How you move'}</p>
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Statistics</h1>
 
       {/* Page switcher (also swipeable) */}
-      <div role="tablist" aria-label="Statistics pages" className="relative grid grid-cols-2 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+      <div role="tablist" aria-label="Statistics pages" className="relative grid grid-cols-3 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
         <span
           aria-hidden
-          className="absolute top-1 bottom-1 left-1 w-[calc(50%-4px)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
-          style={{ transform: page === 'goals' ? 'translateX(100%)' : undefined }}
+          className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/3)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
+          style={{ transform: pageIndex(page) ? `translateX(${pageIndex(page) * 100}%)` : undefined }}
         />
         {PAGES.map((p) => (
           <button
@@ -334,9 +341,11 @@ export function StatsTab() {
         key={page}
         className={`motion-reduce:animate-none ${slideFrom === 'right' ? 'animate-[calSlideFromRight_.22s_ease-out]' : slideFrom === 'left' ? 'animate-[calSlideFromLeft_.22s_ease-out]' : ''}`}
       >
-      {page === 'goals' ? (
+      {page === 'training' ? (
+        <TrainingPage />
+      ) : page === 'goals' ? (
         <div className="space-y-4 compact:space-y-3 mt-5">
-          {goalCards.map((id) => <div key={id}>{goalSections[id]}</div>)}
+          {goalCards.map((id) => <div key={id} className="empty:hidden">{goalSections[id]}</div>)}
         </div>
       ) : (
         <div className="space-y-4 compact:space-y-3 mt-5">

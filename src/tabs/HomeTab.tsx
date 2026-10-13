@@ -12,12 +12,15 @@ import { WeeklyRecapCard } from '@/components/WeeklyRecapCard';
 import { recapPeriod, showRecapOnHome } from '@/lib/weeklyRecap';
 import { isOverGoal, isPartialDay } from '@/lib/goal';
 import { fiberTarget, macroTargets } from '@/lib/macros';
-import { calorieGoalOn, proteinTarget } from '@/lib/goalPlan';
+import { calorieGoalOn, exerciseCreditOn, proteinTarget } from '@/lib/goalPlan';
 import { calculateStreak } from '@/lib/streakUtils';
 import { useAppearance } from '@/lib/theme';
 import { seasonalTouch } from '@/lib/appearance';
 import { Scale, Flame } from 'lucide-react';
 import { QuickPinsCard } from '@/components/QuickPins';
+import { ActivityCard } from '@/components/ActivityCard';
+import { CheckInCard } from '@/components/CheckInCard';
+import { InsightsCard } from '@/components/InsightsCard';
 import { MilestonesCard } from '@/components/Milestones';
 import { GoalForecastCard } from '@/components/GoalInsights';
 import { HOME_LAYOUT, homeSummaryPrefs, visibleCards } from '@/lib/layout';
@@ -102,6 +105,12 @@ export function HomeTab() {
             <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">{Math.round(remaining).toLocaleString()}<span className="text-9 font-normal opacity-70"> kcal</span></span>
           </div>
         )}
+        {exerciseCreditOn(todayKey) > 0 && (
+          <div className="flex justify-between items-baseline gap-2">
+            <span className="text-gray-400">Exercise</span>
+            <span className="font-semibold text-sky-600 whitespace-nowrap">+{exerciseCreditOn(todayKey)}<span className="text-9 font-normal opacity-70"> kcal</span></span>
+          </div>
+        )}
         <div className="flex justify-between items-baseline gap-2">
           <span className="text-gray-400">7-day avg</span>
           <span className={`font-semibold whitespace-nowrap ${weekAvg !== null && isOverGoal(weekAvg, goal) ? 'text-rose-600' : 'text-orange-500'}`}>
@@ -172,6 +181,9 @@ export function HomeTab() {
       </div>
     ),
     brief: recapVisible ? <WeeklyRecapCard onDismiss={() => setRecapVisible(false)} /> : null,
+    insights: <InsightsCard compact />,
+    checkin: <CheckInCard date={todayKey} />,
+    activity: <ActivityCard date={todayKey} />,
     quickPins: <QuickPinsCard />,
     forecast: <GoalForecastCard />,
     milestones: <MilestonesCard />,
@@ -222,7 +234,7 @@ export function HomeTab() {
       </div>
 
       <div className="mt-5 compact:mt-3 space-y-4 compact:space-y-3">
-        {homeCards.map((id) => <div key={id}>{sections[id]}</div>)}
+        {homeCards.map((id) => <div key={id} className="empty:hidden">{sections[id]}</div>)}
       </div>
 
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />

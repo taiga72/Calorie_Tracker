@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { calorieGoalOn, goalVaries, phaseOn, proteinTarget, weeklyTargetOn } from '@/lib/goalPlan';
+import { afterEach, describe, expect, it } from 'vitest';
+import { calorieGoalOn, exerciseCreditByDay, goalVaries, phaseOn, plannedGoalOn, proteinTarget, setExerciseCredit, weeklyTargetOn } from '@/lib/goalPlan';
 import type { Settings } from '@/types';
 
 const base: Settings = { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: -0.4, weightUnit: 'kg', geminiApiKey: '' };
@@ -44,5 +44,29 @@ describe('goal plan', () => {
     expect(proteinTarget(s, 80)).toBe(144);
     expect(proteinTarget(s, null)).toBeNull(); // no weigh-in, no fixed target
     expect(proteinTarget(base, 80)).toBeNull();
+  });
+});
+
+describe('exercise credit', () => {
+  afterEach(() => setExerciseCredit(new Map()));
+
+  it('adds nothing when switched off', () => {
+    expect(exerciseCreditByDay([{ date: '2026-10-10', calories: 400 }], 0).size).toBe(0);
+    expect(exerciseCreditByDay([{ date: '2026-10-10', calories: 400 }], undefined).size).toBe(0);
+  });
+
+  it('adds the chosen share of each day\'s exercise to that day\'s goal', () => {
+    const credit = exerciseCreditByDay([
+      { date: '2026-10-10', calories: 300 },
+      { date: '2026-10-10', calories: 101 },
+      { date: '2026-10-11', calories: 200 },
+    ], 0.5);
+    expect(credit.get('2026-10-10')).toBe(201);
+    expect(credit.get('2026-10-11')).toBe(100);
+    setExerciseCredit(credit);
+    const s = { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: -0.5, weightUnit: 'kg' as const, geminiApiKey: '' };
+    expect(calorieGoalOn(s, '2026-10-10')).toBe(2201);
+    expect(plannedGoalOn(s, '2026-10-10')).toBe(2000);
+    expect(calorieGoalOn(s, '2026-10-12')).toBe(2000);
   });
 });

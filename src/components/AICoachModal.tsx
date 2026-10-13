@@ -21,8 +21,9 @@ const GREETING: CoachMessage = {
   text: "Hi! I'm your AI coach. I can see your goals and recent logs. Ask me anything, or tap a suggestion below.",
 };
 
-export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { meals, weights, settings } = useStore();
+export function AICoachModal({ open, onClose, question }: { open: boolean; onClose: () => void; question?: string | null }) {
+  const { meals, weights, settings, workouts, checkins } = useStore();
+  const coachCtx = { settings, meals, weights, workouts, checkins };
   const [memoryOpen, setMemoryOpen] = useState(false);
   const memoryCount = settings.prefs?.coachMemory?.length ?? 0;
   const userId = useAuth().user?.id;
@@ -38,9 +39,9 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
     if (open) {
       setMessages([GREETING, ...loadCoachChat(userId)]);
       setError(null);
-      setInput('');
+      setInput(question ?? '');
       setInsight(null);
-      getOrFetchInsight(settings.geminiApiKey, { settings, meals, weights }, false)
+      getOrFetchInsight(settings.geminiApiKey, coachCtx, false)
         .then(setInsight)
         .catch(() => {});
     }
@@ -74,7 +75,7 @@ export function AICoachModal({ open, onClose }: { open: boolean; onClose: () => 
       // requests small, and it starts on a question so turns alternate.
       let history = nextHistory.slice(1, -1).slice(-MAX_HISTORY_SENT);
       while (history.length > 0 && history[0].role !== 'user') history = history.slice(1);
-      const reply = await askCoach(settings.geminiApiKey, { settings, meals, weights }, history, trimmed);
+      const reply = await askCoach(settings.geminiApiKey, coachCtx, history, trimmed);
       setMessages((prev) => [...prev, { role: 'model', text: reply }]);
     } catch (err) {
       const msg = err instanceof RateLimitError

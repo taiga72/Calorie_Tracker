@@ -1,4 +1,4 @@
-import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal, Workout, CheckIn } from '@/types';
 import { isStorageRef } from '@/lib/photoStorage';
 
 /**
@@ -15,7 +15,10 @@ export type OutboxOp =
   | { kind: 'setSettings'; settings: Settings }
   | { kind: 'setProfile'; profile: Profile }
   | { kind: 'upsertPinned'; pin: PinnedMeal }
-  | { kind: 'deletePinned'; id: string };
+  | { kind: 'deletePinned'; id: string }
+  | { kind: 'upsertWorkout'; workout: Workout }
+  | { kind: 'deleteWorkout'; id: string }
+  | { kind: 'upsertCheckIn'; checkin: CheckIn };
 
 export interface QueuedOp {
   qid: string;
@@ -30,6 +33,8 @@ export interface Snapshot {
   settings: Settings;
   profile: Profile;
   pinned: PinnedMeal[];
+  workouts: Workout[];
+  checkins: CheckIn[];
 }
 
 const outboxKey = (userId: string) => `calorie_tracker_outbox_${userId}`;
@@ -62,7 +67,10 @@ export function loadSnapshot(userId: string): Snapshot | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as Partial<Snapshot>;
     if (!Array.isArray(s.meals) || !Array.isArray(s.weights) || !s.settings || !s.profile) return null;
-    return { meals: s.meals, weights: s.weights, settings: s.settings, profile: s.profile, pinned: s.pinned ?? [] };
+    return {
+      meals: s.meals, weights: s.weights, settings: s.settings, profile: s.profile,
+      pinned: s.pinned ?? [], workouts: s.workouts ?? [], checkins: s.checkins ?? [],
+    };
   } catch {
     return null;
   }
@@ -97,13 +105,14 @@ export function clearOfflineData(userId: string): void {
 }
 
 const sortWeights = (ws: WeightEntry[]) => [...ws].sort((a, b) => a.date.localeCompare(b.date));
+const sortByDate = <T extends { date: string }>(list: T[]) => [...list].sort((a, b) => a.date.localeCompare(b.date));
 
 /**
  * Re-applies writes that haven't reached the server yet on top of freshly
  * loaded server data, so a refresh never makes an offline change "disappear".
  */
 export function applyPending(snap: Snapshot, queue: QueuedOp[]): Snapshot {
-  let { meals, weights, settings, profile, pinned } = snap;
+  let { meals, weights, settings, profile, pinned, workouts, checkins } = snap;
   for (const { op } of queue) {
     switch (op.kind) {
       case 'insertMeal':
@@ -135,9 +144,18 @@ export function applyPending(snap: Snapshot, queue: QueuedOp[]): Snapshot {
       case 'deletePinned':
         pinned = pinned.filter((p) => p.id !== op.id);
         break;
+      case 'upsertWorkout':
+        workouts = [op.workout, ...workouts.filter((w) => w.id !== op.workout.id)];
+        break;
+      case 'deleteWorkout':
+        workouts = workouts.filter((w) => w.id !== op.id);
+        break;
+      case 'upsertCheckIn':
+        checkins = sortByDate([...checkins.filter((c) => c.date !== op.checkin.date), op.checkin]);
+        break;
     }
   }
-  return { meals, weights, settings, profile, pinned };
+  return { meals, weights, settings, profile, pinned, workouts, checkins };
 }
 
 export function describeOp(op: OutboxOp): string {
@@ -151,6 +169,9 @@ export function describeOp(op: OutboxOp): string {
     case 'setProfile': return 'your profile';
     case 'upsertPinned':
     case 'deletePinned': return 'your pinned meals';
+    case 'upsertWorkout': return 'your workout';
+    case 'deleteWorkout': return 'that deletion';
+    case 'upsertCheckIn': return 'your check-in';
   }
 }
 

@@ -1,4 +1,6 @@
-import type { MealEntry, Settings, WeightEntry } from '@/types';
+import type { CheckIn, MealEntry, Settings, WeightEntry, Workout } from '@/types';
+import { plateau, weekendPattern } from '@/lib/insights';
+import { groupSets } from '@/lib/workouts';
 import type { WeeklyRecap } from '@/lib/weeklyRecap';
 import { resolveApiKey, RateLimitError } from '@/lib/gemini';
 import { kgToUnit } from '@/lib/units';
@@ -20,6 +22,8 @@ export interface CoachContext {
   settings: Settings;
   meals: MealEntry[];
   weights: WeightEntry[];
+  workouts?: Workout[];
+  checkins?: CheckIn[];
 }
 
 interface ApiError extends Error {
@@ -84,13 +88,50 @@ function buildContextJson(ctx: CoachContext): string {
     suggestedMealSplit: settings.calc?.suggestedMealSplit ?? null,
   };
 
+  // Exercise and how the days felt, for patterns (sleep vs. hunger, training days).
+  const workouts = ctx.workouts ?? [];
+  const checkins = ctx.checkins ?? [];
+  const twoWeeks = rangeKeys(logicalNow(), 14)[0];
+  const recentWorkouts = workouts
+    .filter((w) => w.date >= twoWeeks)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((w) => ({
+      date: w.date,
+      type: w.kind,
+      name: w.name,
+      minutes: w.minutes,
+      caloriesBurned: w.calories,
+      ...(w.sets?.length ? {
+        lifts: groupSets(w.sets).map((g) => `${g.exercise}: ${g.sets.map((s) => `${s.reps}${s.weight ? `x${Number(kgToUnit(s.weight, settings.weightUnit).toFixed(1))}` : ''}`).join(', ')}`),
+      } : {}),
+    }));
+  const recentCheckIns = checkins
+    .filter((c) => c.date >= keys[0])
+    .map((c) => ({ date: c.date, sleep: c.sleep, energy: c.energy, hunger: c.hunger, mood: c.mood, ...(c.note ? { note: c.note } : {}) }));
+  const now = logicalNow();
+  const stall = plateau({ meals, weights, workouts, checkins, settings, today: now });
+  const weekends = weekendPattern({ meals, settings, today: now });
+  const patterns = {
+    ...(stall ? { weightPlateau: { weeks: stall.weeks, likelyCauses: stall.causes.map((c) => c.text) } } : {}),
+    ...(weekends ? { weekendEating: { weekdayAvgKcal: weekends.weekdayAvg, weekendAvgKcal: weekends.weekendAvg } } : {}),
+  };
+  const exerciseShare = settings.prefs?.exerciseCredit ?? 0;
+
   // Facts the user asked the coach to always keep in mind.
   const memory = settings.prefs?.coachMemory?.filter((m) => m.trim()) ?? [];
-  return JSON.stringify({ profile, ...(memory.length ? { userNotes: memory } : {}), recentMeals, recentWeights }, null, 2);
+  return JSON.stringify({
+    profile: { ...profile, exerciseCaloriesAddedToGoal: exerciseShare ? `${exerciseShare * 100}%` : 'no' },
+    ...(memory.length ? { userNotes: memory } : {}),
+    recentMeals,
+    recentWeights,
+    ...(recentWorkouts.length ? { recentWorkouts } : {}),
+    ...(recentCheckIns.length ? { recentCheckIns, checkInScale: '1 = poor (hunger: not hungry) to 5 = great (hunger: starving)' } : {}),
+    ...(Object.keys(patterns).length ? { patterns } : {}),
+  }, null, 2);
 }
 
 const COACH_SYSTEM_PROMPT = `You are an encouraging, knowledgeable AI nutrition and fitness coach inside a calorie-tracking app.
-The user's profile and their past 7 days of meal/weight logs are provided as a JSON context block.
+The user's profile and their past 7 days of meal/weight logs are provided as a JSON context block, with recent workouts, daily check-ins (sleep, energy, hunger, mood) and detected patterns (a weight plateau, weekend eating) when there are any.
 Give structured, warm, and actionable advice tailored to their actual data. Reference their real numbers when relevant.
 Keep answers concise (3-5 sentences) unless the user asks for detail. Use plain language, no medical diagnoses, no prescribing. If they could be doing better, frame it positively.
 Never invent stats that contradict the provided context. If data is missing, say so and give general guidance.

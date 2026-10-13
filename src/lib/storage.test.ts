@@ -520,7 +520,9 @@ describe('clearAll', () => {
     expect(supabase.from).toHaveBeenCalledWith('settings');
     expect(supabase.from).toHaveBeenCalledWith('profiles');
     expect(supabase.from).toHaveBeenCalledWith('pinned_meals');
-    expect(from.delete).toHaveBeenCalledTimes(5);
+    expect(supabase.from).toHaveBeenCalledWith('workouts');
+    expect(supabase.from).toHaveBeenCalledWith('checkins');
+    expect(from.delete).toHaveBeenCalledTimes(7);
     expect(from.node.eq).toHaveBeenCalledWith('user_id', USER_ID);
   });
 

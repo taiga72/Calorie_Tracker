@@ -68,9 +68,9 @@ export interface Settings {
 
 // ---- Personalization (Settings.prefs)
 
-export type HomeCardId = 'summary' | 'brief' | 'quickPins' | 'forecast' | 'milestones' | 'meals';
+export type HomeCardId = 'summary' | 'brief' | 'insights' | 'checkin' | 'quickPins' | 'forecast' | 'milestones' | 'activity' | 'meals';
 export type StatsCardId = 'recap' | 'calories' | 'macros' | 'weight';
-export type GoalsCardId = 'phases' | 'forecast' | 'target' | 'milestones';
+export type GoalsCardId = 'insights' | 'phases' | 'forecast' | 'target' | 'habits' | 'milestones';
 
 /** Cards in display order, and which of them are hidden. */
 export interface CardLayout<T extends string> {
@@ -117,6 +117,8 @@ export interface Prefs {
   phases?: GoalPhase[];
   /** kcal added to (or taken from) the goal per weekday, Sunday first. */
   weekdayOffsets?: number[] | null;
+  /** Share of logged exercise calories added to that day's goal: 0 (off), 0.5 or 1. */
+  exerciseCredit?: number;
   /** Protein target in g per kg of body weight, instead of fixed grams. */
   proteinPerKg?: number | null;
   milestones?: Milestone[];
@@ -155,5 +157,40 @@ export interface PinnedMeal {
   carbs: number;
   fat: number;
   fiber: number;
+  createdAt: number;
+}
+
+// ---- Training and wellbeing
+
+export type WorkoutKind = 'cardio' | 'strength' | 'sport' | 'other';
+
+/** One set of a strength exercise. Weight in kg (0 for bodyweight). */
+export interface StrengthSet {
+  exercise: string;
+  reps: number;
+  weight: number;
+}
+
+export interface Workout {
+  id: string;
+  date: string; // YYYY-MM-DD
+  kind: WorkoutKind;
+  name: string;
+  minutes: number;
+  /** Estimated kcal burned. */
+  calories: number;
+  sets?: StrengthSet[];
+  notes?: string;
+  createdAt: number;
+}
+
+/** How the day felt, each 1 (poor) – 5 (great); hunger 1 (not hungry) – 5 (starving). */
+export interface CheckIn {
+  date: string; // YYYY-MM-DD
+  sleep?: number;
+  energy?: number;
+  hunger?: number;
+  mood?: number;
+  note?: string;
   createdAt: number;
 }

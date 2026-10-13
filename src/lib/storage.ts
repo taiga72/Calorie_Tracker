@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabaseClient';
 import { deleteAllPhotos, isDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
-import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal, Prefs } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, MealType, PinnedMeal, Prefs, Workout, WorkoutKind, CheckIn } from '@/types';
 
 export const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2200,
@@ -21,6 +21,9 @@ export interface BackupPayload {
   weights: WeightEntry[];
   settings: Settings;
   profile?: Profile;
+  /** Added later; older backups don't have them. */
+  workouts?: Workout[];
+  checkins?: CheckIn[];
 }
 
 interface MealRow {
@@ -265,6 +268,80 @@ function pinnedToRow(userId: string, p: PinnedMeal) {
   };
 }
 
+interface WorkoutRow {
+  id: string;
+  date: string;
+  kind: string;
+  name: string;
+  minutes: number;
+  calories: number;
+  sets: Workout['sets'] | null;
+  notes: string | null;
+  created_at: number;
+}
+
+function rowToWorkout(row: WorkoutRow): Workout {
+  return {
+    id: row.id,
+    date: row.date,
+    kind: row.kind as WorkoutKind,
+    name: row.name ?? '',
+    minutes: Number(row.minutes) || 0,
+    calories: Number(row.calories) || 0,
+    ...(row.sets?.length ? { sets: row.sets } : {}),
+    ...(row.notes ? { notes: row.notes } : {}),
+    createdAt: row.created_at,
+  };
+}
+
+function workoutToRow(userId: string, w: Workout) {
+  return {
+    id: w.id,
+    user_id: userId,
+    date: w.date,
+    kind: w.kind,
+    name: w.name,
+    minutes: w.minutes,
+    calories: w.calories,
+    sets: w.sets?.length ? w.sets : null,
+    notes: w.notes || null,
+    created_at: w.createdAt,
+  };
+}
+
+interface CheckInRow {
+  date: string;
+  sleep: number | null;
+  energy: number | null;
+  hunger: number | null;
+  mood: number | null;
+  note: string | null;
+  created_at: number;
+}
+
+function rowToCheckIn(row: CheckInRow): CheckIn {
+  const c: CheckIn = { date: row.date, createdAt: row.created_at };
+  if (row.sleep != null) c.sleep = row.sleep;
+  if (row.energy != null) c.energy = row.energy;
+  if (row.hunger != null) c.hunger = row.hunger;
+  if (row.mood != null) c.mood = row.mood;
+  if (row.note) c.note = row.note;
+  return c;
+}
+
+function checkInToRow(userId: string, c: CheckIn) {
+  return {
+    user_id: userId,
+    date: c.date,
+    sleep: c.sleep ?? null,
+    energy: c.energy ?? null,
+    hunger: c.hunger ?? null,
+    mood: c.mood ?? null,
+    note: c.note || null,
+    created_at: c.createdAt,
+  };
+}
+
 // The pinned_meals table was added after launch. Until the updated
 // supabase/schema.sql has been run, pins stay on this device instead of
 // failing every load and save.
@@ -504,6 +581,50 @@ export const storage = {
     return !error || isMissingTable(error);
   },
 
+  /** Returns null when the workouts table hasn't been created yet. */
+  getWorkouts: async (userId: string): Promise<Workout[] | null> => {
+    const { data, error } = await withRetry(() =>
+      supabase.from('workouts').select('*').eq('user_id', userId).order('created_at', { ascending: false })
+    );
+    if (error) {
+      if (isMissingTable(error)) return null;
+      console.error('Failed to load workouts', error);
+      throw error;
+    }
+    return ((data as WorkoutRow[] | null) ?? []).map(rowToWorkout);
+  },
+
+  upsertWorkout: async (userId: string, w: Workout): Promise<boolean> => {
+    const { error } = await withRetry(() => supabase.from('workouts').upsert(workoutToRow(userId, w), { onConflict: 'id' }));
+    if (error && !isMissingTable(error)) console.error('Failed to save workout', error);
+    return !error || isMissingTable(error);
+  },
+
+  deleteWorkout: async (userId: string, id: string): Promise<boolean> => {
+    const { error } = await withRetry(() => supabase.from('workouts').delete().eq('user_id', userId).eq('id', id));
+    if (error && !isMissingTable(error)) console.error('Failed to delete workout', error);
+    return !error || isMissingTable(error);
+  },
+
+  /** Returns null when the checkins table hasn't been created yet. */
+  getCheckIns: async (userId: string): Promise<CheckIn[] | null> => {
+    const { data, error } = await withRetry(() =>
+      supabase.from('checkins').select('*').eq('user_id', userId).order('date', { ascending: true })
+    );
+    if (error) {
+      if (isMissingTable(error)) return null;
+      console.error('Failed to load check-ins', error);
+      throw error;
+    }
+    return ((data as CheckInRow[] | null) ?? []).map(rowToCheckIn);
+  },
+
+  upsertCheckIn: async (userId: string, c: CheckIn): Promise<boolean> => {
+    const { error } = await withRetry(() => supabase.from('checkins').upsert(checkInToRow(userId, c), { onConflict: 'user_id,date' }));
+    if (error && !isMissingTable(error)) console.error('Failed to save check-in', error);
+    return !error || isMissingTable(error);
+  },
+
   importBackup: async (userId: string, payload: BackupPayload): Promise<boolean> => {
     // Replace all of this user's rows with the backup's contents.
     let ok = true;
@@ -527,6 +648,23 @@ export const storage = {
       for (const batch of batchRowsBySize(rows, MAX_IMPORT_BATCH_BYTES)) {
         const { error } = await withRetry(() => supabase.from('weights').insert(batch));
         if (error) { console.error('Failed to import weights', error); ok = false; }
+      }
+    }
+    // Backups made before workouts and check-ins existed leave them as they are.
+    if (payload.workouts) {
+      const del = await withRetry(() => supabase.from('workouts').delete().eq('user_id', userId));
+      if (del.error && !isMissingTable(del.error)) { console.error('Failed to clear workouts before import', del.error); ok = false; }
+      if (!del.error && payload.workouts.length) {
+        const { error } = await withRetry(() => supabase.from('workouts').insert(payload.workouts!.map((w) => workoutToRow(userId, w))));
+        if (error && !isMissingTable(error)) { console.error('Failed to import workouts', error); ok = false; }
+      }
+    }
+    if (payload.checkins) {
+      const del = await withRetry(() => supabase.from('checkins').delete().eq('user_id', userId));
+      if (del.error && !isMissingTable(del.error)) { console.error('Failed to clear check-ins before import', del.error); ok = false; }
+      if (!del.error && payload.checkins.length) {
+        const { error } = await withRetry(() => supabase.from('checkins').insert(payload.checkins!.map((c) => checkInToRow(userId, c))));
+        if (error && !isMissingTable(error)) { console.error('Failed to import check-ins', error); ok = false; }
       }
     }
     const s = await upsertSettings(userId, { ...DEFAULT_SETTINGS, ...payload.settings });
@@ -553,6 +691,10 @@ export const storage = {
     if (r4.error) { console.error('Failed to clear profile', r4.error); ok = false; }
     const r5 = await withRetry(() => supabase.from('pinned_meals').delete().eq('user_id', userId));
     if (r5.error && !isMissingTable(r5.error)) { console.error('Failed to clear pinned meals', r5.error); ok = false; }
+    const r6 = await withRetry(() => supabase.from('workouts').delete().eq('user_id', userId));
+    if (r6.error && !isMissingTable(r6.error)) { console.error('Failed to clear workouts', r6.error); ok = false; }
+    const r7 = await withRetry(() => supabase.from('checkins').delete().eq('user_id', userId));
+    if (r7.error && !isMissingTable(r7.error)) { console.error('Failed to clear check-ins', r7.error); ok = false; }
     if (!(await deleteAllPhotos(userId))) ok = false;
     return ok;
   },

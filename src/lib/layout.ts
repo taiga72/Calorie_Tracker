@@ -13,14 +13,17 @@ export interface LayoutDef<T extends string> {
 }
 
 export const HOME_LAYOUT: LayoutDef<HomeCardId> = {
-  defaults: ['summary', 'brief', 'quickPins', 'forecast', 'milestones', 'meals'],
+  defaults: ['summary', 'brief', 'insights', 'checkin', 'quickPins', 'forecast', 'milestones', 'activity', 'meals'],
   hiddenByDefault: ['quickPins', 'forecast', 'milestones'],
   labels: {
     summary: "Today's summary",
     brief: 'End-of-week brief',
+    insights: 'Plateau & weekend insights',
+    checkin: 'Daily check-in',
     quickPins: 'Quick add: pinned meals',
     forecast: 'Goal forecast',
     milestones: 'Milestones',
+    activity: 'Exercise today',
     meals: 'Meals today',
   },
 };
@@ -32,9 +35,16 @@ export const STATS_LAYOUT: LayoutDef<StatsCardId> = {
 };
 
 export const GOALS_LAYOUT: LayoutDef<GoalsCardId> = {
-  defaults: ['forecast', 'target', 'milestones', 'phases'],
+  defaults: ['insights', 'forecast', 'target', 'habits', 'milestones', 'phases'],
   hiddenByDefault: [],
-  labels: { phases: 'Goal plan', forecast: 'Goal forecast', target: 'Calorie target check', milestones: 'Milestones' },
+  labels: {
+    insights: 'Plateau & weekend insights',
+    phases: 'Goal plan',
+    forecast: 'Goal forecast',
+    target: 'Calorie target check',
+    habits: 'Habit streaks',
+    milestones: 'Milestones',
+  },
 };
 
 export interface LayoutItem<T extends string> {

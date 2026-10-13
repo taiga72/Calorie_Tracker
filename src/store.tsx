@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal, Prefs } from '@/types';
+import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal, Prefs, Workout, CheckIn } from '@/types';
 import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type MealPhotos } from '@/lib/storage';
 import { addDays, setDayStartHour, toKey, todayKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
+import { exerciseCreditByDay, setExerciseCredit } from '@/lib/goalPlan';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
@@ -17,6 +18,12 @@ interface StoreValue {
   settings: Settings;
   profile: Profile;
   pinned: PinnedMeal[];
+  /** Newest first. */
+  workouts: Workout[];
+  /** Oldest first, one per day. */
+  checkins: CheckIn[];
+  /** False until the workouts/checkins tables exist; they then stay on this device. */
+  activitySyncEnabled: boolean;
   /** False until the pinned_meals table exists; pins then stay on this device. */
   pinsSyncEnabled: boolean;
   /** False until settings.prefs exists; personalization then stays on this device. */
@@ -40,6 +47,14 @@ interface StoreValue {
   updatePin: (id: string, patch: Partial<Omit<PinnedMeal, 'id' | 'createdAt'>>) => void;
   /** Puts a previously removed pin back exactly as it was (for undo). */
   restorePin: (pin: PinnedMeal) => void;
+  /** Logs a workout; returns its id. */
+  addWorkout: (w: Omit<Workout, 'id' | 'createdAt'>) => string | undefined;
+  updateWorkout: (id: string, patch: Partial<Omit<Workout, 'id' | 'createdAt'>>) => void;
+  deleteWorkout: (id: string) => void;
+  /** Puts a deleted workout back exactly as it was (for undo). */
+  restoreWorkout: (w: Workout) => void;
+  /** Merges into that day's check-in (creating it). */
+  saveCheckIn: (date: string, patch: Partial<Omit<CheckIn, 'date' | 'createdAt'>>) => void;
   clearAll: () => void;
   importBackup: (payload: BackupPayload) => void;
   exportBackup: () => BackupPayload;
@@ -119,6 +134,9 @@ function runOp(userId: string, op: OutboxOp): Promise<boolean> {
     case 'setProfile': return storage.setProfile(userId, op.profile);
     case 'upsertPinned': return storage.upsertPinnedMeal(userId, op.pin);
     case 'deletePinned': return storage.deletePinnedMeal(userId, op.id);
+    case 'upsertWorkout': return storage.upsertWorkout(userId, op.workout);
+    case 'deleteWorkout': return storage.deleteWorkout(userId, op.id);
+    case 'upsertCheckIn': return storage.upsertCheckIn(userId, op.checkin);
   }
 }
 
@@ -140,6 +158,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   setDayStartHour(settings.prefs?.dayStartHour ?? 0);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
   const [pinned, setPinned] = useState<PinnedMeal[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
+  const [checkins, setCheckins] = useState<CheckIn[]>([]);
+  const [activitySyncEnabled, setActivitySyncEnabled] = useState(true);
+  // Exercise calories earned back, for every goal check (see lib/goalPlan);
+  // set during render, like the day-start hour, so children see it at once.
+  const exerciseShare = settings.prefs?.exerciseCredit;
+  const creditMap = useMemo(() => exerciseCreditByDay(workouts, exerciseShare), [workouts, exerciseShare]);
+  setExerciseCredit(creditMap);
   const [pinsSyncEnabled, setPinsSyncEnabled] = useState(true);
   const [prefsSyncEnabled, setPrefsSyncEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -155,8 +181,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncInFlight = useRef<Promise<boolean> | null>(null);
   const lastSyncAttempt = useRef(0);
   // Latest state, for merging a partial load (one table failed) and for undo.
-  const current = useRef<Snapshot>({ meals, weights, settings, profile, pinned });
-  current.current = { meals, weights, settings, profile, pinned };
+  const current = useRef<Snapshot>({ meals, weights, settings, profile, pinned, workouts, checkins });
+  current.current = { meals, weights, settings, profile, pinned, workouts, checkins };
 
   // Photos by meal id, kept apart from the meal list so a sync (which loads
   // meals without photos) never re-downloads them. A null entry means the
@@ -300,6 +326,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSettings(snap.settings);
     setProfile(snap.profile);
     setPinned(snap.pinned);
+    setWorkouts(snap.workouts);
+    setCheckins(snap.checkins);
   }, []);
 
   // Shared by the initial load, background syncs and pull-to-refresh: push
@@ -309,12 +337,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const run = (async () => {
       lastSyncAttempt.current = Date.now();
       await flush(uid);
-      const [m, w, s, p, pins] = await Promise.allSettled([
+      const [m, w, s, p, pins, wk, ci] = await Promise.allSettled([
         storage.getMeals(uid),
         storage.getWeights(uid),
         storage.getSettings(uid),
         storage.getProfile(uid),
         storage.getPinnedMeals(uid),
+        storage.getWorkouts(uid),
+        storage.getCheckIns(uid),
       ]);
       const base = current.current;
       base.meals.forEach(rememberPhotos);
@@ -337,6 +367,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else {
         failed.push('pinned meals');
       }
+      // Without the tables yet, the copies on this device (in the cache) stay.
+      if (wk.status === 'fulfilled' && ci.status === 'fulfilled') setActivitySyncEnabled(wk.value !== null && ci.value !== null);
+      if (wk.status === 'fulfilled') { if (wk.value !== null) next.workouts = wk.value; } else failed.push('workouts');
+      if (ci.status === 'fulfilled') { if (ci.value !== null) next.checkins = ci.value; } else failed.push('check-ins');
       applySnapshot(applyPending(next, queue.current));
       // Thumbnails for recent meals arrive shortly after, without holding up
       // the data itself.
@@ -389,9 +423,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Cache what's on screen for the next (possibly offline) launch.
   useEffect(() => {
     if (!userId || loading) return;
-    const t = setTimeout(() => saveSnapshot(userId, { meals, weights, settings, profile, pinned }), SNAPSHOT_DEBOUNCE_MS);
+    const t = setTimeout(() => saveSnapshot(userId, { meals, weights, settings, profile, pinned, workouts, checkins }), SNAPSHOT_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [userId, loading, meals, weights, settings, profile, pinned]);
+  }, [userId, loading, meals, weights, settings, profile, pinned, workouts, checkins]);
 
   // Auto-sync: when the app comes back to the foreground or the connection
   // returns, push queued changes and pull anything changed on other devices.
@@ -466,6 +500,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings(DEFAULT_SETTINGS);
       setProfile(DEFAULT_PROFILE);
       setPinned([]);
+      setWorkouts([]);
+      setCheckins([]);
       void storage.clearAll(userId).then((ok) => {
         if (!ok) setSyncError("Couldn't save the reset — check your connection and try again.");
       });
@@ -473,7 +509,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
       if (!userId) return;
-      persistQueue(userId, queue.current.filter((q) => q.op.kind === 'upsertPinned' || q.op.kind === 'deletePinned'));
+      // Pins aren't in backups; workouts and check-ins only in newer ones.
+      const keep = new Set<string>(['upsertPinned', 'deletePinned']);
+      if (!payload.workouts) { keep.add('upsertWorkout'); keep.add('deleteWorkout'); }
+      if (!payload.checkins) keep.add('upsertCheckIn');
+      persistQueue(userId, queue.current.filter((q) => keep.has(q.op.kind)));
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
       const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
       photos.current.clear();
@@ -482,6 +522,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setWeights(payload.weights ?? []);
       setSettings(nextSettings);
       setProfile(nextProfile);
+      if (payload.workouts) setWorkouts(payload.workouts);
+      if (payload.checkins) setCheckins(payload.checkins);
       void storage.importBackup(userId, payload).then((ok) => {
         if (!ok) setSyncError("Couldn't save the imported backup — check your connection and try again.");
       });
@@ -494,6 +536,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       weights,
       settings,
       profile,
+      workouts,
+      checkins,
     });
 
     // Backups embed photos as data URLs, exactly as before, so they restore
@@ -582,6 +626,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit({ kind: 'upsertPinned', pin });
     };
 
+    const addWorkout: StoreValue['addWorkout'] = (w) => {
+      if (!userId) return;
+      const workout: Workout = { ...w, id: makeId(), createdAt: Date.now() };
+      current.current = { ...current.current, workouts: [workout, ...current.current.workouts] };
+      setWorkouts((prev) => [workout, ...prev]);
+      commit({ kind: 'upsertWorkout', workout });
+      return workout.id;
+    };
+
+    const updateWorkout: StoreValue['updateWorkout'] = (id, patch) => {
+      const existing = current.current.workouts.find((w) => w.id === id);
+      if (!existing) return;
+      const workout: Workout = { ...existing, ...patch };
+      current.current = { ...current.current, workouts: current.current.workouts.map((w) => (w.id === id ? workout : w)) };
+      setWorkouts((prev) => prev.map((w) => (w.id === id ? workout : w)));
+      commit({ kind: 'upsertWorkout', workout });
+    };
+
+    const deleteWorkout: StoreValue['deleteWorkout'] = (id) => {
+      current.current = { ...current.current, workouts: current.current.workouts.filter((w) => w.id !== id) };
+      setWorkouts((prev) => prev.filter((w) => w.id !== id));
+      commit({ kind: 'deleteWorkout', id });
+    };
+
+    const restoreWorkout: StoreValue['restoreWorkout'] = (workout) => {
+      setWorkouts((prev) => [...prev.filter((w) => w.id !== workout.id), workout].sort((a, b) => b.createdAt - a.createdAt));
+      commit({ kind: 'upsertWorkout', workout });
+    };
+
+    const saveCheckIn: StoreValue['saveCheckIn'] = (date, patch) => {
+      if (!userId) return;
+      const existing = current.current.checkins.find((c) => c.date === date);
+      const checkin: CheckIn = { ...existing, ...patch, date, createdAt: existing?.createdAt ?? Date.now() };
+      const next = [...current.current.checkins.filter((c) => c.date !== date), checkin].sort((a, b) => a.date.localeCompare(b.date));
+      current.current = { ...current.current, checkins: next };
+      setCheckins(next);
+      commit({ kind: 'upsertCheckIn', checkin });
+    };
+
     const getDay: StoreValue['getDay'] = (dateKey) => {
       const dayMeals = meals.filter((m) => m.date === dateKey);
       const weight = weights.find((w) => w.date === dateKey);
@@ -609,16 +692,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
 
     return {
-      meals, weights, settings, profile, pinned, pinsSyncEnabled, prefsSyncEnabled, loading,
+      meals, weights, settings, profile, pinned, workouts, checkins, activitySyncEnabled, pinsSyncEnabled, prefsSyncEnabled, loading,
       addMeal, updateMeal, deleteMeal,
       logWeight, logWeightForDate, deleteWeight,
       updateSettings, updatePrefs, updateProfile,
       pinMeal, unpinMeal, updatePin, restorePin,
+      addWorkout, updateWorkout, deleteWorkout, restoreWorkout, saveCheckIn,
       clearAll, importBackup, exportBackup, prepareExport, loadPhotos, getDay,
       syncError, dismissSyncError,
       refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, pinned, pinsSyncEnabled, prefsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
+  }, [meals, weights, settings, profile, pinned, workouts, checkins, activitySyncEnabled, pinsSyncEnabled, prefsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
