@@ -2,7 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
-import { downloadCsv } from '@/lib/csv';
+import { downloadCsv, downloadWeightsCsv, downloadWorkoutsCsv } from '@/lib/csv';
+import { useTheme, type ThemePreference } from '@/lib/theme';
+import { parseAppearance, readAppearance } from '@/lib/appearance';
+import { loadReminderConfig, saveReminderConfig, type ReminderConfig } from '@/lib/reminders';
 import { formatRelativeTime, todayKey } from '@/lib/dateUtils';
 import type { BackupPayload } from '@/lib/storage';
 import { compressImage } from '@/lib/gemini';
@@ -54,7 +57,7 @@ export function SettingsTab() {
   });
 
   const {
-    settings, updateSettings, updateProfile, profile, meals, weights, clearAll, importBackup, prepareExport,
+    settings, updateSettings, updateProfile, profile, meals, weights, workouts, clearAll, importBackup, prepareExport,
     lastSyncedAt, refreshing, pinsSyncEnabled, prefsSyncEnabled,
   } = useStore();
   const activePhase = phaseOn(settings, todayKey());
@@ -184,13 +187,18 @@ export function SettingsTab() {
   };
 
   const [exporting, setExporting] = useState(false);
+  const { preference: themePreference, setPreference, setAppearance } = useTheme();
+  // Bumped after a restore so the reminders section shows the restored times.
+  const [restoreCount, setRestoreCount] = useState(0);
 
   const onExportJson = async () => {
     // Photos load on demand, so fetch any not loaded yet: the backup is the
     // same complete file as before.
     setExporting(true);
-    const { payload, missingPhotos } = await prepareExport();
+    const { payload: data, missingPhotos } = await prepareExport();
     setExporting(false);
+    // This device's own settings too, so a restore on a new phone looks and reminds the same.
+    const payload: BackupPayload = { ...data, device: { appearance: readAppearance(), theme: themePreference, reminders: loadReminderConfig() } };
     if (missingPhotos && !window.confirm("Some meal photos couldn't be downloaded (you may be offline). Export the backup without them?")) return;
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -204,6 +212,19 @@ export function SettingsTab() {
     URL.revokeObjectURL(url);
   };
 
+  const restoreDeviceSettings = (device: BackupPayload['device']) => {
+    if (!device) return;
+    if (device.appearance) setAppearance(parseAppearance(device.appearance));
+    if (device.theme === 'light' || device.theme === 'dark' || device.theme === 'system') setPreference(device.theme as ThemePreference);
+    const r = device.reminders as Partial<ReminderConfig> | undefined;
+    if (r?.slots) {
+      // Times only: notifications stay as allowed (or not) on this phone.
+      const current = loadReminderConfig();
+      saveReminderConfig({ enabled: current.enabled, slots: { ...current.slots, ...r.slots } });
+      setRestoreCount((n) => n + 1);
+    }
+  };
+
   const onImportJson = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -214,6 +235,7 @@ export function SettingsTab() {
           return;
         }
         importBackup(parsed);
+        restoreDeviceSettings(parsed.device);
         notify('Backup restored.');
       } catch {
         notify("Couldn't read this backup file.", 'error');
@@ -479,7 +501,7 @@ export function SettingsTab() {
 
       <CoachMemorySection />
 
-      <RemindersSection />
+      <RemindersSection key={restoreCount} />
 
         </>
       )}
@@ -562,7 +584,7 @@ export function SettingsTab() {
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Backup & Export</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Back up your full data for transferring between devices, or export meal logs as a CSV for Google Sheets or Excel.
+          Back up everything — meals, weights, workouts, pinned meals, goals and settings — to move to another device, or export logs as CSV for Google Sheets or Excel.
         </p>
         <div className="space-y-2.5">
           <ActionBtn onClick={onExportJson} Icon={Download} label={exporting ? 'Preparing backup…' : 'Export Backup (JSON)'} sub="Full state — restore on any device" disabled={exporting} />
@@ -575,6 +597,8 @@ export function SettingsTab() {
           />
           <ActionBtn onClick={() => fileRef.current?.click()} Icon={Upload} label="Import Backup (JSON)" sub="Restore state from a backup file" />
           <ActionBtn onClick={onExportCsv} Icon={FileSpreadsheet} label="Export CSV" sub={`${meals.length} meal${meals.length === 1 ? '' : 's'} — for Google Sheets`} disabled={meals.length === 0} />
+          <ActionBtn onClick={() => downloadWeightsCsv(weights, settings.weightUnit)} Icon={FileSpreadsheet} label="Export weights (CSV)" sub={`${weights.length} weigh-in${weights.length === 1 ? '' : 's'}`} disabled={weights.length === 0} />
+          <ActionBtn onClick={() => downloadWorkoutsCsv(workouts, settings.weightUnit)} Icon={FileSpreadsheet} label="Export workouts (CSV)" sub={`${workouts.length} workout${workouts.length === 1 ? '' : 's'}, with sets`} disabled={workouts.length === 0} />
         </div>
       </div>
 
@@ -586,7 +610,7 @@ export function SettingsTab() {
           <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
-          Clear all data deletes your meal logs and weight history and resets settings, keeping the account. Delete account removes everything, including the account. Neither can be undone.
+          Clear all data deletes your meals, weights, workouts and pinned meals and resets settings, keeping the account. Delete account removes everything, including the account. Neither can be undone.
         </p>
         <button
           onClick={() => setConfirmOpen(true)}

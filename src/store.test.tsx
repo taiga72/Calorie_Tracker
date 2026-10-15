@@ -112,6 +112,8 @@ vi.mock('@/lib/storage', () => ({
       db.weights = payload.weights ?? [];
       db.settings = { ...DEFAULT_SETTINGS, ...payload.settings };
       db.profile = { ...DEFAULT_PROFILE, ...payload.profile };
+      if (payload.workouts) db.workouts = payload.workouts;
+      if (payload.pinned) db.pinned = payload.pinned;
       return true;
     }),
     clearAll: vi.fn(async () => {
@@ -832,5 +834,47 @@ describe('workouts', () => {
     const { result } = await renderStore();
     const backup = result.current.exportBackup();
     expect(backup.workouts).toHaveLength(1);
+  });
+});
+
+describe('backup round trip', () => {
+  const pin: PinnedMeal = { id: 'p1', name: 'Oat bowl', mealType: 'Breakfast', items: [], calories: 380, protein: 12, carbs: 60, fat: 9, fiber: 8, createdAt: 1 };
+  const workout: Workout = { id: 'w1', date: '2026-10-10', kind: 'strength', name: 'Gym', minutes: 45, calories: 220, sets: [{ exercise: 'Bench press', reps: 8, weight: 60 }], createdAt: 1 };
+
+  it('exports pinned meals and workouts with everything else, and restores them all', async () => {
+    db.pinned = [pin];
+    db.workouts = [workout];
+    db.weights = [{ date: '2026-10-10', weight: 80, createdAt: 1 }];
+    db.settings = { ...DEFAULT_SETTINGS, prefs: { exerciseCredit: 0.5, coachMemory: ['Vegetarian'], milestones: [] } };
+    const first = await renderStore();
+    act(() => { first.result.current.addMeal(emptyMeal({ calories: 500 })); });
+    const backup = first.result.current.exportBackup();
+    expect(backup.pinned).toEqual([pin]);
+    expect(backup.workouts).toEqual([workout]);
+    expect(backup.settings.prefs).toMatchObject({ exerciseCredit: 0.5, coachMemory: ['Vegetarian'] });
+    first.unmount();
+
+    // A fresh account somewhere else.
+    resetDb();
+    localStorage.clear();
+    const { result } = await renderStore();
+    expect(result.current.pinned).toEqual([]);
+    act(() => result.current.importBackup(JSON.parse(JSON.stringify(backup))));
+    expect(result.current.pinned).toEqual([pin]);
+    expect(result.current.workouts).toEqual([workout]);
+    expect(result.current.meals.map((m) => m.calories)).toEqual([500]);
+    expect(result.current.weights).toHaveLength(1);
+    expect(result.current.settings.prefs).toMatchObject({ exerciseCredit: 0.5 });
+    await waitFor(() => expect(db.pinned).toEqual([pin]));
+    expect(db.workouts).toEqual([workout]);
+  });
+
+  it('leaves pins and workouts alone when restoring an older backup without them', async () => {
+    db.pinned = [pin];
+    db.workouts = [workout];
+    const { result } = await renderStore();
+    act(() => result.current.importBackup({ version: 1, exportedAt: '', meals: [], weights: [], settings: DEFAULT_SETTINGS }));
+    expect(result.current.pinned).toEqual([pin]);
+    expect(result.current.workouts).toEqual([workout]);
   });
 });
