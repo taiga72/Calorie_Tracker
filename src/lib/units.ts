@@ -15,3 +15,13 @@ export function fmtWeight(kg: number, unit: WeightUnit, digits = 1): string {
   const v = kgToUnit(kg, unit);
   return `${v.toFixed(digits)} ${unit}`;
 }
+
+/**
+ * A change with its sign ("+0.4", "−1.2"), signed from the rounded value so
+ * a tiny change never reads "−0.0"; null when it rounds to nothing.
+ */
+export function fmtSignedChange(v: number, digits: number): string | null {
+  const r = Number(v.toFixed(digits));
+  if (r === 0) return null;
+  return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(digits)}`;
+}

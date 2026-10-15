@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { kgToUnit, unitToKg, fmtWeight, KG_TO_LB, LB_TO_KG } from '@/lib/units';
+import { kgToUnit, unitToKg, fmtWeight, fmtSignedChange, KG_TO_LB, LB_TO_KG } from '@/lib/units';
 
 describe('kgToUnit', () => {
   it('passes kg through unchanged', () => {
@@ -45,5 +45,15 @@ describe('fmtWeight', () => {
   it('honors a custom digits count', () => {
     expect(fmtWeight(70.456, 'kg', 2)).toBe('70.46 kg');
     expect(fmtWeight(70, 'kg', 0)).toBe('70 kg');
+  });
+});
+
+describe('fmtSignedChange', () => {
+  it('signs from the rounded value and says nothing for no change', () => {
+    expect(fmtSignedChange(0.44, 1)).toBe('+0.4');
+    expect(fmtSignedChange(-1.25, 1)).toBe('−1.3');
+    expect(fmtSignedChange(-0.04, 1)).toBeNull();
+    expect(fmtSignedChange(0.004, 2)).toBeNull();
+    expect(fmtSignedChange(0.006, 2)).toBe('+0.01');
   });
 });

@@ -3,7 +3,7 @@ import { useStore } from '@/store';
 import { computeWeeklyRecap, cachedRecapSummary, cacheRecapSummary, dismissRecap } from '@/lib/weeklyRecap';
 import { cleanCoachText, getWeeklySummary } from '@/lib/geminiCoach';
 import { formatShortDate } from '@/lib/dateUtils';
-import { kgToUnit } from '@/lib/units';
+import { fmtSignedChange, kgToUnit } from '@/lib/units';
 import { weeklyTargetOn } from '@/lib/goalPlan';
 import { CalendarCheck, Sparkles, X } from 'lucide-react';
 
@@ -84,7 +84,7 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
         />
         <Tile
           label="Weight"
-          value={weight === null ? '—' : `${weight > 0 ? '+' : weight < 0 ? '−' : ''}${Math.abs(weight).toFixed(1)} ${unit}`}
+          value={weight === null ? '—' : fmtSignedChange(weight, 1) ? `${fmtSignedChange(weight, 1)} ${unit}` : 'No change'}
           sub={weight === null ? 'Weigh in 2+ times a week' : 'first to last weigh-in'}
           tone={weight !== null && Math.sign(weight) === Math.sign(weeklyTargetOn(settings, recap.weekEnd)) ? 'good' : undefined}
         />

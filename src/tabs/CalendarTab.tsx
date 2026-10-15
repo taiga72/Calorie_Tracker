@@ -96,10 +96,10 @@ export function CalendarTab() {
       </div>
 
       <div className="px-5 flex items-center justify-center gap-4 mt-3 flex-wrap">
-        <Legend color="bg-emerald-50 dark:bg-emerald-950" label="Within goal" />
-        <Legend color="bg-rose-50 dark:bg-rose-950" label="Over goal" />
-        <Legend color="bg-amber-50 dark:bg-amber-950/60" label="Partly logged" />
-        <Legend color="bg-blue-50 dark:bg-blue-950" label="Weight only" />
+        <Legend color="bg-emerald-50 dark:bg-emerald-950 border-emerald-300 dark:border-emerald-700" label="Within goal" />
+        <Legend color="bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700" label="Over goal" />
+        <Legend color="bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700" label="Partly logged" />
+        <Legend color="bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700" label="Weight only" />
         {cellContent !== 'color' && (
           <span className="text-10 text-gray-400 font-medium">
             {showKcal && <><span className="font-bold text-orange-600 dark:text-orange-300">1.9k</span> = kcal</>}
@@ -210,8 +210,9 @@ function compactKcal(kcal: number): string {
 function Legend({ color, label }: { color: string; label: string }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`w-2.5 h-2.5 rounded-full ${color} border border-black/5`} />
-      <span className="text-10 text-gray-400 font-medium">{label}</span>
+      {/* A swatch of the day tint, outlined so the pale colours are still told apart. */}
+      <span className={`w-3 h-3 rounded ${color} border`} />
+      <span className="text-10 text-gray-500 dark:text-gray-400 font-medium">{label}</span>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export function StreakModal({ open, onClose, name, streak }: StreakModalProps) {
         </div>
 
         <p className="text-sm font-semibold text-gray-400 tracking-wide">
-          {streak} day{streak === 1 ? '' : 's'} streak
+          {streak}-day streak
         </p>
         <h2 className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
           {name.trim() || 'Friend'}, you're on fire!

@@ -175,6 +175,13 @@ describe('HomeTab macros and streak', () => {
     expect(screen.getByLabelText('3 day logging streak')).toHaveTextContent('3');
   });
 
+  it('opens the streak card when the streak chip is tapped', () => {
+    meals = [0, 1, 2].map((i) => lunchOn(toKey(addDays(new Date(), -i)), 600));
+    renderHomeTab();
+    fireEvent.click(screen.getByLabelText('3 day logging streak'));
+    expect(screen.getByText('3-day streak')).toBeInTheDocument();
+  });
+
   it("shows each meal type's calories against its budget", () => {
     settings = { ...DEFAULT_SETTINGS, calc: CALC };
     const today = toKey(new Date());
