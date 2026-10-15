@@ -505,8 +505,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const importBackup: StoreValue['importBackup'] = (payload) => {
       if (!userId) return;
-      // Pins aren't in backups; workouts only in newer ones.
-      const keep = new Set<string>(['upsertPinned', 'deletePinned']);
+      // Older backups have no workouts or pins: those stay as they are.
+      const keep = new Set<string>();
+      if (!payload.pinned) { keep.add('upsertPinned'); keep.add('deletePinned'); }
       if (!payload.workouts) { keep.add('upsertWorkout'); keep.add('deleteWorkout'); }
       persistQueue(userId, queue.current.filter((q) => keep.has(q.op.kind)));
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
@@ -518,6 +519,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setSettings(nextSettings);
       setProfile(nextProfile);
       if (payload.workouts) setWorkouts(payload.workouts);
+      if (payload.pinned) setPinned(payload.pinned);
       void storage.importBackup(userId, payload).then((ok) => {
         if (!ok) setSyncError("Couldn't save the imported backup — check your connection and try again.");
       });
@@ -531,6 +533,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       settings,
       profile,
       workouts,
+      pinned,
     });
 
     // Backups embed photos as data URLs, exactly as before, so they restore

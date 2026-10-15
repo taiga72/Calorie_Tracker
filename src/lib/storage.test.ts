@@ -469,6 +469,27 @@ describe('importBackup', () => {
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, name: 'Imported' }), { onConflict: 'user_id' });
   });
 
+  it('restores workouts and pinned meals when the backup has them', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+
+    const ok = await storage.importBackup(USER_ID, {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      meals: [],
+      weights: [],
+      settings: { calorieGoal: 1900, goalWeight: 65, weeklyWeightTarget: -0.4, weightUnit: 'kg', geminiApiKey: '' },
+      workouts: [{ id: 'w1', date: '2026-10-10', kind: 'cardio', name: 'Run', minutes: 30, calories: 300, createdAt: 1 }],
+      pinned: [{ id: 'p1', name: 'Oats', mealType: 'Breakfast', items: [], calories: 300, protein: 10, carbs: 50, fat: 5, fiber: 6, createdAt: 1 }],
+    });
+
+    expect(ok).toBe(true);
+    expect(supabase.from).toHaveBeenCalledWith('workouts');
+    expect(supabase.from).toHaveBeenCalledWith('pinned_meals');
+    expect(from.insert).toHaveBeenCalledWith([expect.objectContaining({ id: 'w1', user_id: USER_ID, name: 'Run' })]);
+    expect(from.insert).toHaveBeenCalledWith([expect.objectContaining({ id: 'p1', user_id: USER_ID, meal_type: 'Breakfast' })]);
+  });
+
   it('splits meals with large photos across multiple insert requests instead of one oversized payload', async () => {
     const { from } = makeFrom({ error: null });
     vi.mocked(supabase.from).mockReturnValue(from as never);

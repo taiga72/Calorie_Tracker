@@ -21,8 +21,18 @@ export interface BackupPayload {
   weights: WeightEntry[];
   settings: Settings;
   profile?: Profile;
-  /** Added later; older backups don't have them. */
+  /** Added later; older backups don't have them (and restoring one leaves them as they are). */
   workouts?: Workout[];
+  pinned?: PinnedMeal[];
+  /**
+   * Settings kept per device rather than on the account: the look, light/dark
+   * theme and reminder times. Restored on import.
+   */
+  device?: {
+    appearance?: unknown;
+    theme?: string;
+    reminders?: unknown;
+  };
 }
 
 interface MealRow {
@@ -604,6 +614,14 @@ export const storage = {
       if (!del.error && payload.workouts.length) {
         const { error } = await withRetry(() => supabase.from('workouts').insert(payload.workouts!.map((w) => workoutToRow(userId, w))));
         if (error && !isMissingTable(error)) { console.error('Failed to import workouts', error); ok = false; }
+      }
+    }
+    if (payload.pinned) {
+      const del = await withRetry(() => supabase.from('pinned_meals').delete().eq('user_id', userId));
+      if (del.error && !isMissingTable(del.error)) { console.error('Failed to clear pinned meals before import', del.error); ok = false; }
+      if (!del.error && payload.pinned.length) {
+        const { error } = await withRetry(() => supabase.from('pinned_meals').insert(payload.pinned!.map((p) => pinnedToRow(userId, p))));
+        if (error && !isMissingTable(error)) { console.error('Failed to import pinned meals', error); ok = false; }
       }
     }
     const s = await upsertSettings(userId, { ...DEFAULT_SETTINGS, ...payload.settings });

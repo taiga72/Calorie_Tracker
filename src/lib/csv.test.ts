@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mealsToCsv } from '@/lib/csv';
+import { mealsToCsv, weightsToCsv, workoutsToCsv } from '@/lib/csv';
 import type { MealEntry } from '@/types';
 
 function meal(overrides: Partial<MealEntry> = {}): MealEntry {
@@ -76,5 +76,29 @@ describe('mealsToCsv', () => {
     ]);
     expect(csv).toContain('Snack (300 kcal)');
     expect(csv).toContain(',301,');
+  });
+});
+
+describe('weightsToCsv', () => {
+  it('lists weigh-ins oldest first in the chosen unit', () => {
+    const csv = weightsToCsv([{ date: '2026-10-02', weight: 80, createdAt: 1 }, { date: '2026-10-01', weight: 80.5, createdAt: 1 }], 'lb');
+    expect(csv.split('\r\n')).toEqual(['Date,Weight (lb)', '2026-10-01,177.5', '2026-10-02,176.4']);
+  });
+});
+
+describe('workoutsToCsv', () => {
+  it('writes one row per workout with its sets summed up per exercise', () => {
+    const csv = workoutsToCsv([
+      { id: 'b', date: '2026-10-02', kind: 'cardio', name: 'Run, easy', minutes: 30, calories: 300, createdAt: 2 },
+      {
+        id: 'a', date: '2026-10-01', kind: 'strength', name: 'Gym', minutes: 45, calories: 210.4, notes: 'felt "strong"', createdAt: 1, sets: [
+          { exercise: 'Bench press', reps: 8, weight: 60 }, { exercise: 'Bench press', reps: 6, weight: 62.5 }, { exercise: 'Pull-up', reps: 10, weight: 0 },
+        ],
+      },
+    ], 'kg');
+    const lines = csv.split('\r\n');
+    expect(lines[0]).toBe('Date,Type,Name,Minutes,Calories burned (kcal),Sets (reps×kg),Notes');
+    expect(lines[1]).toBe('2026-10-01,strength,Gym,45,210,"Bench press 8×60, 6×62.5; Pull-up 10","felt ""strong"""');
+    expect(lines[2]).toBe('2026-10-02,cardio,"Run, easy",30,300,,');
   });
 });
