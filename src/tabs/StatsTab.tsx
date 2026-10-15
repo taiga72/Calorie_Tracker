@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useStore } from '@/store';
 import { rangeKeys, formatShortDate, logicalNow, todayKey as todayKeyFn } from '@/lib/dateUtils';
-import { kgToUnit } from '@/lib/units';
+import { fmtSignedChange, kgToUnit } from '@/lib/units';
 import { TrendChart } from '@/components/TrendChart';
 import { dayIndex, fitDomain, smoothingFor, trendLine, SMOOTHING_LABEL } from '@/lib/trends';
 import { MacroBar } from '@/components/MacroBar';
@@ -273,10 +273,10 @@ export function StatsTab() {
             {wLine.length >= 2 && (
               <div className="text-right">
                 <p className={`text-sm font-semibold ${Math.sign(wChange) === Math.sign(weeklyTargetOn(settings, todayKey)) || Math.abs(wChange) < 0.05 ? 'text-emerald-600' : 'text-orange-500'}`}>
-                  {wChange > 0 ? '+' : wChange < 0 ? '−' : ''}{Math.abs(wChange).toFixed(1)} {unit}
+                  {fmtSignedChange(wChange, 1) ? `${fmtSignedChange(wChange, 1)} ${unit}` : 'No change'}
                 </p>
                 <p className="text-10 text-gray-400">
-                  trend over range{wWeeks >= 1.5 ? ` · ${wChange > 0 ? '+' : wChange < 0 ? '−' : ''}${Math.abs(wChange / wWeeks).toFixed(2)} ${unit}/wk` : ''}
+                  trend over range{wWeeks >= 1.5 && fmtSignedChange(wChange / wWeeks, 2) ? ` · ${fmtSignedChange(wChange / wWeeks, 2)} ${unit}/wk` : ''}
                 </p>
               </div>
             )}

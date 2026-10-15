@@ -4,6 +4,7 @@ import { toKey, addDays, formatHeaderDate, relativeDayLabel, logicalNow, todayKe
 import { fmtWeight } from '@/lib/units';
 import { CalorieRing } from '@/components/CalorieRing';
 import { LogModal } from '@/modals/LogModal';
+import { StreakModal } from '@/modals/StreakModal';
 import { PullToRefresh } from '@/components/PullToRefresh';
 import { MealList } from '@/components/MealList';
 import { useGoalForecast } from '@/lib/useGoalForecast';
@@ -29,6 +30,7 @@ export function HomeTab() {
   const { getDay, settings, meals, profile, weights, refresh, refreshing } = useStore();
   const [editing, setEditing] = useState<MealEntry | null>(null);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [streakOpen, setStreakOpen] = useState(false);
   const todayKey = todayKeyFn();
   const day = getDay(todayKey);
   const goal = calorieGoalOn(settings, todayKey);
@@ -222,12 +224,14 @@ export function HomeTab() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5 line-clamp-2 break-words">{season?.greeting ?? greeting}, {displayName}</h1>
         </div>
         {showStreak && streak > 0 && (
-          <span
-            className="flex-shrink-0 self-start mt-1 inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 px-2.5 py-1 text-xs font-bold"
+          <button
+            type="button"
+            onClick={() => setStreakOpen(true)}
+            className="flex-shrink-0 self-start mt-1 inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 px-2.5 py-1 text-xs font-bold active:scale-95 transition-transform"
             aria-label={`${streak} day logging streak`}
           >
             <Flame size={13} /> {streak}
-          </span>
+          </button>
         )}
       </div>
 
@@ -237,6 +241,7 @@ export function HomeTab() {
 
       <LogModal open={editing !== null} onClose={() => setEditing(null)} editMeal={editing} />
       <LogModal open={weightOpen} onClose={() => setWeightOpen(false)} weightDate={todayKey} initialMode="weight" />
+      <StreakModal open={streakOpen} onClose={() => setStreakOpen(false)} name={profile.name} streak={streak} />
     </div>
     </PullToRefresh>
   );

@@ -5,13 +5,13 @@ import { useStore } from '@/store';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { adaptiveTarget, formatForecastDate, ADAPTIVE_WINDOW_DAYS } from '@/lib/forecast';
 import { useGoalForecast } from '@/lib/useGoalForecast';
-import { kgToUnit } from '@/lib/units';
+import { fmtSignedChange, kgToUnit } from '@/lib/units';
 import { Target, Gauge, Check, PartyPopper, CalendarRange } from 'lucide-react';
 import type { WeightUnit } from '@/types';
 
 function fmtRate(kgPerWeek: number, unit: WeightUnit): string {
-  const v = kgToUnit(kgPerWeek, unit);
-  return `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v).toFixed(2)} ${unit}/wk`;
+  const change = fmtSignedChange(kgToUnit(kgPerWeek, unit), 2);
+  return change ? `${change} ${unit}/wk` : 'no change';
 }
 
 export function GoalForecastCard() {

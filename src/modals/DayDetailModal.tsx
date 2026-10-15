@@ -8,6 +8,8 @@ import { LogModal } from '@/modals/LogModal';
 import { MealList } from '@/components/MealList';
 import { WorkoutList, WorkoutSheet } from '@/components/ActivityCard';
 import { workoutsOn } from '@/lib/workouts';
+import { fmtGrams } from '@/lib/macros';
+import { calorieGoalOn } from '@/lib/goalPlan';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MealEntry, Workout } from '@/types';
 
@@ -67,6 +69,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
         : { transition: 'transform .25s cubic-bezier(.2,.8,.2,1), opacity .25s' };
   const day = dateKey ? getDay(dateKey) : null;
   const dayWorkouts = dateKey ? workoutsOn(workouts, dateKey) : [];
+  const dayGoal = dateKey ? calorieGoalOn(settings, dateKey) : settings.calorieGoal;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
   useEffect(() => {
@@ -138,18 +141,24 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               </button>
             )}
 
-            {/* Stat pills */}
+            {/* Stat pills: calories (against that day's goal) across two columns, then the macros */}
             <div className="grid grid-cols-3 gap-2 mb-5">
+              <div className="col-span-2 rounded-2xl p-3 flex items-center gap-3 text-orange-500 bg-orange-50 dark:bg-orange-950/40">
+                <Flame size={20} className="flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xl font-bold leading-tight">{Math.round(day.totalCalories).toLocaleString()}</p>
+                  <p className="text-10 font-medium opacity-80">of {dayGoal.toLocaleString()} kcal</p>
+                </div>
+              </div>
               {[
-                { label: 'Calories', val: String(Math.round(day.totalCalories)), Icon: Flame, color: 'text-orange-500 bg-orange-50 dark:bg-orange-950' },
-                { label: 'Protein', val: `${day.totalProtein.toFixed(1)}g`, Icon: Beef, color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950' },
-                { label: 'Carbs', val: `${day.totalCarbs.toFixed(0)}g`, Icon: Wheat, color: 'text-orange-400 bg-orange-50 dark:bg-orange-950' },
-                { label: 'Fat', val: `${day.totalFat.toFixed(1)}g`, Icon: Droplet, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950' },
-                { label: 'Fiber', val: `${day.totalFiber.toFixed(1)}g`, Icon: Sparkles, color: 'text-purple-500 bg-purple-50 dark:bg-purple-950' },
+                { label: 'Protein', val: fmtGrams(day.totalProtein), Icon: Beef, color: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40' },
+                { label: 'Carbs', val: fmtGrams(day.totalCarbs), Icon: Wheat, color: 'text-orange-400 bg-orange-50 dark:bg-orange-950/40' },
+                { label: 'Fat', val: fmtGrams(day.totalFat), Icon: Droplet, color: 'text-amber-500 bg-amber-50 dark:bg-amber-950/40' },
+                { label: 'Fiber', val: fmtGrams(day.totalFiber), Icon: Sparkles, color: 'text-purple-500 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/40' },
               ].map(({ label, val, Icon, color }) => (
                 <div key={label} className={`rounded-2xl p-3 flex flex-col items-center ${color}`}>
                   <Icon size={16} />
-                  <span className="text-base font-bold mt-1">{val}</span>
+                  <span className="text-base font-bold mt-1">{val}g</span>
                   <span className="text-10 font-medium opacity-80">{label}</span>
                 </div>
               ))}

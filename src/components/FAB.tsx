@@ -59,7 +59,7 @@ export function FAB({ onClick, onCoachClick, coachHint, onHintDismiss }: {
         onClick={onClick}
         aria-label="Add entry"
         tabIndex={hidden ? -1 : undefined}
-        className="w-14 h-14 rounded-full bg-gray-900 text-white shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-800"
+        className="w-14 h-14 rounded-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 shadow-lg shadow-black/30 flex items-center justify-center active:scale-95 transition-transform hover:bg-gray-800 dark:hover:bg-gray-100"
       >
         <Plus size={26} strokeWidth={2.5} />
       </button>

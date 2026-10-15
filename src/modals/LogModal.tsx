@@ -18,6 +18,7 @@ import { Camera, Type, Sparkles, Loader2, AlertCircle, Check, Scale, Clock, Cale
 import { haptic } from '@/lib/appearance';
 import { lastLogMethod, mealTypeForTime, rememberLogMethod, type LogMethod } from '@/lib/logPrefs';
 import { friendlyAiError } from '@/lib/aiErrors';
+import { fmtGrams } from '@/lib/macros';
 import { WorkoutForm } from '@/components/WorkoutForm';
 
 type Mode = 'food' | 'weight' | 'exercise';
@@ -420,7 +421,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         /* ---- Edit form (itemized) ---- */
         <div>
           {/* Meal type selector */}
-          <div className="flex gap-1.5 overflow-x-auto no-scrollbar mb-3">
+          <div className="flex flex-wrap gap-1.5 mb-3">
             {MEAL_TYPES.map((t) => (
               <Pill key={t} active={mealType === t} onClick={() => setMealType(t)}>{t}</Pill>
             ))}
@@ -538,19 +539,19 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
               <p className="text-10 text-gray-400">kcal</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-emerald-600">{editTotals.protein.toFixed(1)}</p>
+              <p className="text-sm font-bold text-emerald-600">{fmtGrams(editTotals.protein)}</p>
               <p className="text-10 text-gray-400">Protein</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-orange-500">{editTotals.carbs.toFixed(0)}</p>
+              <p className="text-sm font-bold text-orange-500">{fmtGrams(editTotals.carbs)}</p>
               <p className="text-10 text-gray-400">Carbs</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-amber-500">{editTotals.fat.toFixed(1)}</p>
+              <p className="text-sm font-bold text-amber-500">{fmtGrams(editTotals.fat)}</p>
               <p className="text-10 text-gray-400">Fat</p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-purple-500">{editTotals.fiber.toFixed(1)}</p>
+              <p className="text-sm font-bold text-purple-500">{fmtGrams(editTotals.fiber)}</p>
               <p className="text-10 text-gray-400">Fiber</p>
             </div>
           </div>
@@ -631,7 +632,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           /* ---- Result view ---- */
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="bg-accent-100 text-accent-700 text-xs font-bold px-2.5 py-1 rounded-full">{result.mealType}</span>
+              <span className="bg-accent-100 dark:bg-accent-900/60 text-accent-700 dark:text-accent-200 text-xs font-bold px-2.5 py-1 rounded-full">{result.mealType}</span>
               <span className="text-sm font-bold text-orange-500">{Math.round(result.calories)} kcal</span>
             </div>
 
@@ -644,8 +645,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 <div key={i} className="flex flex-wrap items-center gap-2 bg-white dark:bg-gray-900 rounded-xl p-3 border border-gray-50 dark:border-gray-800">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{it.name}</p>
-                    <p className="text-11 text-orange-500 font-semibold mt-0.5">
-                      {Math.round(it.calories)} kcal · P {it.protein.toFixed(1)}g · C {it.carbs.toFixed(0)}g · F {it.fat.toFixed(1)}g
+                    <p className="text-11 text-gray-400 mt-0.5">
+                      <span className="text-orange-500 font-semibold">{Math.round(it.calories)} kcal</span>
+                      {' · P '}{fmtGrams(it.protein)}g · C {fmtGrams(it.carbs)}g · F {fmtGrams(it.fat)}g
                     </p>
                   </div>
                   {result.items.length > 1 && <PinMealButton item={it} mealType={result.mealType} size={15} />}
@@ -670,7 +672,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 { l: 'Fiber', v: result.fiber, c: 'text-purple-500' },
               ].map((m) => (
                 <div key={m.l} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-                  <p className={`text-sm font-bold ${m.c}`}>{m.v.toFixed(m.l === 'Carbs' ? 0 : 1)}g</p>
+                  <p className={`text-sm font-bold ${m.c}`}>{fmtGrams(m.v)}g</p>
                   <p className="text-10 text-gray-400">{m.l}</p>
                 </div>
               ))}
@@ -831,7 +833,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             {speech.error && !speech.listening && <p className="text-11 text-amber-600 mt-1.5">{speech.error}</p>}
 
             {/* Meal type selector */}
-            <div className="flex gap-1.5 mt-3 overflow-x-auto no-scrollbar">
+            <div className="flex flex-wrap gap-1.5 mt-3">
               <Pill active={mealType === 'auto'} onClick={() => { typePicked.current = true; setMealType('auto'); }}>Auto</Pill>
               {MEAL_TYPES.map((t) => (
                 <Pill key={t} active={mealType === t} onClick={() => { typePicked.current = true; setMealType(t); }}>{t}</Pill>

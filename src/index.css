@@ -18,6 +18,21 @@
   .dark body {
     background-color: #0B0D10;
   }
+  /* Fields size to their content by default (about 20 characters), which
+     pushed unit labels ("kg", "years") off the edge in a flex row. */
+  input, select, textarea {
+    min-width: 0;
+  }
+  /* No spinner arrows on number fields: they're tiny on phones and crowd the value. */
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
 
   /* Background style (Settings → Appearance). */
   [data-bg="gradient"] body {
