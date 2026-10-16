@@ -128,7 +128,7 @@ function AddMilestone({ onDone }: { onDone: () => void }) {
           placeholder={kind === 'weight' ? (latest ? (kgToUnit(latest, unit) - (unit === 'kg' ? 2 : 5)).toFixed(0) : '') : kind === 'meals' ? '100' : '30'}
           value={target}
           onChange={(e) => setTarget(e.target.value)}
-          className="w-24 bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none"
+          className="w-24 bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
         <span className="text-xs text-gray-500">{kindInfo.unitLabel(unit)}</span>
       </div>
@@ -138,7 +138,7 @@ function AddMilestone({ onDone }: { onDone: () => void }) {
         placeholder="Name (optional)"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
-        className="w-full bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm text-gray-900 dark:text-white outline-none"
+        className="w-full bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
       />
       <div className="flex gap-2">
         <button onClick={onDone} className="flex-1 flex items-center justify-center gap-1 py-2.5 rounded-xl bg-white dark:bg-gray-900 text-xs font-semibold text-gray-500"><X size={14} /> Cancel</button>

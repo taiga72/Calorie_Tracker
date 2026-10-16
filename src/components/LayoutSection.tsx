@@ -64,7 +64,7 @@ export function LayoutSection() {
           { value: 'both', label: 'Both' },
           { value: 'calories', label: 'Calories' },
           { value: 'weight', label: 'Weight' },
-          { value: 'color', label: 'Colour' },
+          { value: 'color', label: 'Color only' },
         ]}
       />
     </div>

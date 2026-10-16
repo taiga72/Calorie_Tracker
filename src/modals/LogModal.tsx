@@ -385,7 +385,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       {/* Mode toggle (hidden in edit / weight-edit mode) */}
       {!isEdit && !isWeightEdit && !editingPin && (
         <div className="flex gap-2 mb-4">
-          <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food (AI)" />
+          <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food" />
           <ModeBtn active={mode === 'exercise'} onClick={() => { setMode('exercise'); setError(null); }} Icon={Dumbbell} label="Exercise" />
           <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
         </div>
@@ -495,7 +495,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 value={editNote}
                 onChange={(e) => setEditNote(e.target.value)}
                 placeholder="e.g. Added a side salad and extra sauce"
-                className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+                className="flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
               />
               <button
                 onClick={onReestimate}
@@ -519,7 +519,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           {/* Quick calorie override */}
           <div className="mb-3">
             <label className="text-xs font-semibold text-gray-400 mb-1.5 block">Total calories</label>
-            <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
+            <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
               <input
                 type="number"
                 inputMode="numeric"
@@ -570,8 +570,8 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                       type="text"
                       value={it.name}
                       onChange={(e) => updateItem(i, { name: e.target.value })}
-                      placeholder="Food item (e.g. 100g cooked white rice)"
-                      className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+                      placeholder="e.g. 100 g cooked white rice"
+                      className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                     />
                     {editItems.length > 1 && it.name.trim() && (
                       <PinMealButton item={it} mealType={mealType === 'auto' ? (editMeal?.mealType ?? 'Snack') : mealType} size={15} />
@@ -811,9 +811,9 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 ref={textRef}
                 value={text}
                 onChange={(e) => { setText(e.target.value); if (imageB64s.length > 0) setFoodInput(e.target.value.trim() ? 'both' : 'image'); }}
-                placeholder={speech.supported ? 'e.g. grilled chicken breast 200g, brown rice 1 cup — or tap the mic and say it' : 'e.g. grilled chicken breast 200g, brown rice 1 cup, steamed broccoli'}
+                placeholder={speech.supported ? 'e.g. grilled chicken breast 200 g, brown rice 1 cup — or tap the mic and say it' : 'e.g. grilled chicken breast 200 g, brown rice 1 cup, steamed broccoli'}
                 rows={3}
-                className={`w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 ring-accent-500/30 ${speech.supported ? 'pr-14' : ''}`}
+                className={`w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-3 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 focus:ring-accent-500/30 ${speech.supported ? 'pr-14' : ''}`}
               />
               {speech.supported && (
                 <button
@@ -862,7 +862,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           ) : (
             <p className="text-xs text-gray-400 mb-3">Log your weight for today. Overwrites any existing entry for today.</p>
           )}
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
+          <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               type="number"
               inputMode="decimal"

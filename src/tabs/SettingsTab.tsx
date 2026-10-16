@@ -205,7 +205,7 @@ export function SettingsTab() {
     const a = document.createElement('a');
     a.href = url;
     const today = new Date().toISOString().slice(0, 10);
-    a.download = `calorie-counter-backup-${today}.json`;
+    a.download = `calorie-tracker-backup-${today}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -290,22 +290,6 @@ export function SettingsTab() {
       >
       {page === 'goals' && (
         <>
-      {/* Wizard banner — only for new users who haven't completed setup */}
-      {!setupComplete && (
-        <button
-          onClick={() => setWizardOpen(true)}
-          className="w-full bg-accent-600 rounded-3xl p-4 mt-5 flex items-center gap-3 text-white text-left active:scale-[.99] transition-transform"
-        >
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-            <Sparkles size={20} />
-          </div>
-          <div className="flex-1">
-            <p className="text-sm font-bold">Setup Wizard</p>
-            <p className="text-xs text-accent-50">Calculate your calorie & weight goals</p>
-          </div>
-        </button>
-      )}
-
       {/* Goals card */}
       <div className="card p-5 mt-4">
         <div className="flex items-center gap-2 mb-4">
@@ -326,13 +310,13 @@ export function SettingsTab() {
             </div>
             <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-1">No goals set yet</p>
             <p className="text-xs text-gray-400 mb-4 leading-relaxed px-4">
-              Run the Setup Wizard to calculate your personalized calorie target, macro breakdown, and estimated goal date.
+              Answer a few quick questions to get your personal calorie target, macros and an estimated goal date.
             </p>
             <button
               onClick={() => setWizardOpen(true)}
               className="bg-accent-600 text-white font-semibold px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 active:scale-[.99] transition-transform"
             >
-              <Sparkles size={16} /> Start Setup Wizard
+              <Sparkles size={16} /> Start goal setup
             </button>
           </div>
         ) : (
@@ -344,7 +328,7 @@ export function SettingsTab() {
               <SummaryStat
                 icon={<TrendingDown size={12} className={liveDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
                 label={liveDeficit > 0 ? 'Surplus' : 'Deficit'}
-                value={liveDeficit > 0 ? `+${liveDeficit}` : liveDeficit}
+                value={Math.abs(liveDeficit)}
               />
               <SummaryStat
                 icon={<Target size={12} className="text-accent-600" />}
@@ -372,9 +356,9 @@ export function SettingsTab() {
               className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 py-2.5 mt-2 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
             >
               {expanded ? (
-                <><ChevronUp size={16} /> Minimize details</>
+                <><ChevronUp size={16} /> Hide details</>
               ) : (
-                <><ChevronDown size={16} /> Edit goals & details</>
+                <><ChevronDown size={16} /> Edit goals and details</>
               )}
             </button>
 
@@ -382,7 +366,7 @@ export function SettingsTab() {
             {expanded && (
               <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-800 mt-1">
                 <Field label="Daily calorie goal">
-                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
                     <input
                       type="number"
                       inputMode="numeric"
@@ -395,7 +379,7 @@ export function SettingsTab() {
                 </Field>
 
                 <Field label="Goal weight">
-                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
                     <input
                       type="number"
                       inputMode="decimal"
@@ -422,7 +406,7 @@ export function SettingsTab() {
                       Gain
                     </button>
                   </div>
-                  <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 mt-2">
+                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 mt-2">
                     <input
                       type="number"
                       inputMode="decimal"
@@ -453,7 +437,7 @@ export function SettingsTab() {
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 mt-1">
                   <div className="flex items-center gap-2 mb-3">
                     <Activity size={14} className="text-gray-400" />
-                    <p className="text-xs font-semibold text-gray-400">MACRO BREAKDOWN</p>
+                    <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Macro targets</p>
                   </div>
                   <div className="space-y-3">
                     <MacroField label="Protein" value={protein} onChange={setProtein} color="text-emerald-600" sub="Preserves muscle" />
@@ -555,7 +539,7 @@ export function SettingsTab() {
           )}
         </div>
         <Field label="Display name">
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+          <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
             <input
               type="text"
               value={name}
@@ -581,13 +565,13 @@ export function SettingsTab() {
       <div className="card p-5 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <FileSpreadsheet size={18} className="text-accent-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Backup & Export</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Backup and export</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
           Back up everything — meals, weights, workouts, pinned meals, goals and settings — to move to another device, or export logs as CSV for Google Sheets or Excel.
         </p>
         <div className="space-y-2.5">
-          <ActionBtn onClick={onExportJson} Icon={Download} label={exporting ? 'Preparing backup…' : 'Export Backup (JSON)'} sub="Full state — restore on any device" disabled={exporting} />
+          <ActionBtn onClick={onExportJson} Icon={Download} label={exporting ? 'Preparing backup…' : 'Export backup (JSON)'} sub="Everything — restore on any device" disabled={exporting} />
           <input
             ref={fileRef}
             type="file"
@@ -595,19 +579,19 @@ export function SettingsTab() {
             className="hidden"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) onImportJson(f); e.target.value = ''; }}
           />
-          <ActionBtn onClick={() => fileRef.current?.click()} Icon={Upload} label="Import Backup (JSON)" sub="Restore state from a backup file" />
-          <ActionBtn onClick={onExportCsv} Icon={FileSpreadsheet} label="Export CSV" sub={`${meals.length} meal${meals.length === 1 ? '' : 's'} — for Google Sheets`} disabled={meals.length === 0} />
+          <ActionBtn onClick={() => fileRef.current?.click()} Icon={Upload} label="Import backup (JSON)" sub="Restore everything from a backup file" />
+          <ActionBtn onClick={onExportCsv} Icon={FileSpreadsheet} label="Export meals (CSV)" sub={`${meals.length} meal${meals.length === 1 ? '' : 's'} — for Google Sheets or Excel`} disabled={meals.length === 0} />
           <ActionBtn onClick={() => downloadWeightsCsv(weights, settings.weightUnit)} Icon={FileSpreadsheet} label="Export weights (CSV)" sub={`${weights.length} weigh-in${weights.length === 1 ? '' : 's'}`} disabled={weights.length === 0} />
           <ActionBtn onClick={() => downloadWorkoutsCsv(workouts, settings.weightUnit)} Icon={FileSpreadsheet} label="Export workouts (CSV)" sub={`${workouts.length} workout${workouts.length === 1 ? '' : 's'}, with sets`} disabled={workouts.length === 0} />
         </div>
       </div>
 
 
-      {/* Danger Zone */}
+      {/* Danger zone */}
       <div className="card p-5 border-red-100 dark:border-red-900 mt-4">
         <div className="flex items-center gap-2 mb-3">
           <AlertTriangle size={18} className="text-red-500" />
-          <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger Zone</h2>
+          <h2 className="text-sm font-bold text-red-600 dark:text-red-400">Danger zone</h2>
         </div>
         <p className="text-xs text-gray-400 mb-4">
           Clear all data deletes your meals, weights, workouts and pinned meals and resets settings, keeping the account. Delete account removes everything, including the account. Neither can be undone.
@@ -616,7 +600,7 @@ export function SettingsTab() {
           onClick={() => setConfirmOpen(true)}
           className="w-full bg-red-500 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
         >
-          <Trash2 size={16} /> Clear All Data
+          <Trash2 size={16} /> Clear all data
         </button>
         <DeleteAccountButton />
       </div>
@@ -682,7 +666,7 @@ export function SettingsTab() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="text-xs font-semibold text-gray-400 mb-1.5 block">{label}</label>
+      <label className="text-11 font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">{label}</label>
       {children}
     </div>
   );
@@ -721,7 +705,7 @@ function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; la
         {icon}
         <p className="text-9 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">{label}</p>
       </div>
-      <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-11' : 'text-sm'}`}>{value}</p>
+      <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-11' : 'text-sm'}`}>{typeof value === 'number' ? Math.round(value).toLocaleString() : value}</p>
     </div>
   );
 }
@@ -747,7 +731,7 @@ function MacroField({
         <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
         {!compact && sub && <span className="text-10 text-gray-400 truncate ml-1">{sub}</span>}
       </div>
-      <div className="flex items-center bg-white dark:bg-gray-900 rounded-xl px-2.5 py-2 border border-gray-100 dark:border-gray-700 min-w-0">
+      <div className="field-box flex items-center bg-white dark:bg-gray-900 rounded-xl px-2.5 py-2 border border-gray-100 dark:border-gray-700 min-w-0">
         <input
           type="number"
           inputMode="numeric"

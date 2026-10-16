@@ -15,7 +15,7 @@ const SEXES: { key: Sex; label: string }[] = [
 
 const ACTIVITY_KEYS: ActivityLevel[] = ['sedentary', 'light', 'moderate', 'active', 'extra'];
 
-const STEP_TITLES = ['Age', 'Sex', 'Height', 'Current Weight', 'Goal Weight', 'Activity', 'Deficit', 'Results'];
+const STEP_TITLES = ['Age', 'Sex', 'Height', 'Current weight', 'Goal weight', 'Activity', 'Deficit', 'Results'];
 
 export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { settings, updateSettings } = useStore();
@@ -120,7 +120,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
   };
 
   return (
-    <Modal open={open} onClose={close} title="Setup Wizard">
+    <Modal open={open} onClose={close} title="Goal setup">
       {/* Progress dots */}
       <div className="flex items-center gap-1.5 mb-5">
         {STEP_TITLES.map((_, i) => (
@@ -141,7 +141,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       {step === 0 && (
         <div>
           <p className="text-sm text-gray-500 mb-4">How old are you?</p>
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
+          <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               autoFocus
               type="number"
@@ -187,7 +187,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
               </button>
             ))}
           </div>
-          <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
+          <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               autoFocus
               type="number"
@@ -407,7 +407,7 @@ function UnitToggle({ unit, onChange }: { unit: InputWeightUnit; onChange: (u: I
 
 function NumberField({ value, onChange, unit, placeholder }: { value: string; onChange: (v: string) => void; unit: string; placeholder: string }) {
   return (
-    <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
+    <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
       <input
         autoFocus
         type="number"

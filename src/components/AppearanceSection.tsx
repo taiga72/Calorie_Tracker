@@ -40,8 +40,8 @@ export function AppearanceSection() {
         ]}
       />
 
-      <p className="text-11 font-semibold text-gray-500 dark:text-gray-400 mt-4 mb-2">Accent colour</p>
-      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent colour">
+      <p className="text-11 font-semibold text-gray-500 dark:text-gray-400 mt-4 mb-2">Accent color</p>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Accent color">
         {ACCENTS.map((c) => (
           <button
             key={c.id}
@@ -128,7 +128,7 @@ export function AppearanceSection() {
         />
         <Toggle
           label="Same look on all my devices"
-          sub="Theme, colour, text size and the rest follow your account"
+          sub="Theme, color, text size and the rest follow your account"
           on={a.syncAcrossDevices}
           onChange={(syncAcrossDevices) => setAppearance({ syncAcrossDevices })}
         />

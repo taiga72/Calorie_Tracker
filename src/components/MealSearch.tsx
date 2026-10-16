@@ -43,7 +43,7 @@ export function MealSearchModal({ open, onClose, onOpenDay }: { open: boolean; o
 
   return (
     <Modal open={open} onClose={onClose} title={<span className="flex items-center gap-2"><Search size={18} className="text-accent-600" /> Search meals</span>}>
-      <div className="flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-3 py-2.5">
+      <div className="field-box flex items-center gap-2 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-3 py-2.5">
         <Search size={16} className="text-gray-400 flex-shrink-0" />
         <input
           autoFocus
