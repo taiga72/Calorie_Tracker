@@ -60,7 +60,7 @@ export function ItemReestimate({ item, others, onApply }: { item: FoodItem; othe
           onKeyDown={(e) => { if (e.key === 'Enter') void run(); }}
           aria-label="Describe this item"
           placeholder="e.g. 200 g grilled chicken breast"
-          className="flex-1 min-w-0 bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+          className="flex-1 min-w-0 bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
         <button
           type="button"

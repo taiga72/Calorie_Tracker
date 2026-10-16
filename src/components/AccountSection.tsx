@@ -3,7 +3,7 @@ import { useAuth } from '@/auth';
 import { Modal } from '@/components/Modal';
 import { User, LogOut, Mail, KeyRound, Trash2, AlertTriangle, Loader2, Check } from 'lucide-react';
 
-const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30';
+const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30';
 
 type Panel = 'email' | 'password' | null;
 
@@ -101,7 +101,7 @@ export function AccountSection() {
   );
 }
 
-/** Danger Zone: delete the account and everything in it, after typing DELETE. */
+/** Danger zone: delete the account and everything in it, after typing DELETE. */
 export function DeleteAccountButton() {
   const { deleteAccount, status } = useAuth();
   const [open, setOpen] = useState(false);

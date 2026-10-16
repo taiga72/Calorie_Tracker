@@ -24,7 +24,7 @@ export function SetPasswordScreen() {
     }
   };
 
-  const field = 'flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3';
+  const field = 'field-box flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3';
   return (
     <div className="min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-sm">

@@ -174,14 +174,14 @@ export function AICoachModal({ open, onClose, question }: { open: boolean; onClo
       </div>
 
       {/* Input */}
-      <div className="flex items-center gap-2 mt-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-3 py-2">
+      <div className="field-box flex items-center gap-2 mt-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-2xl px-3 py-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') send(input); }}
-          placeholder="Ask your coach anything..."
+          placeholder="Ask your coach anything…"
           disabled={loading}
-          className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 disabled:opacity-50"
+          className="flex-1 bg-transparent text-sm text-gray-900 dark:text-white outline-none disabled:opacity-50"
         />
         <button
           onClick={() => send(input)}

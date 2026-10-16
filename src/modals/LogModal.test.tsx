@@ -364,7 +364,7 @@ describe('LogModal re-estimating one item', () => {
     estimateItem.mockResolvedValueOnce({ name: 'Brown rice 1.5 cups', calories: 330, protein: 7, carbs: 69, fat: 2.6, fiber: 5 });
     renderLog();
     fireEvent.click(screen.getByText('Text'));
-    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200g/), { target: { value: 'rice and chicken' } });
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200 g/), { target: { value: 'rice and chicken' } });
     await act(async () => { fireEvent.click(screen.getByText(/Estimate with AI|Analyze|Estimate/)); });
     fireEvent.click(screen.getByLabelText('Re-estimate Rice 1 cup'));
     fireEvent.change(screen.getByLabelText('Describe this item'), { target: { value: 'Brown rice 1.5 cups' } });
@@ -432,7 +432,7 @@ describe('LogModal pinning one food', () => {
     pinMeal.mockReturnValueOnce({ pin: { id: 'px' }, alreadyPinned: false });
     renderLog();
     fireEvent.click(screen.getByText('Text'));
-    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200g/), { target: { value: 'rice and chicken' } });
+    fireEvent.change(screen.getByPlaceholderText(/grilled chicken breast 200 g/), { target: { value: 'rice and chicken' } });
     await act(async () => { fireEvent.click(screen.getByText(/Estimate with AI|Analyze|Estimate/)); });
     fireEvent.click(screen.getByLabelText('Pin Chicken 100g'));
     expect(pinMeal).toHaveBeenCalledWith(expect.objectContaining({ name: 'Chicken 100g', mealType: 'Lunch', calories: 165 }));

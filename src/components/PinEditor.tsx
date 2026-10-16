@@ -78,7 +78,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         maxLength={60}
-        className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30"
+        className="w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
       />
 
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar mt-3">
@@ -96,7 +96,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
       </div>
 
       <label className="text-xs font-semibold text-gray-400 mt-4 mb-1.5 block" htmlFor="pin-calories">Calories</label>
-      <div className="flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+      <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
         <input
           id="pin-calories"
           type="number"
@@ -117,7 +117,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
           ['fat', 'Fat', 'text-amber-500'],
           ['fiber', 'Fiber', 'text-purple-500'],
         ] as const).map(([key, label, color]) => (
-          <label key={key} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
+          <label key={key} className="field-box bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
             <input
               type="number"
               inputMode="decimal"

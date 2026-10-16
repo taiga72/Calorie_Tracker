@@ -54,7 +54,7 @@ export function CoachMemoryEditor({ compact = false }: { compact?: boolean }) {
           disabled={full}
           aria-label="Something for your coach to remember"
           placeholder={full ? 'Memory is full — remove one to add more' : notes.length ? 'Add another…' : 'e.g. I train Mon, Wed and Fri'}
-          className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30 disabled:opacity-50"
+          className="flex-1 min-w-0 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30 disabled:opacity-50"
         />
         <button
           onClick={add}

@@ -17,8 +17,8 @@ export const HOME_LAYOUT: LayoutDef<HomeCardId> = {
   hiddenByDefault: ['quickPins', 'forecast', 'milestones'],
   labels: {
     summary: "Today's summary",
-    brief: 'End-of-week brief',
-    insights: 'Plateau & weekend insights',
+    brief: 'End-of-week brief (Fri–Sun)',
+    insights: 'Plateau and weekend insights',
     quickPins: 'Quick add: pinned meals',
     forecast: 'Goal forecast',
     milestones: 'Milestones',
@@ -37,7 +37,7 @@ export const GOALS_LAYOUT: LayoutDef<GoalsCardId> = {
   defaults: ['insights', 'forecast', 'target', 'habits', 'milestones', 'phases'],
   hiddenByDefault: [],
   labels: {
-    insights: 'Plateau & weekend insights',
+    insights: 'Plateau and weekend insights',
     phases: 'Goal plan',
     forecast: 'Goal forecast',
     target: 'Calorie target check',

@@ -164,8 +164,8 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={2}
-              placeholder="e.g. 40 min brisk walk — or bench 3x8 60kg, squats 5x5 100kg"
-              className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 pr-14 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 focus:ring-accent-200"
+              placeholder="e.g. 40 min brisk walk — or bench 3×8 at 60 kg, squats 5×5 at 100 kg"
+              className="w-full bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 pr-14 text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 focus:ring-accent-500/30"
             />
             {speech.supported && (
               <button
@@ -241,7 +241,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder={kind === 'strength' ? 'e.g. Upper body' : 'e.g. Morning run'}
-          className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+          className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
       </label>
       <div className="grid grid-cols-2 gap-2 mt-2">
@@ -253,7 +253,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             value={minutes}
             onChange={(e) => { setMinutes(e.target.value); autoCalories(kind, e.target.value); }}
             placeholder="0"
-            className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+            className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
           />
         </label>
         <label className="block">
@@ -264,7 +264,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             value={calories}
             onChange={(e) => { setCalories(e.target.value); setCaloriesSet(true); }}
             placeholder="0"
-            className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+            className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
           />
         </label>
       </div>
@@ -288,7 +288,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                   list="known-lifts"
                   placeholder="Exercise"
                   aria-label={`Set ${i + 1} exercise`}
-                  className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+                  className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
                 <input
                   type="number"
@@ -297,7 +297,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                   onChange={(e) => updateSet(i, { reps: e.target.value })}
                   placeholder="reps"
                   aria-label={`Set ${i + 1} reps`}
-                  className="w-14 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+                  className="w-14 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
                 <input
                   type="number"
@@ -306,7 +306,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                   onChange={(e) => updateSet(i, { weight: e.target.value })}
                   placeholder={unit}
                   aria-label={`Set ${i + 1} weight`}
-                  className="w-16 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+                  className="w-16 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
                 <button type="button" onClick={() => setSets((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove set ${i + 1}`} className="w-9 h-9 -mr-1 flex items-center justify-center text-gray-400 hover:text-red-500 rounded-full">
                   <X size={15} />
@@ -326,7 +326,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="How did it feel?"
-          className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-200"
+          className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
       </label>
 

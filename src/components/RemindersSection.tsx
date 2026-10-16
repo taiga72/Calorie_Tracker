@@ -75,7 +75,7 @@ export function RemindersSection() {
                   onChange={(e) => e.target.value && setSlot(id, { time: e.target.value })}
                   disabled={!config.slots[id].on}
                   aria-label={`${REMINDER_LABELS[id]} time`}
-                  className="bg-white dark:bg-gray-900 rounded-lg px-2 py-1 text-sm font-semibold text-gray-900 dark:text-white disabled:opacity-40 outline-none"
+                  className="bg-white dark:bg-gray-900 rounded-lg px-2 py-1 text-sm font-semibold text-gray-900 dark:text-white disabled:opacity-40 outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
               </div>
             ))}

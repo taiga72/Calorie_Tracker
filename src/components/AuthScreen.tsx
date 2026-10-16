@@ -78,7 +78,7 @@ export function AuthScreen() {
             <div className="bg-accent-50 dark:bg-accent-950 text-accent-700 dark:text-accent-300 text-xs rounded-xl p-3 mb-4">{info}</div>
           )}
           <form onSubmit={onSubmit} className="space-y-3">
-            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
+            <div className="field-box flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
               <Mail size={16} className="text-gray-400 flex-shrink-0" />
               <input
                 type="email"
@@ -90,7 +90,7 @@ export function AuthScreen() {
               />
             </div>
             {mode !== 'reset' && (
-            <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
+            <div className="field-box flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-3">
               <Lock size={16} className="text-gray-400 flex-shrink-0" />
               <input
                 type="password"

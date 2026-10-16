@@ -8,7 +8,7 @@ import { phaseOn, sortedPhases, WEEKDAY_NAMES } from '@/lib/goalPlan';
 import { CalendarRange, Plus, Trash2, Check, X } from 'lucide-react';
 import type { GoalPhase, WeightUnit } from '@/types';
 
-const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 ring-accent-500/30';
+const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30';
 
 /**
  * Settings → Goal plan: goal phases (cut → maintain → lean bulk), different
@@ -123,7 +123,7 @@ export function GoalPlanSection() {
                   value={offsets[i] || ''}
                   placeholder="0"
                   onChange={(e) => setOffset(i, Math.round(Number(e.target.value) || 0))}
-                  className="w-20 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right"
+                  className="w-20 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30"
                 />
                 <span className="text-11 text-gray-400">kcal</span>
                 <span className="ml-auto text-xs font-bold text-gray-900 dark:text-white">{Math.max(800, baseToday + (offsets[i] || 0)).toLocaleString()}</span>
@@ -158,7 +158,7 @@ export function GoalPlanSection() {
               const v = Number(e.target.value);
               if (v > 0) updatePrefs({ proteinPerKg: +(unit === 'lb' ? v * 2.2046 : v).toFixed(3) });
             }}
-            className="w-20 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right"
+            className="w-20 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30"
           />
           <span className="text-xs text-gray-500">g per {unit} — follows your latest weigh-in</span>
         </div>
@@ -228,7 +228,7 @@ function PhaseForm({ phase, unit, onSave, onCancel, onDelete }: {
 
   return (
     <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-2">
-      <input aria-label="Phase name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Cut, Maintain, Lean bulk…" className={INPUT.replace('bg-gray-50 dark:bg-gray-800', 'bg-white dark:bg-gray-900')} />
+      <input aria-label="Phase name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cut, Maintain, Lean bulk" className={INPUT.replace('bg-gray-50 dark:bg-gray-800', 'bg-white dark:bg-gray-900')} />
       <div className="grid grid-cols-1 gap-2">
         <label className="text-11 text-gray-400">
           Starts
@@ -252,7 +252,7 @@ function PhaseForm({ phase, unit, onSave, onCancel, onDelete }: {
       </div>
       {dir !== 'maintain' && (
         <div className="flex items-center gap-2">
-          <input type="number" inputMode="decimal" step={0.05} aria-label="Weekly pace" value={pace} onChange={(e) => setPace(e.target.value)} className="w-20 bg-white dark:bg-gray-900 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right" />
+          <input type="number" inputMode="decimal" step={0.05} aria-label="Weekly pace" value={pace} onChange={(e) => setPace(e.target.value)} className="w-20 bg-white dark:bg-gray-900 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30" />
           <span className="text-xs text-gray-500">{unit} per week</span>
         </div>
       )}

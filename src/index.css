@@ -33,6 +33,13 @@
     -moz-appearance: textfield;
     appearance: textfield;
   }
+  /* One placeholder colour for every field. */
+  input::placeholder, textarea::placeholder {
+    color: rgb(156 163 175);
+  }
+  .dark input::placeholder, .dark textarea::placeholder {
+    color: rgb(107 114 128);
+  }
 
   /* Background style (Settings → Appearance). */
   [data-bg="gradient"] body {
@@ -154,6 +161,11 @@
 }
 
 @layer components {
+  /* A box holding a borderless field (an icon or unit beside it): it shows
+     the same focus ring the stand-alone fields do. */
+  .field-box:focus-within {
+    box-shadow: 0 0 0 2px rgb(var(--accent-500) / 0.3);
+  }
   /* Cards: one look, switchable in Settings → Appearance (soft / sharp /
      outlined). card-sm is the smaller-radius variant for list groups. */
   .card {

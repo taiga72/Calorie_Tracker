@@ -173,7 +173,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
                 onClick={() => setLogOpen(true)}
                 className="flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
               >
-                <Plus size={14} /> Log Meal
+                <Plus size={14} /> Log meal
               </button>
             </div>
             {day.meals.length === 0 ? (
