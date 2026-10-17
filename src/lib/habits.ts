@@ -1,6 +1,6 @@
 import type { MealEntry, Settings, WeightEntry, Workout } from '@/types';
 import { addDays, fromKey, startOfWeek, toKey } from '@/lib/dateUtils';
-import { dayStatus } from '@/lib/goal';
+import { dayStatus, PROTEIN_HIT_SHARE } from '@/lib/goal';
 import { calorieGoalOn, proteinTarget } from '@/lib/goalPlan';
 import { fiberTarget } from '@/lib/macros';
 
@@ -97,7 +97,7 @@ export function habitStreaks({ meals, workouts, weights, settings, today }: Inpu
     }),
   ];
   if (protein) {
-    habits.push(dayHabit('protein', 'Protein', `${protein} g or more`, (k) => (totals.get(k)?.protein ?? 0) >= protein * 0.95));
+    habits.push(dayHabit('protein', 'Protein', `${protein} g or more`, (k) => (totals.get(k)?.protein ?? 0) >= protein * PROTEIN_HIT_SHARE));
   }
   habits.push(
     dayHabit('fiber', 'Fiber', 'About 14 g per 1,000 kcal', (k) => {

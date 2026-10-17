@@ -97,4 +97,18 @@ describe('WorkoutForm', () => {
     fireEvent.click(screen.getByText('Undo'));
     expect(restoreWorkout).toHaveBeenCalledWith(w);
   });
+
+  it('moves a workout to another day', () => {
+    const w: Workout = { id: 'w4', date: '2026-10-11', kind: 'cardio', name: 'Swim', minutes: 30, calories: 250, createdAt: 1 };
+    renderForm({ editWorkout: w });
+    fireEvent.change(screen.getByLabelText('Workout date'), { target: { value: '2026-10-09' } });
+    expect(screen.getByText(/Will move to/)).toBeTruthy();
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateWorkout).toHaveBeenCalledWith('w4', expect.objectContaining({ date: '2026-10-09' }));
+  });
+
+  it('has no day picker when logging a new workout', () => {
+    renderForm();
+    expect(screen.queryByLabelText('Workout date')).toBeNull();
+  });
 });

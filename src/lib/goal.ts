@@ -38,3 +38,6 @@ export function dayStatus(calories: number, goal: number, { inProgress = false }
   if (!inProgress && isPartialDay(calories, goal)) return 'partial';
   return 'within';
 }
+
+/** Protein counts as hit at 95% of the target (habit streaks, weekly recap). */
+export const PROTEIN_HIT_SHARE = 0.95;

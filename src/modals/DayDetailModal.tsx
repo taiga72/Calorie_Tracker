@@ -9,7 +9,7 @@ import { MealList } from '@/components/MealList';
 import { WorkoutList, WorkoutSheet } from '@/components/ActivityCard';
 import { workoutsOn } from '@/lib/workouts';
 import { fmtGrams } from '@/lib/macros';
-import { calorieGoalOn } from '@/lib/goalPlan';
+import { calorieGoalOn, exerciseCreditOn } from '@/lib/goalPlan';
 import { Flame, Beef, Wheat, Droplet, Sparkles, Scale, Plus, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { MealEntry, Workout } from '@/types';
 
@@ -70,6 +70,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
   const day = dateKey ? getDay(dateKey) : null;
   const dayWorkouts = dateKey ? workoutsOn(workouts, dateKey) : [];
   const dayGoal = dateKey ? calorieGoalOn(settings, dateKey) : settings.calorieGoal;
+  const credit = dateKey ? exerciseCreditOn(dateKey) : 0;
   // Only recent photos are loaded up front; older days fetch theirs here.
   const mealIdsKey = day ? day.meals.map((m) => m.id).join(',') : '';
   useEffect(() => {
@@ -147,7 +148,9 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
                 <Flame size={20} className="flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xl font-bold leading-tight">{Math.round(day.totalCalories).toLocaleString()}</p>
-                  <p className="text-10 font-medium opacity-80">of {dayGoal.toLocaleString()} kcal</p>
+                  <p className="text-10 font-medium opacity-80">
+                    of {dayGoal.toLocaleString()} kcal{credit > 0 ? ` · incl. +${credit.toLocaleString()} exercise` : ''}
+                  </p>
                 </div>
               </div>
               {[
@@ -183,13 +186,13 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
             )}
 
             {/* Exercise */}
-            <div className="flex items-center justify-between mt-5 mb-1">
+            <div className="flex items-center justify-between mt-5 mb-2">
               <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 Exercise ({dayWorkouts.length})
               </h3>
               <button
                 onClick={() => setWorkoutOpen(true)}
-                className="flex items-center gap-1 text-accent-600 text-xs font-semibold px-2 py-1.5 -mr-2 rounded-full"
+                className="flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
               >
                 <Plus size={14} /> Log exercise
               </button>

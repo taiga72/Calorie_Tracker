@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Check, Loader2, Mic, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, Calendar, Check, Loader2, Mic, Plus, Sparkles, Trash2, X } from 'lucide-react';
 import { useStore } from '@/store';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { useSpeechInput } from '@/lib/useSpeechInput';
@@ -7,6 +7,7 @@ import { friendlyAiError } from '@/lib/aiErrors';
 import { RateLimitError } from '@/lib/gemini';
 import { estimateBurn, estimateWorkout, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
 import { kgToUnit, unitToKg } from '@/lib/units';
+import { formatHeaderDate, fromKey, todayKey } from '@/lib/dateUtils';
 import type { Workout, WorkoutKind } from '@/types';
 
 interface SetRow {
@@ -41,6 +42,8 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const [caloriesSet, setCaloriesSet] = useState(false);
   const [sets, setSets] = useState<SetRow[]>([]);
   const [notes, setNotes] = useState('');
+  // Editing: move the workout if it was logged on the wrong day.
+  const [editDate, setEditDate] = useState(editWorkout?.date ?? date);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<(() => void) | null>(null);
@@ -54,6 +57,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setCaloriesSet(true);
     setSets((editWorkout.sets ?? []).map((s) => ({ exercise: s.exercise, reps: String(s.reps), weight: s.weight ? trimNum(kgToUnit(s.weight, unit)) : '' })));
     setNotes(editWorkout.notes ?? '');
+    setEditDate(editWorkout.date);
   }, [editWorkout, unit]);
 
   const textBefore = useRef('');
@@ -123,7 +127,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const onSave = () => {
     if (!canSave) return;
     const data = {
-      date: editWorkout?.date ?? date,
+      date: editWorkout && /^\d{4}-\d{2}-\d{2}$/.test(editDate) ? editDate : editWorkout?.date ?? date,
       kind,
       name: name.trim(),
       minutes: Math.round(num(minutes)),
@@ -184,7 +188,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             type="button"
             onClick={() => void onEstimate()}
             disabled={!text.trim() || loading}
-            className="w-full mt-2 bg-accent-600 disabled:opacity-40 text-white font-semibold py-3 rounded-2xl text-sm flex items-center justify-center gap-2"
+            className="w-full mt-2 bg-accent-600 disabled:opacity-40 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             {loading ? 'Working it out…' : 'Fill in with AI'}
@@ -320,6 +324,26 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
         </div>
       )}
 
+      {editWorkout && (
+        <>
+          <label className="field-box flex items-center gap-2 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 mt-3 text-xs">
+            <Calendar size={14} className="flex-shrink-0 text-gray-400" />
+            <span className="font-medium text-gray-500 dark:text-gray-400">Day</span>
+            <input
+              type="date"
+              aria-label="Workout date"
+              value={editDate}
+              max={todayKey()}
+              onChange={(e) => setEditDate(e.target.value)}
+              className="ml-auto bg-transparent font-semibold text-gray-900 dark:text-white outline-none text-right"
+            />
+          </label>
+          {editDate && editDate !== editWorkout.date && (
+            <p className="text-11 text-blue-600 dark:text-blue-400 mt-1 px-1">Will move to {formatHeaderDate(fromKey(editDate))}</p>
+          )}
+        </>
+      )}
+
       <label className="block mt-3">
         <span className="text-11 font-semibold text-gray-500 dark:text-gray-400">Notes (optional)</span>
         <input
@@ -334,7 +358,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
         type="button"
         onClick={onSave}
         disabled={!canSave}
-        className="w-full mt-5 bg-gray-900 dark:bg-accent-600 disabled:opacity-40 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2"
+        className="w-full mt-5 bg-accent-600 disabled:opacity-40 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
       >
         <Check size={18} /> {editWorkout ? 'Save changes' : 'Save workout'}
       </button>
@@ -342,7 +366,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
         <button
           type="button"
           onClick={onDelete}
-          className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2"
+          className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
         >
           <Trash2 size={16} /> Delete workout
         </button>

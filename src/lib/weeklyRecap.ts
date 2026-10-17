@@ -1,7 +1,7 @@
-import type { MealEntry, Settings, WeightEntry } from '@/types';
+import type { MealEntry, Settings, WeightEntry, Workout } from '@/types';
 import { addDays, fromKey, logicalNow, toKey } from '@/lib/dateUtils';
 import { normalizeItemName } from '@/lib/pinnedMeals';
-import { isOverGoal, isPartialDay } from '@/lib/goal';
+import { isOverGoal, isPartialDay, PROTEIN_HIT_SHARE } from '@/lib/goal';
 import { goalFor, proteinTarget as proteinTargetFor } from '@/lib/goalPlan';
 
 export interface WeeklyRecap {
@@ -38,6 +38,8 @@ export interface WeeklyRecap {
   weightChangeKg: number | null;
   topFoods: { name: string; count: number }[];
   bestDay: { date: string; calories: number } | null;
+  /** Exercise logged in the period; null when there was none. */
+  exercise: { workouts: number; minutes: number; calories: number } | null;
 }
 
 /** Monday of the week containing `d`. */
@@ -92,7 +94,7 @@ function displayName(n: string) {
 }
 
 /** The recap week's numbers (see recapPeriod), or null when nothing was logged. */
-export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], settings: Settings, today = logicalNow()): WeeklyRecap | null {
+export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], settings: Settings, today = logicalNow(), workouts: Workout[] = []): WeeklyRecap | null {
   const { start, end, mode } = recapPeriod(today);
   const goalOf = goalFor(settings);
   const logged = dailyTotals(meals, start, end);
@@ -144,6 +146,11 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
   const under = full.filter(([date, d]) => d.calories <= goalOf(date));
   const best = under.sort((a, b) => b[1].calories - a[1].calories)[0];
 
+  const weekWorkouts = workouts.filter((w) => w.date >= start && w.date <= end);
+  const exercise = weekWorkouts.length
+    ? { workouts: weekWorkouts.length, minutes: weekWorkouts.reduce((a, w) => a + w.minutes, 0), calories: weekWorkouts.reduce((a, w) => a + w.calories, 0) }
+    : null;
+
   return {
     mode,
     weekStart: start,
@@ -158,10 +165,11 @@ export function computeWeeklyRecap(meals: MealEntry[], weights: WeightEntry[], s
     calorieGoal: Math.round(avg(periodKeys(start, end).map(goalOf))),
     avgProtein: Math.round(avg(days.map(([, d]) => d.protein))),
     proteinTarget,
-    daysProteinHit: proteinTarget ? days.filter(([, d]) => d.protein >= proteinTarget * 0.9).length : 0,
+    daysProteinHit: proteinTarget ? days.filter(([, d]) => d.protein >= proteinTarget * PROTEIN_HIT_SHARE).length : 0,
     weightChangeKg,
     topFoods,
     bestDay: best ? { date: best[0], calories: Math.round(best[1].calories) } : null,
+    exercise,
   };
 }
 

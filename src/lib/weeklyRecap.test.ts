@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { computeWeeklyRecap, lastWeek, recapPeriod, startOfIsoWeek, showRecapOnHome, dismissRecap, cacheRecapSummary, cachedRecapSummary } from '@/lib/weeklyRecap';
-import type { MealEntry, Settings, WeightEntry } from '@/types';
+import type { MealEntry, Settings, WeightEntry, Workout } from '@/types';
 
 const settings: Settings = {
   calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: -0.4, weightUnit: 'kg', geminiApiKey: '',
@@ -111,5 +111,21 @@ describe('Friday end-of-week brief', () => {
     cacheRecapSummary('2026-09-28', 'Nice week.');
     expect(cachedRecapSummary('2026-09-28')).toBe('Nice week.');
     expect(cachedRecapSummary('2026-10-05')).toBeNull();
+  });
+});
+
+describe('weekly recap extras', () => {
+  it('sums up the period\'s exercise, or null without any', () => {
+    const meals = [meal('2026-09-28', 1800)];
+    const wo = (date: string, minutes: number, calories: number): Workout => ({ id: date + minutes, date, kind: 'cardio', name: 'Run', minutes, calories, createdAt: 1 });
+    const r = computeWeeklyRecap(meals, [], settings, TODAY, [wo('2026-09-29', 30, 300), wo('2026-10-02', 45, 400), wo('2026-10-06', 60, 600)])!;
+    expect(r.exercise).toEqual({ workouts: 2, minutes: 75, calories: 700 });
+    expect(computeWeeklyRecap(meals, [], settings, TODAY)!.exercise).toBeNull();
+  });
+
+  it('counts protein as hit at 95% of the target, like habit streaks', () => {
+    // Target 120 g: 114 g is a hit, 110 g is not.
+    const r = computeWeeklyRecap([meal('2026-09-28', 1900, 114), meal('2026-09-29', 1900, 110)], [], settings, TODAY)!;
+    expect(r.daysProteinHit).toBe(1);
   });
 });

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Dumbbell, Trophy, TrendingUp } from 'lucide-react';
+import { Dumbbell, History, Plus, Trophy, TrendingUp } from 'lucide-react';
 import { useStore } from '@/store';
 import { TrendChart } from '@/components/TrendChart';
-import { WorkoutSheet } from '@/components/ActivityCard';
+import { WorkoutList, WorkoutSheet } from '@/components/ActivityCard';
 import { fitDomain } from '@/lib/trends';
 import { formatShortDate, fromKey, logicalNow, todayKey } from '@/lib/dateUtils';
 import { kgToUnit } from '@/lib/units';
 import { liftHistory, liftRecords, weeklyTotals } from '@/lib/workouts';
+import type { Workout } from '@/types';
 
 const WEEKS = 8;
 
@@ -15,6 +16,9 @@ export function TrainingPage() {
   const { workouts, settings } = useStore();
   const unit = settings.weightUnit;
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Workout | null>(null);
+  // Newest first, for editing (workouts are stored newest first).
+  const recent = useMemo(() => [...workouts].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt).slice(0, 8), [workouts]);
   const weeks = useMemo(() => weeklyTotals(workouts, logicalNow(), WEEKS), [workouts]);
   const records = useMemo(() => liftRecords(workouts), [workouts]);
   const [liftKey, setLiftKey] = useState<string | null>(null);
@@ -55,6 +59,13 @@ export function TrainingPage() {
         <div className="flex items-center gap-2 mb-1">
           <Dumbbell size={16} className="text-sky-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Weekly activity</h2>
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="ml-auto flex items-center gap-1 text-xs font-semibold text-accent-600 py-1.5 px-2 -mr-2 rounded-full"
+          >
+            <Plus size={14} /> Log
+          </button>
         </div>
         <p className="text-xs text-gray-400 mb-3">Minutes of exercise per week</p>
         <div className="flex items-end gap-1.5 h-28" role="img" aria-label={`Exercise minutes per week for the last ${WEEKS} weeks`}>
@@ -79,6 +90,15 @@ export function TrainingPage() {
           <Tile label="Burned" value={thisWeek.calories.toLocaleString()} unit="kcal this week" />
         </div>
         <p className="text-10 text-gray-400 mt-2">Health guidelines suggest about 150 minutes of moderate activity a week.</p>
+      </div>
+
+      {/* Recent workouts: tap to edit, swipe to delete */}
+      <div className="card p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <History size={16} className="text-gray-400" />
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Recent workouts</h2>
+        </div>
+        <WorkoutList workouts={recent} onEdit={setEditing} showDate />
       </div>
 
       {/* Personal records */}
@@ -149,6 +169,8 @@ export function TrainingPage() {
           )}
         </div>
       )}
+      <WorkoutSheet open={adding} onClose={() => setAdding(false)} date={todayKey()} />
+      <WorkoutSheet open={editing !== null} onClose={() => setEditing(null)} date={editing?.date ?? todayKey()} workout={editing} />
     </div>
   );
 }
