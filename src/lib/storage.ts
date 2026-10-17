@@ -10,6 +10,16 @@ export const DEFAULT_SETTINGS: Settings = {
   geminiApiKey: '',
 };
 
+/**
+ * A number the database will accept: NaN/undefined (e.g. from an emptied
+ * form field) become `fallback` instead of null, which the not-null numeric
+ * columns would reject — over and over, as a queued write retries.
+ */
+function num(v: unknown, fallback = 0): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 export const DEFAULT_PROFILE: Profile = {
   name: '',
 };
@@ -84,17 +94,17 @@ function mealToRow(userId: string, m: MealEntry) {
     id: m.id,
     user_id: userId,
     date: m.date,
-    meal_type: m.mealType,
-    items: m.items,
-    calories: m.calories,
-    protein: m.protein,
-    carbs: m.carbs,
-    fat: m.fat,
-    fiber: m.fiber,
-    reasoning: m.reasoning,
+    meal_type: m.mealType ?? 'Snack',
+    items: m.items ?? [],
+    calories: num(m.calories),
+    protein: num(m.protein),
+    carbs: num(m.carbs),
+    fat: num(m.fat),
+    fiber: num(m.fiber),
+    reasoning: m.reasoning ?? '',
     image_data: m.imageData ?? null,
     image_datas: m.imageDatas ?? null,
-    created_at: m.createdAt,
+    created_at: Math.round(num(m.createdAt, Date.now())),
   };
 }
 
@@ -125,11 +135,11 @@ function mealPatchToRow(patch: Partial<Omit<MealEntry, 'id' | 'createdAt'>>) {
   if (patch.date !== undefined) row.date = patch.date;
   if (patch.mealType !== undefined) row.meal_type = patch.mealType;
   if (patch.items !== undefined) row.items = patch.items;
-  if (patch.calories !== undefined) row.calories = patch.calories;
-  if (patch.protein !== undefined) row.protein = patch.protein;
-  if (patch.carbs !== undefined) row.carbs = patch.carbs;
-  if (patch.fat !== undefined) row.fat = patch.fat;
-  if (patch.fiber !== undefined) row.fiber = patch.fiber;
+  if (patch.calories !== undefined) row.calories = num(patch.calories);
+  if (patch.protein !== undefined) row.protein = num(patch.protein);
+  if (patch.carbs !== undefined) row.carbs = num(patch.carbs);
+  if (patch.fat !== undefined) row.fat = num(patch.fat);
+  if (patch.fiber !== undefined) row.fiber = num(patch.fiber);
   if (patch.reasoning !== undefined) row.reasoning = patch.reasoning;
   if (patch.imageData !== undefined) row.image_data = patch.imageData ?? null;
   if (patch.imageDatas !== undefined) {
@@ -151,7 +161,7 @@ function rowToWeight(row: WeightRow): WeightEntry {
 }
 
 function weightToRow(userId: string, w: WeightEntry) {
-  return { user_id: userId, date: w.date, weight: w.weight, created_at: w.createdAt };
+  return { user_id: userId, date: w.date, weight: w.weight, created_at: Math.round(num(w.createdAt, Date.now())) };
 }
 
 interface SettingsRow {
@@ -180,11 +190,11 @@ function rowToSettings(row: SettingsRow | null): Settings {
 function settingsToRow(userId: string, s: Settings) {
   return {
     user_id: userId,
-    calorie_goal: s.calorieGoal,
-    goal_weight: s.goalWeight,
-    weekly_weight_target: s.weeklyWeightTarget,
-    weight_unit: s.weightUnit,
-    gemini_api_key: s.geminiApiKey,
+    calorie_goal: num(s.calorieGoal, DEFAULT_SETTINGS.calorieGoal),
+    goal_weight: num(s.goalWeight, DEFAULT_SETTINGS.goalWeight),
+    weekly_weight_target: num(s.weeklyWeightTarget, DEFAULT_SETTINGS.weeklyWeightTarget),
+    weight_unit: s.weightUnit ?? DEFAULT_SETTINGS.weightUnit,
+    gemini_api_key: s.geminiApiKey ?? '',
     calc: s.calc ?? null,
     ...(prefsColumn !== false ? { prefs: s.prefs ?? null } : {}),
   };
@@ -230,7 +240,7 @@ function rowToProfile(row: ProfileRow | null): Profile {
 }
 
 function profileToRow(userId: string, p: Profile) {
-  return { user_id: userId, name: p.name, avatar: p.avatar ?? null };
+  return { user_id: userId, name: p.name ?? '', avatar: p.avatar ?? null };
 }
 
 interface PinnedRow {
@@ -265,15 +275,15 @@ function pinnedToRow(userId: string, p: PinnedMeal) {
   return {
     id: p.id,
     user_id: userId,
-    name: p.name,
+    name: p.name ?? '',
     meal_type: p.mealType,
-    items: p.items,
-    calories: p.calories,
-    protein: p.protein,
-    carbs: p.carbs,
-    fat: p.fat,
-    fiber: p.fiber,
-    created_at: p.createdAt,
+    items: p.items ?? [],
+    calories: num(p.calories),
+    protein: num(p.protein),
+    carbs: num(p.carbs),
+    fat: num(p.fat),
+    fiber: num(p.fiber),
+    created_at: Math.round(num(p.createdAt, Date.now())),
   };
 }
 
@@ -308,13 +318,13 @@ function workoutToRow(userId: string, w: Workout) {
     id: w.id,
     user_id: userId,
     date: w.date,
-    kind: w.kind,
-    name: w.name,
-    minutes: w.minutes,
-    calories: w.calories,
+    kind: w.kind ?? 'other',
+    name: w.name ?? '',
+    minutes: num(w.minutes),
+    calories: num(w.calories),
     sets: w.sets?.length ? w.sets : null,
     notes: w.notes || null,
-    created_at: w.createdAt,
+    created_at: Math.round(num(w.createdAt, Date.now())),
   };
 }
 
@@ -350,8 +360,23 @@ async function withRetry<T extends { error: unknown; status?: number }>(fn: () =
     await sleep(RETRY_DELAY_MS * attempt);
     result = await fn();
   }
+  if (result.error) {
+    const e = result.error as { code?: string; message?: string };
+    lastError = { status: result.status, code: e.code, message: e.message ?? String(result.error) };
+  }
   return result;
 }
+
+/**
+ * Why the last request failed — so the outbox can tell a write the server
+ * refuses (it will fail the same way every time) from a connection problem.
+ */
+export interface WriteError {
+  status?: number;
+  code?: string;
+  message: string;
+}
+let lastError: WriteError | null = null;
 
 // Meal rows can carry full-size base64 photos, so a backup's full meal list
 // can add up to tens of MB — far past what a single insert request survives
@@ -379,6 +404,18 @@ function batchRowsBySize<T>(rows: T[], maxBytes: number): T[][] {
 }
 
 export const storage = {
+  /** The error behind the last failed request (if any), and forgets it. */
+  takeWriteError: (): WriteError | null => {
+    const e = lastError;
+    lastError = null;
+    return e;
+  },
+
+  /** Gets a fresh sign-in token (after the server said it had expired). */
+  refreshAuth: async (): Promise<void> => {
+    await supabase.auth.refreshSession().catch(() => undefined);
+  },
+
   /**
    * Meals without their photos. Photos are stored inline as base64 and are
    * most of the payload (tens of MB for a long history), so they're fetched

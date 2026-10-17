@@ -35,11 +35,18 @@ export function supersedeKey(op: OutboxOp): string | null {
   }
 }
 
-/** The queue with `op` added, dropping any queued write it replaces. */
+/**
+ * The queue with `op` added, dropping any queued write it replaces. The new
+ * write takes over the failed attempts of the one it replaces, so a save that
+ * keeps failing and keeps being redone (settings re-saved on every launch)
+ * still gives up after a few tries instead of retrying forever.
+ */
 export function enqueue(queue: QueuedOp[], item: QueuedOp): QueuedOp[] {
   const key = supersedeKey(item.op);
-  const kept = key ? queue.filter((q) => supersedeKey(q.op) !== key) : queue;
-  return [...kept, item];
+  if (!key) return [...queue, item];
+  const replaced = queue.filter((q) => supersedeKey(q.op) === key);
+  const attempts = Math.max(item.attempts, ...replaced.map((q) => q.attempts));
+  return [...queue.filter((q) => supersedeKey(q.op) !== key), { ...item, attempts }];
 }
 
 export interface QueuedOp {
@@ -47,6 +54,8 @@ export interface QueuedOp {
   op: OutboxOp;
   /** Failed attempts made while the device reported being online. */
   attempts: number;
+  /** Already sent again once after renewing an expired sign-in. */
+  authRetried?: boolean;
 }
 
 export interface Snapshot {
@@ -189,6 +198,18 @@ export function describeOp(op: OutboxOp): string {
     case 'upsertWorkout': return 'your workout';
     case 'deleteWorkout': return 'that deletion';
   }
+}
+
+/**
+ * A failure the server will repeat every time (bad data, a missing column,
+ * a permission rule): retrying can't help, and leaving it at the front of
+ * the queue would hold up every later write. An expired sign-in (401),
+ * timeouts, rate limits and server/network errors are worth retrying.
+ */
+export function isRejection(error: { status?: number } | null | undefined): boolean {
+  const status = error?.status;
+  if (!status) return false;
+  return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
 }
 
 export function isOnline(): boolean {

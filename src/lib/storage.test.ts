@@ -329,6 +329,22 @@ describe('getSettings / setSettings', () => {
     expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ user_id: USER_ID, calorie_goal: 2000 }), { onConflict: 'user_id' });
   });
 
+  it('never sends empty numbers the database would refuse', async () => {
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    await storage.setSettings(USER_ID, { calorieGoal: NaN, goalWeight: undefined as unknown as number, weeklyWeightTarget: -0.4, weightUnit: 'kg', geminiApiKey: undefined as unknown as string });
+    expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ calorie_goal: 2200, goal_weight: 75, gemini_api_key: '' }), { onConflict: 'user_id' });
+  });
+
+  it('remembers why the last write failed, once', async () => {
+    const { from } = makeFrom({ status: 400, error: { code: '23502', message: 'null value in column "calories"' } });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await storage.upsertWeight(USER_ID, { date: '2026-01-01', weight: 80, createdAt: 1 })).toBe(false);
+    expect(storage.takeWriteError()).toMatchObject({ status: 400, code: '23502' });
+    expect(storage.takeWriteError()).toBeNull();
+  });
+
   it('saves and loads personalization in the prefs column', async () => {
     resetPrefsColumnState();
     const prefs = { calendarCell: 'calories' as const, coachMemory: ['I train Mon/Wed/Fri'] };

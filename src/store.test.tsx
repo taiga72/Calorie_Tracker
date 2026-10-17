@@ -39,6 +39,7 @@ interface FakeDb {
 }
 
 let db: FakeDb;
+let writeError: { status?: number; code?: string; message: string } | null = null;
 
 function resetDb() {
   db = { meals: [], weights: [], settings: { ...DEFAULT_SETTINGS }, profile: { ...DEFAULT_PROFILE }, pinned: [], workouts: [] };
@@ -49,6 +50,8 @@ vi.mock('@/lib/storage', () => ({
   DEFAULT_SETTINGS,
   DEFAULT_PROFILE,
   storage: {
+    takeWriteError: vi.fn(() => { const e = writeError; writeError = null; return e; }),
+    refreshAuth: vi.fn(async () => {}),
     // Like the real query: meals come back without their photo columns.
     getMeals: vi.fn(async () => db.meals.map(({ imageData: _a, imageDatas: _b, ...rest }) => rest)),
     getMealPhotos: vi.fn(async (_userId: string, ids: string[]) => db.meals
@@ -546,6 +549,40 @@ describe('offline logging', () => {
     expect(result.current.pendingCount).toBe(0);
     expect(result.current.syncError).toBeNull();
     expect(db.weights).toHaveLength(1);
+  });
+
+  it('drops a write the server refuses, names why, and still sends the rest', async () => {
+    vi.mocked(storage.setSettings).mockImplementationOnce(async () => {
+      writeError = { status: 400, code: '23502', message: 'null value in column "calorie_goal"' };
+      return false;
+    });
+    const { result } = await renderStore();
+    setOnline(false);
+    act(() => { result.current.updateSettings({ calorieGoal: 1800 }); });
+    act(() => { result.current.logWeightForDate(70, '2026-01-05'); });
+    setOnline(true);
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.pendingCount).toBe(0);
+    expect(db.weights).toHaveLength(1);
+    expect(result.current.syncError).toMatch(/your settings.*didn't accept it.*calorie_goal/);
+    expect(result.current.syncError).not.toMatch(/connection/);
+  });
+
+  it('renews an expired sign-in and sends the write again', async () => {
+    vi.mocked(storage.upsertWeight).mockImplementationOnce(async () => {
+      writeError = { status: 401, code: 'PGRST301', message: 'JWT expired' };
+      return false;
+    });
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.logWeightForDate(70, '2026-01-05'); });
+
+    await waitFor(() => expect(result.current.pendingCount).toBe(0));
+    expect(storage.refreshAuth).toHaveBeenCalled();
+    expect(db.weights).toHaveLength(1);
+    expect(result.current.syncError).toBeNull();
   });
 
   it('opens instantly from the last cached state, before the server answers', async () => {
