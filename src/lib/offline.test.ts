@@ -94,3 +94,12 @@ describe('enqueue', () => {
     expect(enqueue([other], ci(4)).map((x) => x.qid)).toEqual(['x', 'c4']);
   });
 });
+
+describe('enqueue keeps failed attempts', () => {
+  it('a replacing write takes over the attempts of the one it replaces', () => {
+    const s1 = { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: 0, weightUnit: 'kg' as const, geminiApiKey: '' };
+    const q = enqueue([{ qid: 'a', op: { kind: 'setSettings', settings: s1 }, attempts: 3 }], { qid: 'b', op: { kind: 'setSettings', settings: { ...s1, calorieGoal: 1900 } }, attempts: 0 });
+    expect(q).toHaveLength(1);
+    expect(q[0]).toMatchObject({ qid: 'b', attempts: 3 });
+  });
+});

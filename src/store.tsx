@@ -7,7 +7,7 @@ import { exerciseCreditByDay, setExerciseCredit } from '@/lib/goalPlan';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
-  applyPending, describeOp, enqueue, isOnline, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
+  applyPending, describeOp, enqueue, isOnline, isRejection, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
   type OutboxOp, type QueuedOp, type Snapshot,
 } from '@/lib/offline';
 import { useAuth } from '@/auth';
@@ -279,12 +279,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         let hadFailure = false;
         while (queue.current.length > 0 && isOnline() && canSyncRef.current) {
           const item = queue.current[0];
+          storage.takeWriteError?.();
           const ok = await runOp(uid, item.op);
           if (ok) {
             persistQueue(uid, queue.current.filter((q) => q.qid !== item.qid));
             continue;
           }
           if (!isOnline()) break;
+          const error = storage.takeWriteError?.() ?? null;
+          // Refused by the server: it would fail the same way forever and hold
+          // up everything queued after it, so it's dropped and named.
+          if (isRejection(error)) {
+            persistQueue(uid, queue.current.filter((q) => q.qid !== item.qid));
+            setSyncError(`Couldn't save ${describeOp(item.op)} — the server didn't accept it (${error?.message ?? 'unknown error'}).`);
+            continue;
+          }
+          // The sign-in expired (e.g. the app sat in the background): renew it
+          // and send again right away.
+          if (error?.status === 401 && !item.authRetried) {
+            await storage.refreshAuth?.();
+            persistQueue(uid, queue.current.map((q) => (q.qid === item.qid ? { ...q, authRetried: true } : q)));
+            continue;
+          }
           hadFailure = true;
           const attempts = item.attempts + 1;
           if (attempts >= MAX_ATTEMPTS) {

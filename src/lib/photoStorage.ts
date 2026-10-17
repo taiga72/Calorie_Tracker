@@ -46,7 +46,14 @@ function dataUrlToBlob(dataUrl: string): { blob: Blob; mime: string } {
   return { blob: new Blob([bytes], { type: mime }), mime };
 }
 
-type UploadResult = { ok: true; ref: string } | { ok: false; reason: 'unavailable' | 'failed' };
+type UploadResult = { ok: true; ref: string } | { ok: false; reason: 'unavailable' | 'rejected' | 'failed' };
+
+/** Storage refused the file itself (size, type, permissions): retrying won't help. */
+function isRejectedUpload(error: unknown): boolean {
+  const e = error as { status?: number | string; statusCode?: number | string } | null;
+  const status = Number(e?.statusCode ?? e?.status);
+  return status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+}
 
 export async function uploadPhoto(userId: string, dataUrl: string): Promise<UploadResult> {
   if (bucketMissing) return { ok: false, reason: 'unavailable' };
@@ -61,14 +68,15 @@ export async function uploadPhoto(userId: string, dataUrl: string): Promise<Uplo
     return { ok: false, reason: 'unavailable' };
   }
   console.error('Failed to upload meal photo', error);
-  return { ok: false, reason: 'failed' };
+  return { ok: false, reason: isRejectedUpload(error) ? 'rejected' : 'failed' };
 }
 
 /**
  * Uploads any inline photos and returns the list with references in their
- * place. Without the bucket they stay inline. Returns null if an upload
- * failed (e.g. offline) so the save can be retried — unless
- * `keepInlineOnFailure`, which keeps that photo inline instead.
+ * place. Without the bucket, or when Storage refuses a file, they stay
+ * inline (so the meal still saves). Returns null if an upload failed (e.g.
+ * offline) so the save can be retried — unless `keepInlineOnFailure`, which
+ * keeps that photo inline instead.
  */
 export async function storeInlinePhotos(
   userId: string,
@@ -80,7 +88,7 @@ export async function storeInlinePhotos(
     if (!isDataUrl(p)) { out.push(p); continue; }
     const res = await uploadPhoto(userId, p);
     if (res.ok) out.push(res.ref);
-    else if (res.reason === 'unavailable' || keepInlineOnFailure) out.push(p);
+    else if (res.reason !== 'failed' || keepInlineOnFailure) out.push(p);
     else return null;
   }
   return out;

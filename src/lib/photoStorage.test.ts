@@ -47,6 +47,12 @@ describe('storeInlinePhotos', () => {
     expect(await storeInlinePhotos('u1', [PHOTO], { keepInlineOnFailure: true })).toEqual([PHOTO]);
   });
 
+  it('keeps a photo Storage refuses inline, so the meal still saves', async () => {
+    bucket.upload.mockResolvedValue({ error: { statusCode: '413', message: 'The object exceeded the maximum allowed size' } });
+    vi.spyOn(console, 'error').mockImplementationOnce(() => {});
+    expect(await storeInlinePhotos('u1', [PHOTO])).toEqual([PHOTO]);
+  });
+
   it('falls back to inline photos (and stops trying) when the bucket does not exist', async () => {
     bucket.upload.mockResolvedValue({ error: { message: 'Bucket not found' } });
     expect(await storeInlinePhotos('u1', [PHOTO])).toEqual([PHOTO]);
