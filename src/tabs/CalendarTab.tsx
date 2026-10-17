@@ -14,7 +14,8 @@ import { dayStatus } from '@/lib/goal';
 import { calorieGoalOn } from '@/lib/goalPlan';
 
 export function CalendarTab() {
-  const { getDay, settings, refresh, refreshing } = useStore();
+  const { getDay, settings, refresh, refreshing, workouts } = useStore();
+  const exerciseDays = useMemo(() => new Set(workouts.map((w) => w.date)), [workouts]);
   const [cursor, setCursor] = useState(() => logicalNow());
   const [selected, setSelected] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -100,6 +101,12 @@ export function CalendarTab() {
         <Legend color="bg-rose-50 dark:bg-rose-950 border-rose-300 dark:border-rose-700" label="Over goal" />
         <Legend color="bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-700" label="Partly logged" />
         <Legend color="bg-blue-50 dark:bg-blue-950 border-blue-300 dark:border-blue-700" label="Weight only" />
+        {exerciseDays.size > 0 && (
+          <div className="flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+            <span className="text-10 text-gray-500 dark:text-gray-400 font-medium">Exercise</span>
+          </div>
+        )}
         {cellContent !== 'color' && (
           <span className="text-10 text-gray-400 font-medium">
             {showKcal && <><span className="font-bold text-orange-600 dark:text-orange-300">1.9k</span> = kcal</>}
@@ -157,12 +164,15 @@ export function CalendarTab() {
               onClick={() => setSelected(key)}
               className={`flex flex-col items-start p-1.5 border-r border-b border-gray-200 dark:border-gray-700 text-left transition-colors ${cellTint || 'hover:bg-gray-50 dark:hover:bg-gray-800/60'} ${cellTint ? 'hover:brightness-95' : ''}`}
             >
-              <span
-                className={`text-sm font-semibold w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 ${
-                  isCur ? 'bg-rose-500 text-white' : 'text-gray-900 dark:text-gray-100'
-                }`}
-              >
-                {d.getDate()}
+              <span className="w-full flex items-center justify-between">
+                <span
+                  className={`text-sm font-semibold w-6 h-6 flex items-center justify-center rounded-full flex-shrink-0 ${
+                    isCur ? 'bg-rose-500 text-white' : 'text-gray-900 dark:text-gray-100'
+                  }`}
+                >
+                  {d.getDate()}
+                </span>
+                {exerciseDays.has(key) && <span className="w-1.5 h-1.5 mr-0.5 rounded-full bg-sky-500 flex-shrink-0" aria-label="Exercise logged" />}
               </span>
               <div className="mt-1 w-full space-y-0.5 overflow-hidden">
                 {showKcal && day.totalCalories > 0 && (

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import { toKey, addMonths, formatMonthYear, formatHeaderDate } from '@/lib/dateUtils';
-import type { DaySummary, MealEntry, Profile, Settings, WeightEntry } from '@/types';
+import type { DaySummary, MealEntry, Profile, Settings, WeightEntry, Workout } from '@/types';
 
 const DEFAULT_SETTINGS: Settings = {
   calorieGoal: 2000,
@@ -26,6 +26,7 @@ const today = toKey(new Date());
 let days: Record<string, DaySummary>;
 let settings: Settings = DEFAULT_SETTINGS;
 let allMeals: MealEntry[] = [];
+let allWorkouts: Workout[] = [];
 
 vi.mock('@/store', () => ({
   useStore: () => ({
@@ -41,7 +42,7 @@ vi.mock('@/store', () => ({
     deleteWeight: vi.fn(),
     weights: [] as WeightEntry[],
     pinned: [],
-    workouts: [],
+    workouts: allWorkouts,
     pinMeal: vi.fn(),
     unpinMeal: vi.fn(),
     restorePin: vi.fn(),
@@ -111,6 +112,16 @@ describe('CalendarTab heatmap', () => {
     expect(cellFor(fromTodayDayNumber()).className).toMatch(/bg-emerald-50/);
     if (y.getMonth() !== new Date().getMonth()) fireEvent.click(screen.getByLabelText('Previous month'));
     expect(cellFor(String(y.getDate())).className).toMatch(/bg-amber-50/);
+  });
+
+  it('marks days with exercise, and explains the marker', () => {
+    const d = fromTodayDayNumber();
+    days = {};
+    allWorkouts = [{ id: 'w1', date: today, kind: 'cardio', name: 'Run', minutes: 30, calories: 300, createdAt: 1 }];
+    renderCalendar();
+    expect(cellFor(d).querySelector('[aria-label="Exercise logged"]')).toBeTruthy();
+    expect(screen.getByText('Exercise')).toBeTruthy();
+    allWorkouts = [];
   });
 
   it('tints a weight-only day blue', () => {

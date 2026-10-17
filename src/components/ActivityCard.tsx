@@ -3,10 +3,19 @@ import { Dumbbell, Plus, ChevronRight } from 'lucide-react';
 import { useStore } from '@/store';
 import { Modal } from '@/components/Modal';
 import { WorkoutForm } from '@/components/WorkoutForm';
+import { SwipeToDelete } from '@/components/SwipeToDelete';
+import { useUndoToast } from '@/components/UndoToastProvider';
 import { groupSets, kindEmoji, workoutsOn } from '@/lib/workouts';
 import { exerciseCreditOn } from '@/lib/goalPlan';
 import { kgToUnit } from '@/lib/units';
+import { formatShortDate, relativeDayLabel } from '@/lib/dateUtils';
 import type { Workout } from '@/types';
+
+/** "Today", "3 days ago", then a date ("Oct 2") past a week. */
+function dayLabel(key: string): string {
+  const rel = relativeDayLabel(key);
+  return /^\d+ days ago$/.test(rel) && parseInt(rel, 10) > 6 ? formatShortDate(key) : rel;
+}
 
 /** Adds or edits one workout, on `date`. */
 export function WorkoutSheet({ open, onClose, date, workout }: { open: boolean; onClose: () => void; date: string; workout?: Workout | null }) {
@@ -17,20 +26,29 @@ export function WorkoutSheet({ open, onClose, date, workout }: { open: boolean; 
   );
 }
 
-/** One line per workout: "🏋️ Upper body · 45 min · 280 kcal", with its lifts. */
-export function WorkoutList({ workouts, onEdit }: { workouts: Workout[]; onEdit: (w: Workout) => void }) {
-  const { settings } = useStore();
+/**
+ * One line per workout: "🏋️ Upper body · 45 min · 280 kcal", with its lifts.
+ * Rows swipe to delete (with undo), like meals; tap to edit.
+ */
+export function WorkoutList({ workouts, onEdit, showDate = false }: { workouts: Workout[]; onEdit: (w: Workout) => void; showDate?: boolean }) {
+  const { settings, deleteWorkout, restoreWorkout } = useStore();
+  const { requestUndo } = useUndoToast();
   const unit = settings.weightUnit;
+  const onDelete = (w: Workout) => {
+    deleteWorkout(w.id);
+    requestUndo('Workout deleted', () => restoreWorkout(w));
+  };
   return (
     <ul className="divide-y divide-gray-50 dark:divide-gray-800">
       {workouts.map((w) => (
         <li key={w.id}>
+          <SwipeToDelete onDelete={() => onDelete(w)}>
           <button type="button" onClick={() => onEdit(w)} className="w-full flex items-center gap-3 py-2.5 text-left">
             <span aria-hidden className="w-10 h-10 rounded-2xl bg-sky-50 dark:bg-sky-950 flex items-center justify-center text-lg flex-shrink-0">{kindEmoji(w.kind)}</span>
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-semibold text-gray-900 dark:text-white truncate">{w.name}</span>
               <span className="block text-11 text-gray-400">
-                {[w.minutes ? `${w.minutes} min` : null, w.calories ? `${w.calories} kcal` : null, w.sets?.length ? `${w.sets.length} sets` : null].filter(Boolean).join(' · ')}
+                {[showDate ? dayLabel(w.date) : null, w.minutes ? `${w.minutes} min` : null, w.calories ? `${w.calories} kcal` : null, w.sets?.length ? `${w.sets.length} sets` : null].filter(Boolean).join(' · ')}
               </span>
               {w.sets?.length ? (
                 <span className="block text-11 text-gray-500 dark:text-gray-400 truncate mt-0.5">
@@ -40,9 +58,11 @@ export function WorkoutList({ workouts, onEdit }: { workouts: Workout[]; onEdit:
                   }).join(' · ')}
                 </span>
               ) : null}
+              {w.notes ? <span className="block text-11 text-gray-400 italic truncate mt-0.5">{w.notes}</span> : null}
             </span>
             <ChevronRight size={15} className="text-gray-400 flex-shrink-0" />
           </button>
+          </SwipeToDelete>
         </li>
       ))}
     </ul>

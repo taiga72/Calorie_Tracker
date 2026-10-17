@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useStore } from '@/store';
 import { computeWeeklyRecap, cachedRecapSummary, cacheRecapSummary, dismissRecap } from '@/lib/weeklyRecap';
 import { cleanCoachText, getWeeklySummary } from '@/lib/geminiCoach';
-import { formatShortDate } from '@/lib/dateUtils';
+import { formatShortDate, logicalNow } from '@/lib/dateUtils';
 import { fmtSignedChange, kgToUnit } from '@/lib/units';
 import { weeklyTargetOn } from '@/lib/goalPlan';
-import { CalendarCheck, Sparkles, X } from 'lucide-react';
+import { CalendarCheck, Dumbbell, Sparkles, X } from 'lucide-react';
 
 interface WeeklyRecapCardProps {
   /** Home shows a dismiss button; Stats keeps it as a permanent card. */
@@ -18,8 +18,8 @@ interface WeeklyRecapCardProps {
  * Monday to Thursday it shows last week, with that Friday's brief if any.
  */
 export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
-  const { meals, weights, settings } = useStore();
-  const recap = useMemo(() => computeWeeklyRecap(meals, weights, settings), [meals, weights, settings]);
+  const { meals, weights, settings, workouts } = useStore();
+  const recap = useMemo(() => computeWeeklyRecap(meals, weights, settings, logicalNow(), workouts), [meals, weights, settings, workouts]);
   const weekStart = recap?.weekStart;
   const [summary, setSummary] = useState<string | null>(() => (weekStart ? cachedRecapSummary(weekStart) : null));
   const [summaryState, setSummaryState] = useState<'idle' | 'loading' | 'failed'>('idle');
@@ -94,6 +94,17 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
           sub={recap.proteinTarget ? `target hit ${recap.daysProteinHit}/${recap.countedDays || recap.loggedDays} days` : 'daily average'}
         />
       </div>
+
+      {recap.exercise && (
+        <p className="flex items-center gap-1.5 text-11 text-gray-500 dark:text-gray-400 mt-3">
+          <Dumbbell size={12} className="text-sky-600 flex-shrink-0" />
+          <span>
+            <span className="font-semibold text-gray-700 dark:text-gray-200">{recap.exercise.workouts} workout{recap.exercise.workouts === 1 ? '' : 's'}</span>
+            {recap.exercise.minutes > 0 && ` · ${recap.exercise.minutes} min`}
+            {recap.exercise.calories > 0 && ` · ${recap.exercise.calories.toLocaleString()} kcal burned`}
+          </span>
+        </p>
+      )}
 
       {recap.topFoods.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 mt-3">
