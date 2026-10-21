@@ -16,7 +16,7 @@ vi.mock('@/lib/supabaseClient', () => ({
 const { storage } = await import('@/lib/storage');
 const { supabase } = await import('@/lib/supabaseClient');
 const { resetPhotoStorageState } = await import('@/lib/photoStorage');
-const { resetPrefsColumnState } = await import('@/lib/storage');
+const { resetPrefsColumnState, resetUpdatedAtState } = await import('@/lib/storage');
 
 type Result = { data?: unknown; error?: unknown; status?: number };
 
@@ -684,5 +684,67 @@ describe('meal photos in Storage', () => {
     expect(await storage.clearAll(USER_ID)).toBe(true);
     expect(bucket.list).toHaveBeenCalledWith(USER_ID, { limit: 100 });
     expect(bucket.remove).toHaveBeenCalledWith([`${USER_ID}/a.jpg`, `${USER_ID}/b.jpg`]);
+  });
+});
+
+describe('fetching only what changed', () => {
+  const row = (id: string, updated_at: string) => ({ id, date: '2026-01-01', meal_type: 'Lunch', items: [], calories: 500, protein: 1, carbs: 1, fat: 1, fiber: 1, reasoning: '', created_at: 1, updated_at });
+
+  /** select(cols) → a node per query, recording the filters it got. */
+  function tableMock(byColumns: (cols: string) => Result) {
+    const calls: { cols: string; gte?: [string, string] }[] = [];
+    const select = vi.fn((cols: string) => {
+      const call: { cols: string; gte?: [string, string] } = { cols };
+      calls.push(call);
+      const result = byColumns(cols);
+      const node = {
+        then: (resolve: (v: Result) => void, reject?: (e: unknown) => void) => Promise.resolve(result).then(resolve, reject),
+        eq: vi.fn(() => node),
+        gte: vi.fn((c: string, v: string) => { call.gte = [c, v]; return node; }),
+        order: vi.fn(() => Promise.resolve(result)),
+      };
+      return node;
+    });
+    vi.mocked(supabase.from).mockReturnValue({ select } as never);
+    return calls;
+  }
+
+  beforeEach(() => resetUpdatedAtState());
+
+  it('downloads everything the first time, noting the newest change', async () => {
+    const calls = tableMock(() => ({ data: [row('a', '2026-10-20T10:00:00.000Z'), row('b', '2026-10-21T08:30:00.000Z')], error: null }));
+    const res = (await storage.syncMeals(USER_ID, null))!;
+    expect(res.full).toBe(true);
+    expect(res.rows.map((m) => m.id)).toEqual(['a', 'b']);
+    expect(res.cursor).toBe('2026-10-21T08:30:00.000Z');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].cols).toMatch(/updated_at/);
+    expect(calls[0].cols).not.toMatch(/image_data/);
+  });
+
+  it('afterwards asks only for rows changed since then (with a little overlap), plus every key', async () => {
+    const calls = tableMock((cols) => (cols === 'id'
+      ? { data: [{ id: 'a' }, { id: 'c' }], error: null }
+      : { data: [row('c', '2026-10-21T09:00:00.000Z')], error: null }));
+    const res = (await storage.syncMeals(USER_ID, '2026-10-21T08:30:00.000Z'))!;
+    expect(res.full).toBe(false);
+    expect(res.rows.map((m) => m.id)).toEqual(['c']);
+    expect(res.keys).toEqual(['a', 'c']);
+    expect(res.cursor).toBe('2026-10-21T09:00:00.000Z');
+    const changed = calls.find((c) => c.cols !== 'id')!;
+    expect(changed.gte).toEqual(['updated_at', '2026-10-21T08:28:00.000Z']);
+  });
+
+  it('keeps the cursor when nothing changed', async () => {
+    tableMock((cols) => (cols === 'id' ? { data: [{ id: 'a' }], error: null } : { data: [], error: null }));
+    expect((await storage.syncMeals(USER_ID, '2026-10-21T08:30:00.000Z'))!.cursor).toBe('2026-10-21T08:30:00.000Z');
+  });
+
+  it('falls back to full downloads when the database has no updated_at yet', async () => {
+    const calls = tableMock(() => ({ status: 400, data: null, error: { code: '42703', message: 'column meals.updated_at does not exist' } }));
+    expect(await storage.syncMeals(USER_ID, null)).toBeNull();
+    // Not asked again this session.
+    expect(await storage.syncWeights(USER_ID, null)).toBeNull();
+    expect(calls).toHaveLength(1);
   });
 });

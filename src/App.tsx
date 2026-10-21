@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { StoreProvider, useStore } from '@/store';
 import { AuthProvider, useAuth } from '@/auth';
 import { AuthScreen } from '@/components/AuthScreen';
@@ -14,22 +14,43 @@ import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
 import { LogModal } from '@/modals/LogModal';
-import { AICoachModal } from '@/components/AICoachModal';
 import { OPEN_COACH_EVENT } from '@/lib/coachLauncher';
 import { StreakModal } from '@/modals/StreakModal';
 import { HomeTab } from '@/tabs/HomeTab';
-import { StatsTab } from '@/tabs/StatsTab';
-import { CalendarTab } from '@/tabs/CalendarTab';
-import { SettingsTab } from '@/tabs/SettingsTab';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
 import { newlyAchieved } from '@/lib/milestones';
 import { todayKey } from '@/lib/dateUtils';
 import { MilestoneModal } from '@/components/Milestones';
 import { AppearanceSync } from '@/components/AppearanceSync';
 import { WelcomeSheet } from '@/components/WelcomeSheet';
-import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Loader2, AlertTriangle, X, CloudOff, RefreshCw } from 'lucide-react';
 import type { Milestone, TabKey } from '@/types';
+
+// Home is in the first download; the other tabs and the bigger sheets load
+// on their own (and are fetched in the background once Home is up, so
+// switching tabs stays instant and works offline).
+const loadStats = () => import('@/tabs/StatsTab');
+const loadCalendar = () => import('@/tabs/CalendarTab');
+const loadSettings = () => import('@/tabs/SettingsTab');
+const loadCoach = () => import('@/components/AICoachModal');
+const loadWizard = () => import('@/modals/SetupWizardModal');
+const StatsTab = lazy(() => loadStats().then((m) => ({ default: m.StatsTab })));
+const CalendarTab = lazy(() => loadCalendar().then((m) => ({ default: m.CalendarTab })));
+const SettingsTab = lazy(() => loadSettings().then((m) => ({ default: m.SettingsTab })));
+const AICoachModal = lazy(() => loadCoach().then((m) => ({ default: m.AICoachModal })));
+const SetupWizardModal = lazy(() => loadWizard().then((m) => ({ default: m.SetupWizardModal })));
+
+function prefetchScreens() {
+  for (const load of [loadStats, loadCalendar, loadSettings, loadCoach, loadWizard]) void load().catch(() => {});
+}
+
+function TabFallback() {
+  return (
+    <div className="flex justify-center pt-24 text-gray-300 dark:text-gray-600">
+      <Loader2 size={22} className="animate-spin" />
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -118,6 +139,17 @@ function AppInner() {
   }, [loading, userId]);
   const closeWelcome = () => { setWelcomeOpen(false); writeFlag(welcomeKey); };
   useSplashReady(!loading);
+  // Once Home is showing, fetch the other screens quietly in the background.
+  useEffect(() => {
+    if (loading) return;
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    if (idle) idle(prefetchScreens); else setTimeout(prefetchScreens, 1500);
+  }, [loading]);
+  // The coach and the goal setup are only mounted once first opened.
+  const [coachMounted, setCoachMounted] = useState(false);
+  const [wizardMounted, setWizardMounted] = useState(false);
+  useEffect(() => { if (coachOpen) setCoachMounted(true); }, [coachOpen]);
+  useEffect(() => { if (wizardOpen) setWizardMounted(true); }, [wizardOpen]);
   const reminder = useReminders(!loading);
 
   const openLog = (mode: 'food' | 'weight') => {
@@ -190,9 +222,11 @@ function AppInner() {
       {/* Room at the bottom so the last card can scroll clear of the floating buttons. */}
       <main className="pb-48">
         {tab === 'home' && <HomeTab />}
-        {tab === 'stats' && <StatsTab />}
-        {tab === 'calendar' && <CalendarTab />}
-        {tab === 'settings' && <SettingsTab />}
+        <Suspense fallback={<TabFallback />}>
+          {tab === 'stats' && <StatsTab />}
+          {tab === 'calendar' && <CalendarTab />}
+          {tab === 'settings' && <SettingsTab />}
+        </Suspense>
       </main>
 
       <FAB
@@ -203,7 +237,11 @@ function AppInner() {
       />
       <BottomNav active={tab} onChange={(t) => { if (coachHint && t !== tab) dismissCoachHint(); setTab(t); }} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
-      <AICoachModal open={coachOpen} onClose={() => { setCoachOpen(false); setCoachQuestion(null); }} question={coachQuestion} />
+      {coachMounted && (
+        <Suspense fallback={null}>
+          <AICoachModal open={coachOpen} onClose={() => { setCoachOpen(false); setCoachQuestion(null); }} question={coachQuestion} />
+        </Suspense>
+      )}
       <AppearanceSync />
       <WelcomeSheet
         open={welcomeOpen && !wizardOpen && !logOpen}
@@ -214,7 +252,11 @@ function AppInner() {
         onSetGoal={() => setWizardOpen(true)}
         onLogMeal={() => openLog('food')}
       />
-      <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
+      {wizardMounted && (
+        <Suspense fallback={null}>
+          <SetupWizardModal open={wizardOpen} onClose={() => setWizardOpen(false)} />
+        </Suspense>
+      )}
       <MilestoneModal milestone={celebrate} onClose={() => setCelebrate(null)} />
       {/* One celebration at a time: the streak waits for the milestone. */}
       <StreakModal

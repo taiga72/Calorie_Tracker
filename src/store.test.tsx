@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { toKey } from '@/lib/dateUtils';
 import type { MealEntry, WeightEntry, Settings, Profile, PinnedMeal, Workout } from '@/types';
@@ -913,5 +913,61 @@ describe('backup round trip', () => {
     act(() => result.current.importBackup({ version: 1, exportedAt: '', meals: [], weights: [], settings: DEFAULT_SETTINGS }));
     expect(result.current.pinned).toEqual([pin]);
     expect(result.current.workouts).toEqual([workout]);
+  });
+});
+
+describe('syncing only what changed', () => {
+  const m = (id: string, calories: number, createdAt: number): MealEntry => ({ ...emptyMeal({ calories }), id, createdAt });
+  type Sync = (uid: string, since: string | null) => Promise<{ full: boolean; rows: MealEntry[]; keys: string[] | null; cursor: string | null }>;
+  const s = storage as unknown as { syncMeals?: Sync };
+
+  afterEach(() => { delete s.syncMeals; });
+
+  it('downloads everything first, then merges just the changes and drops rows deleted elsewhere', async () => {
+    const syncMeals = vi.fn<Sync>(async (_uid, since) => (since === null
+      ? { full: true, rows: [m('kept', 400, 2), m('gone', 300, 1)], keys: null, cursor: 't1' }
+      : { full: false, rows: [m('kept', 450, 2), m('fresh', 200, 3)], keys: ['kept', 'fresh'], cursor: 't2' }));
+    s.syncMeals = syncMeals;
+    const { result } = await renderStore();
+    expect(syncMeals).toHaveBeenLastCalledWith(TEST_USER_ID, null);
+    expect(result.current.meals.map((x) => x.id)).toEqual(['kept', 'gone']);
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(syncMeals).toHaveBeenLastCalledWith(TEST_USER_ID, 't1');
+    expect(result.current.meals.map((x) => [x.id, x.calories])).toEqual([['fresh', 200], ['kept', 450]]);
+    expect(storage.getMeals).not.toHaveBeenCalled();
+  });
+
+  it('picks up where it left off on the next launch', async () => {
+    const syncMeals = vi.fn<Sync>(async (_uid, since) => ({ full: since === null, rows: since ? [] : [m('a', 400, 1)], keys: since ? ['a'] : null, cursor: 't1' }));
+    s.syncMeals = syncMeals;
+    const first = await renderStore();
+    await waitFor(() => expect(localStorage.getItem(`calorie_tracker_cache_${TEST_USER_ID}`)).toMatch(/"cursors"/), { timeout: 2000 });
+    first.unmount();
+
+    const second = await renderStore();
+    expect(syncMeals).toHaveBeenLastCalledWith(TEST_USER_ID, 't1');
+    expect(second.result.current.meals.map((x) => x.id)).toEqual(['a']);
+  });
+
+  it('downloads in full again after an import', async () => {
+    const syncMeals = vi.fn<Sync>(async () => ({ full: true, rows: [], keys: null, cursor: 't1' }));
+    s.syncMeals = syncMeals;
+    const { result } = await renderStore();
+    act(() => { result.current.importBackup({ version: 1, exportedAt: '', meals: [], weights: [], settings: DEFAULT_SETTINGS }); });
+    await act(async () => { await result.current.refresh(); });
+    expect(syncMeals).toHaveBeenLastCalledWith(TEST_USER_ID, null);
+  });
+});
+
+describe('day lookups', () => {
+  it('sums each day once and finds its weigh-in', async () => {
+    const { buildDayIndex } = await import('@/store');
+    const meals = [{ ...emptyMeal({ calories: 300, protein: 20 }), id: 'a', createdAt: 1 }, { ...emptyMeal({ calories: 200, protein: 5 }), id: 'b', createdAt: 2 }, { ...emptyMeal({ date: '2026-01-02', calories: 900 }), id: 'c', createdAt: 3 }];
+    const days = buildDayIndex(meals, [{ date: '2026-01-02', weight: 80, createdAt: 1 }]);
+    expect(days.get('2026-01-01')).toMatchObject({ totalCalories: 500, totalProtein: 25 });
+    expect(days.get('2026-01-01')!.meals.map((x) => x.id)).toEqual(['a', 'b']);
+    expect(days.get('2026-01-02')!.weight?.weight).toBe(80);
   });
 });

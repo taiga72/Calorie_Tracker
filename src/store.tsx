@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { MealEntry, WeightEntry, Settings, Profile, DaySummary, PinnedMeal, Prefs, Workout } from '@/types';
-import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type MealPhotos } from '@/lib/storage';
+import { storage, DEFAULT_SETTINGS, DEFAULT_PROFILE, type BackupPayload, type MealPhotos, type TableSync } from '@/lib/storage';
 import { addDays, setDayStartHour, toKey, todayKey } from '@/lib/dateUtils';
 import { unitToKg } from '@/lib/units';
 import { exerciseCreditByDay, setExerciseCredit } from '@/lib/goalPlan';
@@ -8,7 +8,7 @@ import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
   applyPending, describeOp, enqueue, isOnline, isRejection, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
-  type OutboxOp, type QueuedOp, type Snapshot,
+  type OutboxOp, type QueuedOp, type Snapshot, type SyncCursors,
 } from '@/lib/offline';
 import { useAuth } from '@/auth';
 
@@ -89,6 +89,35 @@ const RETRY_INTERVAL_MS = 15_000;
 // Returning to the app re-syncs, but not on every quick app switch.
 const FOREGROUND_SYNC_MIN_GAP_MS = 30_000;
 const SNAPSHOT_DEBOUNCE_MS = 800;
+// Between full downloads, syncs fetch only what changed (see storage.syncMeals).
+// A full one now and then is a safety net for anything a cursor could miss.
+const FULL_SYNC_EVERY_MS = 12 * 60 * 60 * 1000;
+
+const byCreatedDesc = <T extends { createdAt: number }>(xs: T[]) => xs.sort((a, b) => b.createdAt - a.createdAt);
+const byDateAsc = <T extends { date: string }>(xs: T[]) => xs.sort((a, b) => a.date.localeCompare(b.date));
+
+/**
+ * One table's fresh list: the changed rows laid over what's already here,
+ * minus anything no longer on the server. `null` from `sync` (no updated_at
+ * column yet) means a plain full download with `get`.
+ */
+async function pullTable<T, L extends T[] | null>(
+  sync: ((since: string | null) => Promise<TableSync<T> | null>) | undefined,
+  get: () => Promise<L>,
+  since: string | null,
+  base: T[],
+  keyOf: (x: T) => string,
+  sort: (xs: T[]) => T[],
+): Promise<{ list: T[] | L; cursor: string | null }> {
+  const res = sync ? await sync(since) : null;
+  if (!res) return { list: await get(), cursor: null };
+  if (res.full || !res.keys) return { list: res.rows, cursor: res.cursor };
+  const onServer = new Set(res.keys);
+  const merged = new Map<string, T>();
+  for (const x of base) if (onServer.has(keyOf(x))) merged.set(keyOf(x), x);
+  for (const x of res.rows) merged.set(keyOf(x), x);
+  return { list: sort([...merged.values()]), cursor: res.cursor };
+}
 // Photos for meals this recent are fetched in the background after each
 // sync; older ones only when a day is opened (or for a backup export).
 const RECENT_PHOTO_DAYS = 30;
@@ -137,6 +166,34 @@ function runOp(userId: string, op: OutboxOp): Promise<boolean> {
   }
 }
 
+function emptyDay(date: string): DaySummary {
+  return { date, meals: [], weight: undefined, totalCalories: 0, totalProtein: 0, totalCarbs: 0, totalFat: 0, totalFiber: 0 };
+}
+
+/** Day summaries by date, in one pass over the meals (kept in their list order). */
+export function buildDayIndex(meals: MealEntry[], weights: WeightEntry[]): Map<string, DaySummary> {
+  const days = new Map<string, DaySummary>();
+  const dayOf = (date: string) => {
+    let d = days.get(date);
+    if (!d) { d = emptyDay(date); days.set(date, d); }
+    return d;
+  };
+  for (const m of meals) {
+    const d = dayOf(m.date);
+    d.meals.push(m);
+    d.totalCalories += m.calories;
+    d.totalProtein += m.protein;
+    d.totalCarbs += m.carbs;
+    d.totalFat += m.fat;
+    d.totalFiber += m.fiber;
+  }
+  for (const w of weights) {
+    const d = dayOf(w.date);
+    if (!d.weight) d.weight = w;
+  }
+  return days;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const { user, status: authStatus } = useAuth();
   const userId = user?.id;
@@ -178,6 +235,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const lastSyncAttempt = useRef(0);
   // Latest state, for merging a partial load (one table failed) and for undo.
   const current = useRef<Snapshot>({ meals, weights, settings, profile, pinned, workouts });
+  const cursors = useRef<SyncCursors | null>(null);
   current.current = { meals, weights, settings, profile, pinned, workouts };
 
   // Photos by meal id, kept apart from the meal list so a sync (which loads
@@ -348,15 +406,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const run = (async () => {
       lastSyncAttempt.current = Date.now();
       await flush(uid);
-      const [m, w, s, p, pins, wk] = await Promise.allSettled([
-        storage.getMeals(uid),
-        storage.getWeights(uid),
+      const base = current.current;
+      // Only what changed since the last sync, unless a full download is due.
+      const prev = cursors.current;
+      const incremental = !!prev && Date.now() - (prev.fullAt ?? 0) < FULL_SYNC_EVERY_MS;
+      const since = (c: string | null | undefined) => (incremental ? c ?? null : null);
+      const [mr, wr, s, p, pins, wkr] = await Promise.allSettled([
+        pullTable(storage.syncMeals && ((x) => storage.syncMeals(uid, x)), () => storage.getMeals(uid), since(prev?.meals), base.meals, (x) => x.id, byCreatedDesc),
+        pullTable(storage.syncWeights && ((x) => storage.syncWeights(uid, x)), () => storage.getWeights(uid), since(prev?.weights), base.weights, (x) => x.date, byDateAsc),
         storage.getSettings(uid),
         storage.getProfile(uid),
         storage.getPinnedMeals(uid),
-        storage.getWorkouts(uid),
+        pullTable(storage.syncWorkouts && ((x) => storage.syncWorkouts(uid, x)), () => storage.getWorkouts(uid), since(prev?.workouts), base.workouts, (x) => x.id, byCreatedDesc),
       ]);
-      const base = current.current;
+      const m = mr.status === 'fulfilled' ? { status: 'fulfilled' as const, value: mr.value.list } : mr;
+      const w = wr.status === 'fulfilled' ? { status: 'fulfilled' as const, value: wr.value.list } : wr;
+      const wk = wkr.status === 'fulfilled' ? { status: 'fulfilled' as const, value: wkr.value.list } : wkr;
+      // A table that failed keeps its old cursor: its data here didn't change.
+      const nextCursors: SyncCursors = {
+        meals: mr.status === 'fulfilled' ? mr.value.cursor : prev?.meals ?? null,
+        weights: wr.status === 'fulfilled' ? wr.value.cursor : prev?.weights ?? null,
+        workouts: wkr.status === 'fulfilled' ? wkr.value.cursor : prev?.workouts ?? null,
+        fullAt: incremental ? prev?.fullAt : mr.status === 'fulfilled' && wr.status === 'fulfilled' && wkr.status === 'fulfilled' ? Date.now() : prev?.fullAt,
+      };
       base.meals.forEach(rememberPhotos);
       const failed: string[] = [];
       const next: Snapshot = { ...base };
@@ -385,6 +457,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         failed.push('workouts');
       }
       applySnapshot(applyPending(next, queue.current));
+      cursors.current = nextCursors;
       // Thumbnails for recent meals arrive shortly after, without holding up
       // the data itself.
       const recentFrom = toKey(addDays(new Date(), -RECENT_PHOTO_DAYS));
@@ -412,6 +485,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // The last known state opens the app instantly (and offline); the server
     // copy replaces it as soon as it arrives.
     const cached = loadSnapshot(userId);
+    cursors.current = cached?.cursors ?? null;
     if (cached) applySnapshot(applyPending(cached, queue.current));
     setLoading(!cached);
   }, [userId, applySnapshot]);
@@ -436,9 +510,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Cache what's on screen for the next (possibly offline) launch.
   useEffect(() => {
     if (!userId || loading) return;
-    const t = setTimeout(() => saveSnapshot(userId, { meals, weights, settings, profile, pinned, workouts }), SNAPSHOT_DEBOUNCE_MS);
+    const t = setTimeout(() => saveSnapshot(userId, { meals, weights, settings, profile, pinned, workouts }, cursors.current), SNAPSHOT_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [userId, loading, meals, weights, settings, profile, pinned, workouts]);
+  }, [userId, loading, meals, weights, settings, profile, pinned, workouts, lastSyncedAt]);
 
   // Auto-sync: when the app comes back to the foreground or the connection
   // returns, push queued changes and pull anything changed on other devices.
@@ -477,6 +551,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [userId, fetchPhotos],
   );
 
+  // Each day's meals and totals, worked out once per change instead of
+  // scanning every meal on each lookup (the calendar alone asks for 42 days).
+  const dayIndex = useMemo(() => buildDayIndex(meals, weights), [meals, weights]);
+
   const value = useMemo<StoreValue>(() => {
     const addMeal: StoreValue['addMeal'] = (m) => {
       if (!userId) return;
@@ -508,6 +586,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!userId) return;
       persistQueue(userId, []);
       photos.current.clear();
+      cursors.current = null;
       setMeals([]);
       setWeights([]);
       setSettings(DEFAULT_SETTINGS);
@@ -529,6 +608,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
       const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
       photos.current.clear();
+      cursors.current = null;
       (payload.meals ?? []).forEach(rememberPhotos);
       setMeals(payload.meals ?? []);
       setWeights(payload.weights ?? []);
@@ -667,21 +747,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       commit({ kind: 'upsertWorkout', workout });
     };
 
-    const getDay: StoreValue['getDay'] = (dateKey) => {
-      const dayMeals = meals.filter((m) => m.date === dateKey);
-      const weight = weights.find((w) => w.date === dateKey);
-      const sum = (sel: (m: MealEntry) => number) => dayMeals.reduce((a, b) => a + sel(b), 0);
-      return {
-        date: dateKey,
-        meals: dayMeals,
-        weight,
-        totalCalories: sum((m) => m.calories),
-        totalProtein: sum((m) => m.protein),
-        totalCarbs: sum((m) => m.carbs),
-        totalFat: sum((m) => m.fat),
-        totalFiber: sum((m) => m.fiber),
-      };
-    };
+    const getDay: StoreValue['getDay'] = (dateKey) => dayIndex.get(dateKey) ?? emptyDay(dateKey);
 
     const dismissSyncError: StoreValue['dismissSyncError'] = () => setSyncError(null);
 
@@ -704,7 +770,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       syncError, dismissSyncError,
       refreshing, syncing, online, pendingCount, lastSyncedAt, refresh,
     };
-  }, [meals, weights, settings, profile, pinned, workouts, activitySyncEnabled, pinsSyncEnabled, prefsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
+  }, [meals, weights, dayIndex, settings, profile, pinned, workouts, activitySyncEnabled, pinsSyncEnabled, prefsSyncEnabled, loading, userId, syncError, refreshing, syncing, online, pendingCount, lastSyncedAt, loadAll, commit, persistQueue, rememberPhotos, loadPhotos]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

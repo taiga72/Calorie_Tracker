@@ -403,6 +403,89 @@ function batchRowsBySize<T>(rows: T[], maxBytes: number): T[][] {
   return batches;
 }
 
+// ---- Fetching only what changed since the last sync
+//
+// Each synced table has an updated_at column (set by the database on every
+// insert and update — see supabase/schema.sql). A sync then asks for rows
+// changed since the newest one it has seen, plus the bare keys of every row
+// so deletions made on another device are noticed too. Without the column
+// (schema.sql not re-run yet) everything is fetched in full, as before.
+
+/** Rows changed since the cursor (or all of them), and every row's key. */
+export interface TableSync<T> {
+  /** True when `rows` is the whole table (no cursor, or the first sync). */
+  full: boolean;
+  rows: T[];
+  /** Keys of every row on the server; null on a full fetch. */
+  keys: string[] | null;
+  /** The newest updated_at seen: where the next sync starts. */
+  cursor: string | null;
+}
+
+let updatedAtColumn = true;
+/** For tests: forget whether the updated_at columns exist. */
+export function resetUpdatedAtState(): void {
+  updatedAtColumn = true;
+}
+
+function isMissingColumn(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return (e?.code === '42703' || e?.code === 'PGRST204' || e?.code === 'PGRST100') && /updated_at/.test(e?.message ?? '');
+}
+
+// Rows updated in the moments around the last sync are fetched again (the
+// merge is idempotent), so a write landing at the same instant isn't missed.
+const CURSOR_OVERLAP_MS = 2 * 60 * 1000;
+
+function newestCursor(rows: { updated_at?: string | null }[], fallback: string | null): string | null {
+  let best = fallback;
+  let bestMs = best ? Date.parse(best) : -Infinity;
+  for (const r of rows) {
+    const ms = r.updated_at ? Date.parse(r.updated_at) : NaN;
+    if (Number.isFinite(ms) && ms > bestMs) { best = r.updated_at!; bestMs = ms; }
+  }
+  return best;
+}
+
+async function syncTable<Row, T>(
+  userId: string,
+  table: string,
+  columns: string,
+  keyColumn: string,
+  order: { column: string; ascending: boolean },
+  since: string | null,
+  toEntry: (row: Row) => T,
+): Promise<TableSync<T> | null> {
+  if (!updatedAtColumn) return null;
+  const changedQuery = () => {
+    let q = supabase.from(table).select(`${columns},updated_at`).eq('user_id', userId);
+    if (since) q = q.gte('updated_at', new Date(Date.parse(since) - CURSOR_OVERLAP_MS).toISOString());
+    return q.order(order.column, { ascending: order.ascending });
+  };
+  const [changed, keys] = await Promise.all([
+    withRetry(changedQuery),
+    since ? withRetry(() => supabase.from(table).select(keyColumn).eq('user_id', userId)) : Promise.resolve(null),
+  ]);
+  if (changed.error) {
+    if (isMissingColumn(changed.error)) { updatedAtColumn = false; return null; }
+    // No such table yet (e.g. workouts): the regular loader handles that.
+    if (isMissingTable(changed.error)) return null;
+    console.error(`Failed to load ${table}`, changed.error);
+    throw changed.error;
+  }
+  if (keys?.error) {
+    console.error(`Failed to load ${table}`, keys.error);
+    throw keys.error;
+  }
+  const rows = (changed.data as unknown as (Row & { updated_at?: string | null })[] | null) ?? [];
+  return {
+    full: !since,
+    rows: rows.map(toEntry),
+    keys: keys ? ((keys.data as unknown as Record<string, string>[] | null) ?? []).map((r) => String(r[keyColumn])) : null,
+    cursor: newestCursor(rows, since),
+  };
+}
+
 export const storage = {
   /** The error behind the last failed request (if any), and forgets it. */
   takeWriteError: (): WriteError | null => {
@@ -498,6 +581,16 @@ export const storage = {
     if (error) console.error('Failed to delete meal', error);
     return !error;
   },
+
+  /** Meals changed since `since` (all when null); null without updated_at. */
+  syncMeals: (userId: string, since: string | null) =>
+    syncTable<MealRow, MealEntry>(userId, 'meals', MEAL_COLUMNS_WITHOUT_PHOTOS, 'id', { column: 'created_at', ascending: false }, since, rowToMeal),
+
+  syncWeights: (userId: string, since: string | null) =>
+    syncTable<WeightRow, WeightEntry>(userId, 'weights', 'date,weight,created_at', 'date', { column: 'date', ascending: true }, since, rowToWeight),
+
+  syncWorkouts: (userId: string, since: string | null) =>
+    syncTable<WorkoutRow, Workout>(userId, 'workouts', '*', 'id', { column: 'created_at', ascending: false }, since, rowToWorkout),
 
   getWeights: async (userId: string): Promise<WeightEntry[]> => {
     const { data, error } = await withRetry(() =>

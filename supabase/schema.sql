@@ -139,6 +139,37 @@ drop policy if exists "Users manage their own workouts" on public.workouts;
 create policy "Users manage their own workouts" on public.workouts
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- When each row last changed, so the app downloads only what changed since
+-- its last sync instead of everything every time. Set by the database on
+-- every insert and update (the app never sends it).
+create or replace function public.touch_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+alter table public.meals add column if not exists updated_at timestamptz not null default now();
+alter table public.weights add column if not exists updated_at timestamptz not null default now();
+alter table public.workouts add column if not exists updated_at timestamptz not null default now();
+
+drop trigger if exists meals_touch_updated_at on public.meals;
+create trigger meals_touch_updated_at before update on public.meals
+  for each row execute function public.touch_updated_at();
+drop trigger if exists weights_touch_updated_at on public.weights;
+create trigger weights_touch_updated_at before update on public.weights
+  for each row execute function public.touch_updated_at();
+drop trigger if exists workouts_touch_updated_at on public.workouts;
+create trigger workouts_touch_updated_at before update on public.workouts
+  for each row execute function public.touch_updated_at();
+
+create index if not exists meals_user_updated_idx on public.meals(user_id, updated_at);
+create index if not exists weights_user_updated_idx on public.weights(user_id, updated_at);
+create index if not exists workouts_user_updated_idx on public.workouts(user_id, updated_at);
+
 -- Lets a signed-in user delete their own account (Settings → Account).
 -- Their rows go with it (every table cascades on auth.users); the app
 -- removes their photos from Storage first.

@@ -67,6 +67,17 @@ export interface Snapshot {
   workouts: Workout[];
 }
 
+/**
+ * Where the next sync picks up for each table (the newest updated_at seen),
+ * saved with the cached data it describes. `fullAt`: the last full download.
+ */
+export interface SyncCursors {
+  meals?: string | null;
+  weights?: string | null;
+  workouts?: string | null;
+  fullAt?: number;
+}
+
 const outboxKey = (userId: string) => `calorie_tracker_outbox_${userId}`;
 const snapshotKey = (userId: string) => `calorie_tracker_cache_${userId}`;
 
@@ -91,15 +102,16 @@ export function saveOutbox(userId: string, queue: QueuedOp[]): boolean {
   }
 }
 
-export function loadSnapshot(userId: string): Snapshot | null {
+export function loadSnapshot(userId: string): (Snapshot & { cursors?: SyncCursors }) | null {
   try {
     const raw = localStorage.getItem(snapshotKey(userId));
     if (!raw) return null;
-    const s = JSON.parse(raw) as Partial<Snapshot>;
+    const s = JSON.parse(raw) as Partial<Snapshot> & { cursors?: SyncCursors };
     if (!Array.isArray(s.meals) || !Array.isArray(s.weights) || !s.settings || !s.profile) return null;
     return {
       meals: s.meals, weights: s.weights, settings: s.settings, profile: s.profile,
       pinned: s.pinned ?? [], workouts: s.workouts ?? [],
+      ...(s.cursors ? { cursors: s.cursors } : {}),
     };
   } catch {
     return null;
@@ -113,13 +125,14 @@ export function loadSnapshot(userId: string): Snapshot | null {
  * Storage are kept — they're just short references. Edits never send absent
  * photos, so this can't erase them.
  */
-export function saveSnapshot(userId: string, snap: Snapshot): void {
+export function saveSnapshot(userId: string, snap: Snapshot, cursors?: SyncCursors | null): void {
   try {
     const meals = snap.meals.map(({ imageData: _legacy, imageDatas, ...rest }) => {
       const refs = imageDatas?.filter(isStorageRef);
       return refs?.length ? { ...rest, imageDatas: refs } : rest;
     });
-    localStorage.setItem(snapshotKey(userId), JSON.stringify({ ...snap, meals }));
+    const { weights, settings, profile, pinned, workouts } = snap;
+    localStorage.setItem(snapshotKey(userId), JSON.stringify({ meals, weights, settings, profile, pinned, workouts, ...(cursors ? { cursors } : {}) }));
   } catch {
     // Best-effort only.
   }
