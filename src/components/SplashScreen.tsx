@@ -1,15 +1,15 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { SplashContext, useSplashReady } from '@/lib/splash';
 
-// Long enough for the logo animation to read as intentional rather than a
-// flash; counted from page load, so a slow network adds no extra wait.
-const MIN_VISIBLE_MS = 400;
-const FADE_MS = 350;
-
+// The skeleton has nothing to "finish" (unlike the old logo animation), so
+// it goes as soon as the app is ready.
+const MIN_VISIBLE_MS = 0;
+const FADE_MS = 250;
 /**
- * Shows the launch splash over the app until a screen reports it's ready
- * (useSplashReady), then fades it out. Its markup and CSS (in index.html)
- * match the static copy painted before any JS loads, so there's no jump.
+ * Shows the launch skeleton (the shape of Home) over the app until a screen
+ * reports it's ready (useSplashReady), then fades it out. Its markup and CSS
+ * (in index.html) match the static copy painted before any JS loads, so
+ * there's no jump.
  */
 export function SplashProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
@@ -46,27 +46,49 @@ export function SplashReady() {
   return null;
 }
 
+const Bar = ({ w, style }: { w: 25 | 40 | 55 | 70 | 85; style?: CSSProperties }) => <div className={`sk sk-line skw${w}`} style={style} />;
+
+function MealRow({ w }: { w: 55 | 70 }) {
+  return (
+    <div className="sk-meal">
+      <div className="sk sk-thumb" />
+      <div className="sk-grow"><Bar w={w} /><Bar w={40} /></div>
+    </div>
+  );
+}
+
+/** The launch skeleton: kept in step with the static copy in index.html. */
 export function SplashScreen({ leaving = false }: { leaving?: boolean }) {
   return (
     <div className={`splash${leaving ? ' splash-out' : ''}`} aria-label="Loading Calorie Tracker" role="status" aria-hidden={leaving}>
-      <div className="splash-logo">
-        <div className="splash-glow" />
-        <svg className="splash-ring" viewBox="0 0 132 132" width="132" height="132" aria-hidden="true">
-          <circle cx="66" cy="66" r="62" fill="none" stroke="rgba(16,185,129,.15)" strokeWidth="4" />
-          <circle className="arc" cx="66" cy="66" r="62" fill="none" stroke="#F97316" strokeWidth="4" strokeLinecap="round" />
-        </svg>
-        <svg className="splash-icon" viewBox="0 0 512 512" aria-hidden="true">
-          <rect width="512" height="512" rx="112" fill="#059669" />
-          <g className="splash-flame">
-            <path d="M256 120c-18 38-46 58-46 98 0 28 20 50 46 50s46-22 46-50c0-18-8-30-20-48 0 16-8 26-20 26 0-30 20-56-6-76z" fill="#F97316" />
-            <path d="M196 286c-12 18-20 34-20 56 0 44 36 80 80 80s80-36 80-80c0-22-8-38-20-56-4 24-18 40-38 40 0-28-40-40-82-40z" fill="#FB923C" opacity="0.9" />
-          </g>
-        </svg>
+      <div className="sk-page" aria-hidden="true">
+        <div className="sk-head">
+          <div style={{ flex: 1 }}><Bar w={40} /><div className="sk sk-title" /></div>
+          <div className="sk sk-chip" />
+        </div>
+        <div className="sk-row">
+          <div className="sk-card"><Bar w={70} /><div className="sk sk-ring" /><Bar w={55} style={{ margin: '10px auto 0' }} /></div>
+          <div className="sk-col">
+            <div className="sk-card"><Bar w={55} /><Bar w={85} style={{ height: 20, marginTop: 12 }} /><Bar w={40} /></div>
+            <div className="sk-card"><Bar w={55} /><Bar w={85} /><Bar w={70} /><Bar w={85} /></div>
+          </div>
+        </div>
+        <div className="sk-card"><Bar w={40} /><Bar w={85} /></div>
+        <div className="sk-card"><Bar w={25} /><MealRow w={70} /><MealRow w={55} /></div>
       </div>
-      <div className="splash-title">Calorie Tracker</div>
-      <div className="splash-sub">
-        Getting your day ready<span className="splash-dots"><i /><i /><i /></span>
-      </div>
+      <div className="sk-nav" aria-hidden="true"><div className="sk" /><div className="sk" /><div className="sk" /><div className="sk" /></div>
+    </div>
+  );
+}
+
+/** A tab that's still downloading: its title and a few card shapes. */
+export function ScreenSkeleton() {
+  return (
+    <div className="sk-page" role="status" aria-label="Loading">
+      <div className="sk-head"><div style={{ flex: 1 }}><Bar w={25} /><div className="sk sk-title" style={{ width: '45%' }} /></div></div>
+      <div className="sk-card"><Bar w={40} /><Bar w={85} style={{ height: 120, borderRadius: 16, marginTop: 14 }} /></div>
+      <div className="sk-card"><Bar w={55} /><Bar w={85} /><Bar w={70} /></div>
+      <div className="sk-card"><Bar w={40} /><MealRow w={70} /><MealRow w={55} /></div>
     </div>
   );
 }

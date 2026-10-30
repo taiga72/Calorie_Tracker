@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen, waitFor, act } from '@testing-library/react';
 import { useState } from 'react';
-import { SplashProvider } from '@/components/SplashScreen';
+import { SplashProvider, ScreenSkeleton } from '@/components/SplashScreen';
 import { useSplashReady } from '@/lib/splash';
 
 let markReady: () => void = () => {};
@@ -24,5 +24,13 @@ describe('SplashProvider', () => {
 
     await waitFor(() => expect(splash).toHaveClass('splash-out'));
     await waitFor(() => expect(screen.queryByLabelText('Loading Calorie Tracker')).not.toBeInTheDocument());
+  });
+});
+
+describe('ScreenSkeleton', () => {
+  it('shows placeholder shapes while a screen loads', () => {
+    render(<ScreenSkeleton />);
+    const sk = screen.getByRole('status', { name: 'Loading' });
+    expect(sk.querySelectorAll('.sk-card').length).toBeGreaterThan(1);
   });
 });
