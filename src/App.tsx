@@ -6,7 +6,7 @@ import { SetPasswordScreen } from '@/components/SetPasswordScreen';
 import { SupabaseSetupScreen } from '@/components/SupabaseSetupScreen';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import { ThemeProvider } from '@/lib/theme';
-import { SplashProvider, SplashReady } from '@/components/SplashScreen';
+import { SplashProvider, SplashReady, ScreenSkeleton } from '@/components/SplashScreen';
 import { useSplashReady } from '@/lib/splash';
 import { ReminderBanner } from '@/components/Reminders';
 import { useReminders } from '@/lib/useReminders';
@@ -42,14 +42,6 @@ const SetupWizardModal = lazy(() => loadWizard().then((m) => ({ default: m.Setup
 
 function prefetchScreens() {
   for (const load of [loadStats, loadCalendar, loadSettings, loadCoach, loadWizard]) void load().catch(() => {});
-}
-
-function TabFallback() {
-  return (
-    <div className="flex justify-center pt-24 text-gray-300 dark:text-gray-600">
-      <Loader2 size={22} className="animate-spin" />
-    </div>
-  );
 }
 
 function App() {
@@ -222,7 +214,7 @@ function AppInner() {
       {/* Room at the bottom so the last card can scroll clear of the floating buttons. */}
       <main className="pb-48">
         {tab === 'home' && <HomeTab />}
-        <Suspense fallback={<TabFallback />}>
+        <Suspense fallback={<ScreenSkeleton />}>
           {tab === 'stats' && <StatsTab />}
           {tab === 'calendar' && <CalendarTab />}
           {tab === 'settings' && <SettingsTab />}
