@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { isNative } from '@/lib/native';
 import {
   REMINDER_IDS, REMINDER_LABELS, loadReminderConfig, saveReminderConfig, notificationSupport,
-  requestNotificationPermission, showSystemNotification, type ReminderConfig, type ReminderId, type NotificationSupport,
+  refreshNotificationPermission, requestNotificationPermission, showSystemNotification, type ReminderConfig, type ReminderId, type NotificationSupport,
 } from '@/lib/reminders';
 import { Bell, BellOff } from 'lucide-react';
 
@@ -9,6 +10,8 @@ export function RemindersSection() {
   const [config, setConfig] = useState<ReminderConfig>(loadReminderConfig);
   const [permission, setPermission] = useState<NotificationSupport>(notificationSupport);
   const [testSent, setTestSent] = useState(false);
+  // The iPhone app asks iOS what's allowed.
+  useEffect(() => { if (isNative()) void refreshNotificationPermission().then(setPermission); }, []);
 
   const update = (next: ReminderConfig) => {
     setConfig(next);
@@ -92,13 +95,17 @@ export function RemindersSection() {
                 {permission === 'unsupported'
                   ? "This browser can't show notifications — on iPhone, add the app to your Home Screen (Share → Add to Home Screen) and open it from there. You'll still get reminders inside the app."
                   : permission === 'denied'
-                    ? "Notifications are blocked for this app in your browser/phone settings. You'll still get reminders inside the app."
+                    ? isNative()
+                      ? 'Notifications are off for Calorie Tracker — turn them on in the iPhone Settings app → Notifications.'
+                      : "Notifications are blocked for this app in your browser/phone settings. You'll still get reminders inside the app."
                     : "Allow notifications to get reminders when the app isn't on screen."}
               </span>
             </div>
           )}
           <p className="text-11 text-gray-400 mt-2">
-            Reminders are per device, and are delivered while the app is open or recently backgrounded.
+            {isNative()
+              ? 'Reminders are per device, and arrive even when the app is closed.'
+              : 'Reminders are per device, and are delivered while the app is open or recently backgrounded.'}
           </p>
         </>
       )}

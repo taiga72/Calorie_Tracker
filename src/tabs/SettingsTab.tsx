@@ -12,6 +12,7 @@ import { compressImage } from '@/lib/gemini';
 import { SetupWizardModal } from '@/modals/SetupWizardModal';
 import { Modal } from '@/components/Modal';
 import { RemindersSection } from '@/components/RemindersSection';
+import { HealthSection } from '@/components/HealthSection';
 import { AppearanceSection } from '@/components/AppearanceSection';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { useHorizontalSwipe } from '@/lib/useHorizontalSwipe';
@@ -487,6 +488,8 @@ export function SettingsTab() {
       <CoachMemorySection />
 
       <RemindersSection key={restoreCount} />
+
+      <HealthSection />
 
         </>
       )}

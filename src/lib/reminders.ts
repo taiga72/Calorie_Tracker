@@ -1,4 +1,5 @@
 import type { MealType } from '@/types';
+import { isNative } from '@/lib/native';
 
 export type ReminderId = 'Breakfast' | 'Lunch' | 'Dinner' | 'weighIn';
 
@@ -47,12 +48,16 @@ export function loadReminderConfig(): ReminderConfig {
   }
 }
 
+/** Fired when the reminder settings change (the iPhone app reschedules). */
+export const REMINDERS_CHANGED_EVENT = 'calorie-tracker:reminders-changed';
+
 export function saveReminderConfig(config: ReminderConfig): void {
   try {
     localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
   } catch {
     // ignore
   }
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(REMINDERS_CHANGED_EVENT));
 }
 
 /** Reminder ids already shown on `dateKey`, so each fires at most once a day. */
@@ -108,12 +113,43 @@ export function reminderMessage(id: ReminderId): { title: string; body: string }
 
 export type NotificationSupport = 'granted' | 'denied' | 'default' | 'unsupported';
 
+// The iPhone app asks iOS (asynchronously); the answer is kept here.
+let nativePermission: NotificationSupport = 'default';
+
+async function localNotifications() {
+  return (await import('@capacitor/local-notifications')).LocalNotifications;
+}
+
+function fromNative(state: string): NotificationSupport {
+  return state === 'granted' ? 'granted' : state === 'denied' ? 'denied' : 'default';
+}
+
+/** In the iPhone app: what iOS currently allows (call before reading notificationSupport). */
+export async function refreshNotificationPermission(): Promise<NotificationSupport> {
+  if (!isNative()) return notificationSupport();
+  try {
+    nativePermission = fromNative((await (await localNotifications()).checkPermissions()).display);
+  } catch {
+    // keep the last known answer
+  }
+  return nativePermission;
+}
+
 export function notificationSupport(): NotificationSupport {
+  if (isNative()) return nativePermission;
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
   return Notification.permission;
 }
 
 export async function requestNotificationPermission(): Promise<NotificationSupport> {
+  if (isNative()) {
+    try {
+      nativePermission = fromNative((await (await localNotifications()).requestPermissions()).display);
+    } catch {
+      // keep the last known answer
+    }
+    return nativePermission;
+  }
   if (notificationSupport() === 'unsupported') return 'unsupported';
   try {
     return await Notification.requestPermission();
@@ -125,6 +161,14 @@ export async function requestNotificationPermission(): Promise<NotificationSuppo
 /** Shows a system notification (via the service worker when there is one — required on iOS). */
 export async function showSystemNotification(title: string, body: string, tag: string): Promise<boolean> {
   if (notificationSupport() !== 'granted') return false;
+  if (isNative()) {
+    try {
+      await (await localNotifications()).schedule({ notifications: [{ id: 999, title, body, schedule: { at: new Date(Date.now() + 1000) } }] });
+      return true;
+    } catch {
+      return false;
+    }
+  }
   const options = { body, tag, icon: '/apple-touch-icon.png', badge: '/apple-touch-icon.png' };
   try {
     const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
@@ -137,4 +181,44 @@ export async function showSystemNotification(title: string, body: string, tag: s
   } catch {
     return false;
   }
+}
+
+// ---- The iPhone app: reminders scheduled with iOS, so they arrive even when
+// the app is closed. The next week is scheduled; it's redone whenever the app
+// opens, something is logged or the settings change, which drops today's
+// reminders for things already logged.
+
+const NATIVE_ID_BASE = 1000;
+const SCHEDULE_DAYS = 7;
+
+/** The reminders to schedule: [id, ReminderId, when], skipping ones already done or past. */
+export function plannedReminders(config: ReminderConfig, now: Date, today: DayStatus): { id: number; reminder: ReminderId; at: Date }[] {
+  if (!config.enabled) return [];
+  const out: { id: number; reminder: ReminderId; at: Date }[] = [];
+  for (let d = 0; d < SCHEDULE_DAYS; d++) {
+    REMINDER_IDS.forEach((rid, i) => {
+      const slot = config.slots[rid];
+      if (!slot.on) return;
+      const [h, m] = slot.time.split(':').map(Number);
+      const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h || 0, m || 0);
+      if (at <= now) return;
+      if (d === 0 && (rid === 'weighIn' ? today.weighedIn : today.loggedMealTypes.has(rid))) return;
+      out.push({ id: NATIVE_ID_BASE + d * REMINDER_IDS.length + i, reminder: rid, at });
+    });
+  }
+  return out;
+}
+
+export async function scheduleNativeReminders(config: ReminderConfig, today: DayStatus, now = new Date()): Promise<void> {
+  if (!isNative()) return;
+  const ln = await localNotifications();
+  const pending = await ln.getPending();
+  const ours = pending.notifications.filter((n) => n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + SCHEDULE_DAYS * REMINDER_IDS.length);
+  if (ours.length) await ln.cancel({ notifications: ours.map((n) => ({ id: n.id })) });
+  if ((await refreshNotificationPermission()) !== 'granted') return;
+  const plan = plannedReminders(config, now, today);
+  if (plan.length === 0) return;
+  await ln.schedule({
+    notifications: plan.map((p) => ({ id: p.id, ...reminderMessage(p.reminder), schedule: { at: p.at, allowWhileIdle: true } })),
+  });
 }

@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '@/store';
 import { todayKey } from '@/lib/dateUtils';
 import {
-  dueReminders, loadFired, loadReminderConfig, reminderMessage, saveFired, showSystemNotification,
-  type ReminderId,
+  dueReminders, loadFired, loadReminderConfig, reminderMessage, saveFired, scheduleNativeReminders, showSystemNotification,
+  REMINDERS_CHANGED_EVENT, type ReminderId,
 } from '@/lib/reminders';
+import { isNative } from '@/lib/native';
 
 const CHECK_INTERVAL_MS = 60_000;
 
@@ -14,13 +15,35 @@ const CHECK_INTERVAL_MS = 60_000;
  * in the background they go out as a system notification.
  */
 export function useReminders(enabled: boolean) {
-  const { getDay } = useStore();
+  const { getDay, meals, weights } = useStore();
   const getDayRef = useRef(getDay);
   getDayRef.current = getDay;
   const [active, setActive] = useState<ReminderId | null>(null);
 
+  // iPhone app: iOS delivers them (even when the app is closed); they're
+  // rescheduled as things get logged so a done meal isn't nagged about.
+  const [changed, setChanged] = useState(0);
   useEffect(() => {
-    if (!enabled) return;
+    if (!isNative()) return;
+    const bump = () => setChanged((n) => n + 1);
+    window.addEventListener(REMINDERS_CHANGED_EVENT, bump);
+    document.addEventListener('visibilitychange', bump);
+    return () => {
+      window.removeEventListener(REMINDERS_CHANGED_EVENT, bump);
+      document.removeEventListener('visibilitychange', bump);
+    };
+  }, []);
+  useEffect(() => {
+    if (!enabled || !isNative()) return;
+    const t = setTimeout(() => {
+      const day = getDayRef.current(todayKey());
+      void scheduleNativeReminders(loadReminderConfig(), { loggedMealTypes: new Set(day.meals.map((m) => m.mealType)), weighedIn: !!day.weight }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [enabled, meals, weights, changed]);
+
+  useEffect(() => {
+    if (!enabled || isNative()) return;
     const check = () => {
       const now = new Date();
       const key = todayKey();

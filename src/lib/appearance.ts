@@ -1,3 +1,4 @@
+import { isNative } from '@/lib/native';
 /**
  * Look-and-feel preferences. Like light/dark mode, they're kept per device
  * (a phone and a tablet can look different) and applied to <html> as data
@@ -136,6 +137,13 @@ export type HapticKind = keyof typeof PATTERNS;
  */
 export function haptic(kind: HapticKind = 'light'): void {
   if (!hapticsOn || typeof window === 'undefined') return;
+  // In the iPhone app: the real Taptic Engine.
+  if (isNative()) {
+    void import('@capacitor/haptics').then(({ Haptics, ImpactStyle, NotificationType }) =>
+      kind === 'light' ? Haptics.impact({ style: ImpactStyle.Light }) : Haptics.notification({ type: NotificationType.Success }),
+    ).catch(() => {});
+    return;
+  }
   try {
     if (typeof navigator.vibrate === 'function') {
       navigator.vibrate(PATTERNS[kind] as number | number[]);

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { PluginListenerHandle } from '@capacitor/core';
+import { isNative } from '@/lib/native';
 
 // The Web Speech API isn't in every TypeScript DOM lib version; just the
 // parts used here.
@@ -26,7 +28,8 @@ function getRecognition(): RecognitionCtor | null {
 }
 
 export function speechInputSupported(): boolean {
-  return getRecognition() !== null;
+  // The iPhone app uses iOS's own speech recognition (Safari's isn't there).
+  return isNative() || getRecognition() !== null;
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -49,13 +52,68 @@ export function useSpeechInput(onText: (transcript: string, final: boolean) => v
   const onTextRef = useRef(onText);
   onTextRef.current = onText;
 
-  useEffect(() => () => rec.current?.abort(), []);
-
-  const stop = useCallback(() => {
-    rec.current?.stop();
+  // iPhone app: the native recognizer, its listeners kept until it stops.
+  const nativeHandles = useRef<PluginListenerHandle[]>([]);
+  const nativeTranscript = useRef('');
+  const endNative = useCallback(() => {
+    nativeHandles.current.forEach((h) => void h.remove());
+    nativeHandles.current = [];
+    setListening(false);
   }, []);
 
+  useEffect(() => () => {
+    rec.current?.abort();
+    if (nativeHandles.current.length) {
+      void import('@capgo/capacitor-speech-recognition').then(({ SpeechRecognition }) => SpeechRecognition.stop()).catch(() => {});
+      nativeHandles.current.forEach((h) => void h.remove());
+    }
+  }, []);
+
+  const stop = useCallback(() => {
+    if (isNative()) {
+      void import('@capgo/capacitor-speech-recognition')
+        .then(({ SpeechRecognition }) => SpeechRecognition.stop())
+        .catch(() => {})
+        .finally(() => { onTextRef.current(nativeTranscript.current, true); endNative(); });
+      return;
+    }
+    rec.current?.stop();
+  }, [endNative]);
+
+  const startNative = useCallback(async () => {
+    setError(null);
+    try {
+      const { SpeechRecognition } = await import('@capgo/capacitor-speech-recognition');
+      const perm = await SpeechRecognition.requestPermissions();
+      if (perm.speechRecognition !== 'granted') {
+        setError('Allow Speech Recognition and the Microphone for Calorie Tracker in the iPhone Settings app.');
+        return;
+      }
+      nativeTranscript.current = '';
+      nativeHandles.current = [
+        await SpeechRecognition.addListener('partialResults', (e) => {
+          const text = (e.accumulatedText ?? e.matches?.[0] ?? '').trim();
+          if (!text) return;
+          nativeTranscript.current = text;
+          onTextRef.current(text, false);
+        }),
+        await SpeechRecognition.addListener('listeningState', (e) => {
+          if (e.status === 'stopped' || e.state === 'stopped') {
+            onTextRef.current(nativeTranscript.current, true);
+            endNative();
+          }
+        }),
+      ];
+      setListening(true);
+      await SpeechRecognition.start({ language: navigator.language || 'en-US', partialResults: true, popup: false, addPunctuation: true });
+    } catch {
+      endNative();
+      setError('Voice input couldn’t start — try again.');
+    }
+  }, [endNative]);
+
   const start = useCallback(() => {
+    if (isNative()) { void startNative(); return; }
     const Ctor = getRecognition();
     if (!Ctor) return;
     rec.current?.abort();
@@ -89,7 +147,7 @@ export function useSpeechInput(onText: (transcript: string, final: boolean) => v
       setListening(false);
       setError('Voice input couldn’t start — try again.');
     }
-  }, []);
+  }, [startNative]);
 
   return { supported: speechInputSupported(), listening, error, start, stop };
 }
