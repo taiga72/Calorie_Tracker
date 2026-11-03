@@ -29,5 +29,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // Tests behave the same whether or not .env holds a real Gemini key.
+    env: { VITE_GEMINI_API_KEY: '' },
   },
 });

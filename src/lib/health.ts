@@ -25,6 +25,7 @@ export interface HealthPrefs {
 const PREFS_KEY = 'calorie_tracker_health';
 const IMPORTED_KEY = 'calorie_tracker_health_imported';
 const WRITTEN_KEY = 'calorie_tracker_health_written';
+const NO_HR_KEY = 'calorie_tracker_health_no_hr';
 
 export const DEFAULT_HEALTH_PREFS: HealthPrefs = { connected: false, workouts: true, weights: true, writeMeals: true };
 
@@ -166,14 +167,25 @@ export function tidyHealthImport(w: Workout): Partial<Workout> | null {
   return patch;
 }
 
-async function averageHeartRate(start: string, end: string): Promise<number | undefined> {
+/** null: Health has no heart rate for that time; undefined: couldn't ask. */
+async function averageHeartRate(start: string, end: string): Promise<number | null | undefined> {
   try {
     const { samples } = await (await healthModule()).Health.readSamples({ dataType: 'heartRate', startDate: start, endDate: end, limit: 1000 });
-    if (!samples.length) return undefined;
+    if (!samples.length) return null;
     return Math.round(samples.reduce((a, s) => a + s.value, 0) / samples.length);
   } catch {
     return undefined;
   }
+}
+
+/** Average heart rate over an imported workout's time, read again from Health. */
+export async function heartRateForWorkout(w: Workout): Promise<number | undefined> {
+  const none = loadSet(NO_HR_KEY);
+  if (none.has(w.id)) return undefined;
+  const hr = await averageHeartRate(new Date(w.createdAt).toISOString(), new Date(w.createdAt + w.minutes * 60_000).toISOString());
+  // Asked once and Health had nothing (e.g. no watch on): don't ask on every sync.
+  if (hr === null) { none.add(w.id); saveSet(NO_HR_KEY, none); }
+  return hr ?? undefined;
 }
 
 /** Workouts recorded since `since` that haven't been imported before. */
@@ -184,7 +196,7 @@ export async function newHealthWorkouts(since: Date): Promise<Workout[]> {
   for (const w of workouts) {
     const id = `hk-${w.platformId ?? w.startDate}`;
     if (imported.has(id) || w.duration < 60) continue;
-    out.push(fromHealthWorkout(w, await averageHeartRate(w.startDate, w.endDate)));
+    out.push(fromHealthWorkout(w, (await averageHeartRate(w.startDate, w.endDate)) ?? undefined));
   }
   return out;
 }

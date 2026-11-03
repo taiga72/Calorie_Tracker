@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store';
 import { isNative } from '@/lib/native';
 import { kgToUnit } from '@/lib/units';
-import { loadHealthPrefs, markImported, newHealthWeights, newHealthWorkouts, saveHealthPrefs, tidyHealthImport, writeMealsToHealth } from '@/lib/health';
+import { heartRateForWorkout, loadHealthPrefs, markImported, newHealthWeights, newHealthWorkouts, saveHealthPrefs, tidyHealthImport, writeMealsToHealth } from '@/lib/health';
 
 const FIRST_LOOKBACK_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -34,7 +34,15 @@ export function useHealthSync(enabled: boolean) {
       let nWeights = 0;
       if (prefs.workouts) {
         // Earlier imports kept heart rate and Health's calories in the note.
-        for (const w of have) { const patch = tidyHealthImport(w); if (patch) updateWorkout(w.id, patch); }
+        for (const w of have) {
+          const patch = tidyHealthImport(w);
+          if (patch) updateWorkout(w.id, patch);
+          // Imports saved before the cloud had a heart-rate column lost it: read it again.
+          else if (w.id.startsWith('hk-') && !w.avgHeartRate) {
+            const avgHeartRate = await heartRateForWorkout(w);
+            if (avgHeartRate) updateWorkout(w.id, { avgHeartRate });
+          }
+        }
         const found = await newHealthWorkouts(since);
         const ids = new Set(have.map((w) => w.id));
         for (const w of found) if (!ids.has(w.id)) { addWorkout(w); nWorkouts++; }
