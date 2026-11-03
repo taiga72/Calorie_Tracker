@@ -66,8 +66,22 @@
 }
 
 @layer base {
-  /* Accent colour (Settings → Appearance), read by the accent-* classes. */
-  :root, [data-accent="emerald"] {
+  /* Accent colour (Settings → Appearance), read by the accent-* classes.
+     Orange matches the Tally logo; "emerald" is the pre-rebrand default. */
+  :root, [data-accent="orange"], [data-accent="emerald"] {
+    --accent-50: 255 247 237;
+    --accent-100: 255 237 213;
+    --accent-200: 254 215 170;
+    --accent-300: 253 186 116;
+    --accent-400: 251 146 60;
+    --accent-500: 249 115 22;
+    --accent-600: 234 88 12;
+    --accent-700: 194 65 12;
+    --accent-800: 154 52 18;
+    --accent-900: 124 45 18;
+    --accent-950: 67 20 7;
+  }
+  [data-accent="green"] {
     --accent-50: 236 253 245;
     --accent-100: 209 250 229;
     --accent-200: 167 243 208;

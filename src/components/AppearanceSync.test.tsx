@@ -25,7 +25,7 @@ beforeEach(() => {
 describe('AppearanceSync', () => {
   it("saves this device's look to the account when the account has none", () => {
     render(tree());
-    expect(updatePrefs).toHaveBeenCalledWith({ appearance: expect.objectContaining({ accent: 'emerald', theme: 'system' }) });
+    expect(updatePrefs).toHaveBeenCalledWith({ appearance: expect.objectContaining({ accent: 'orange', theme: 'system' }) });
   });
 
   it('applies the look saved on the account', () => {
