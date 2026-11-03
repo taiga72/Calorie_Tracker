@@ -214,7 +214,7 @@ describe('LogModal editing a pin', () => {
     const kcal = screen.getByLabelText('Calories');
     fireEvent.change(kcal, { target: { value: '200' } });
     fireEvent.blur(kcal);
-    expect(screen.getByLabelText('Protein (g)')).toHaveValue(6);
+    expect(screen.getByLabelText('Protein (g)')).toHaveValue('6');
     fireEvent.click(screen.getByText('Save pin'));
 
     const patch = updatePin.mock.calls[0][1];
@@ -461,6 +461,13 @@ describe('LogModal weight', () => {
     render(<UndoToastProvider><LogModal open onClose={vi.fn()} weightDate="2026-10-01" /></UndoToastProvider>);
     expect(screen.queryByText(/Save weight/)).not.toBeInTheDocument();
     fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '79.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(logWeightForDate).toHaveBeenCalledWith(79.5, '2026-10-01');
+  });
+
+  it('takes a weight typed with a decimal comma', () => {
+    render(<UndoToastProvider><LogModal open onClose={vi.fn()} weightDate="2026-10-01" /></UndoToastProvider>);
+    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '79,5' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(logWeightForDate).toHaveBeenCalledWith(79.5, '2026-10-01');
   });

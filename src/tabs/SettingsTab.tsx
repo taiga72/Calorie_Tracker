@@ -1,7 +1,9 @@
+import { parseDecimal } from '@/lib/decimal';
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
-import { useAutoSave } from '@/lib/useAutoSave';
+import { useAutoSave, useChangedSinceOpen } from '@/lib/useAutoSave';
 import { ProteinTarget } from '@/components/ProteinTarget';
+import { FormGroup, FormRow, NumberRow } from '@/components/FormRows';
 import type { SettingsSection } from '@/lib/settingsLauncher';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit, convertWeightText } from '@/lib/units';
@@ -27,7 +29,7 @@ import { phaseOn } from '@/lib/goalPlan';
 import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
-  Trash2, AlertTriangle, User, Camera, Activity, Utensils,
+  Trash2, AlertTriangle, User, Camera,
   ChevronDown, ChevronUp, RefreshCw, Info,
 } from 'lucide-react';
 
@@ -128,10 +130,9 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
   // Auto-calculate macros, deficit, and goal date when the calorie goal or
   // goal weight is changed here (not on opening: that would replace saved
   // macros with calculated ones, which auto-save would then keep).
-  const recalcReady = useRef(false);
+  const goalEdited = useChangedSinceOpen([calorieGoal, goalWeight]);
   useEffect(() => {
-    if (!recalcReady.current) { recalcReady.current = true; return; }
-    if (!calc) return;
+    if (!goalEdited || !calc) return;
     const newCal = Math.max(0, parseInt(calorieGoal) || 0);
     const deficit = newCal - calc.tdee;
     setLiveDeficit(deficit);
@@ -149,7 +150,7 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
     setDinner(String(Math.round(newCal * 0.3)));
     setSnack(String(Math.round(newCal * 0.15)));
 
-    const goalWeightKg = unitToKg(parseFloat(goalWeight) || 0, unit);
+    const goalWeightKg = unitToKg(parseDecimal(goalWeight) || 0, unit);
     const totalDeltaKg = Math.abs(goalWeightKg - weightKg);
     const weeklyRate = Math.abs(settings.weeklyWeightTarget);
     if (weeklyRate > 0 && totalDeltaKg > 0.01) {
@@ -177,9 +178,9 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
 
   const onSaveGoals = () => {
     // Half-typed or cleared: wait for a usable number.
-    if (!(parseInt(calorieGoal) > 0) || !(parseFloat(goalWeight) > 0)) return;
-    const gWeight = unitToKg(parseFloat(goalWeight) || 0, unit);
-    const weeklyAbs = unitToKg(parseFloat(weeklyTarget) || 0, unit);
+    if (!(parseInt(calorieGoal) > 0) || !(parseDecimal(goalWeight) > 0)) return;
+    const gWeight = unitToKg(parseDecimal(goalWeight) || 0, unit);
+    const weeklyAbs = unitToKg(parseDecimal(weeklyTarget) || 0, unit);
     const newCalorieGoal = Math.max(0, parseInt(calorieGoal) || 0);
     const deficit = calc ? newCalorieGoal - calc.tdee : 0;
     updateSettings({
@@ -393,115 +394,47 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
               )}
             </button>
 
-            {/* Collapsible section */}
+            {/* Collapsible section: iOS-style grouped rows */}
             {expanded && (
-              <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-800 mt-1">
-                <Field label="Daily calorie goal">
-                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      value={calorieGoal}
-                      onChange={(e) => setCalorieGoal(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
-                    />
-                    <span className="text-xs text-gray-400">kcal</span>
-                  </div>
-                </Field>
+              <div className="space-y-5 pt-4 border-t border-gray-100 dark:border-gray-800 mt-1">
+                <FormGroup header="Goal">
+                  <NumberRow label="Daily calorie goal" value={calorieGoal} onChange={setCalorieGoal} unit="kcal" />
+                  <NumberRow label="Goal weight" value={goalWeight} onChange={setGoalWeight} unit={unit} decimal />
+                  <FormRow label="Direction">
+                    <span className="seg w-36" role="group" aria-label="Direction">
+                      <button type="button" onClick={() => setLose(true)} aria-pressed={lose} className="seg-item !py-1">Lose</button>
+                      <button type="button" onClick={() => setLose(false)} aria-pressed={!lose} className="seg-item !py-1">Gain</button>
+                    </span>
+                  </FormRow>
+                  <NumberRow label={lose ? 'Lose per week' : 'Gain per week'} value={weeklyTarget} onChange={setWeeklyTarget} unit={unit} decimal />
+                  <FormRow label="Weight unit">
+                    <span className="seg w-36" role="group" aria-label="Weight unit">
+                      {(['kg', 'lb'] as WeightUnit[]).map((u) => (
+                        <button key={u} type="button" onClick={() => switchUnit(u)} aria-pressed={unit === u} className="seg-item !py-1">{u}</button>
+                      ))}
+                    </span>
+                  </FormRow>
+                </FormGroup>
 
-                <Field label="Goal weight">
-                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      value={goalWeight}
-                      onChange={(e) => setGoalWeight(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
-                    />
-                    <span className="text-xs text-gray-400">{unit}</span>
-                  </div>
-                </Field>
+                <FormGroup header="Macro targets">
+                  <ProteinTarget grams={protein} onGramsChange={setProtein} latestWeightKg={latestWeightKg ?? null} />
+                  <NumberRow label="Carbs" value={carbs} onChange={setCarbs} unit="g" />
+                  <NumberRow label="Fat" value={fat} onChange={setFat} unit="g" />
+                </FormGroup>
 
-                <Field label="Weekly weight target">
-                  <div className="seg">
-                    <button
-                      onClick={() => setLose(true)}
-                      aria-pressed={lose}
-                      className="seg-item"
-                    >
-                      Lose
-                    </button>
-                    <button
-                      onClick={() => setLose(false)}
-                      aria-pressed={!lose}
-                      className="seg-item"
-                    >
-                      Gain
-                    </button>
-                  </div>
-                  <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 mt-2">
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.1"
-                      value={weeklyTarget}
-                      onChange={(e) => setWeeklyTarget(e.target.value)}
-                      className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
-                    />
-                    <span className="text-xs text-gray-400">{unit}/week</span>
-                  </div>
-                </Field>
+                <FormGroup header="Calories per meal">
+                  <NumberRow label="Breakfast" value={breakfast} onChange={setBreakfast} unit="kcal" />
+                  <NumberRow label="Lunch" value={lunch} onChange={setLunch} unit="kcal" />
+                  <NumberRow label="Dinner" value={dinner} onChange={setDinner} unit="kcal" />
+                  <NumberRow label="Snack" value={snack} onChange={setSnack} unit="kcal" />
+                </FormGroup>
 
-                <Field label="Weight unit">
-                  <div className="seg">
-                    {(['kg', 'lb'] as WeightUnit[]).map((u) => (
-                      <button
-                        key={u}
-                        onClick={() => switchUnit(u)}
-                        aria-pressed={unit === u}
-                        className="seg-item"
-                      >
-                        {u === 'kg' ? 'Kilograms' : 'Pounds'}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                {/* Macro breakdown */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 mt-1">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Activity size={14} className="text-gray-400" />
-                    <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Macro targets</p>
-                  </div>
-                  <div className="space-y-3">
-                    <ProteinTarget grams={protein} onGramsChange={setProtein} latestWeightKg={latestWeightKg ?? null} />
-                    <MacroField label="Carbs" value={carbs} onChange={setCarbs} color="text-orange-500" sub="Fuels activity" />
-                    <MacroField label="Fat" value={fat} onChange={setFat} color="text-amber-500" sub="Hormones & satiety" />
-                  </div>
-                </div>
-
-                {/* Meal calorie split */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Utensils size={14} className="text-gray-400" />
-                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Calories per meal</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-accent-600" compact />
-                    <MacroField label="Lunch" value={lunch} onChange={setLunch} color="text-accent-600" compact />
-                    <MacroField label="Dinner" value={dinner} onChange={setDinner} color="text-accent-600" compact />
-                    <MacroField label="Snack" value={snack} onChange={setSnack} color="text-accent-600" compact />
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setWizardOpen(true)}
-                    className="flex-1 bg-accent-50 dark:bg-accent-950 text-accent-800 dark:text-accent-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
-                  >
-                    <Sparkles size={15} /> Re-calculate
-                  </button>
-                </div>
+                <button
+                  onClick={() => setWizardOpen(true)}
+                  className="w-full bg-accent-50 dark:bg-accent-950 text-accent-800 dark:text-accent-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+                >
+                  <Sparkles size={15} /> Re-calculate
+                </button>
               </div>
             )}
           </>
@@ -568,18 +501,19 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
             </button>
           )}
         </div>
-        <Field label="Display name">
-          <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5">
+        <FormGroup>
+          <FormRow label="Name" htmlFor="profile-name">
             <input
+              id="profile-name"
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Your name"
               maxLength={40}
-              className="flex-1 bg-transparent text-sm font-semibold text-gray-900 dark:text-white outline-none"
+              className="w-full min-w-0 bg-transparent text-sm font-semibold text-right text-gray-900 dark:text-white outline-none"
             />
-          </div>
-        </Field>
+          </FormRow>
+        </FormGroup>
         <div className="border-t border-gray-100 dark:border-gray-800 mt-5 pt-4">
           <AccountSection bare />
         </div>
@@ -687,15 +621,6 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="text-11 font-semibold text-gray-500 dark:text-gray-400 mb-1.5 block">{label}</label>
-      {children}
-    </div>
-  );
-}
-
 function ActionBtn({
   onClick, Icon, label, sub, disabled,
 }: {
@@ -731,41 +656,3 @@ function SummaryStat({ label, value, isText }: { label: string; value: number | 
   );
 }
 
-function MacroField({
-  label,
-  value,
-  onChange,
-  color,
-  sub,
-  compact,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  color: string;
-  sub?: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-center justify-between mb-1 min-w-0">
-        <span className={`text-xs font-semibold truncate ${color}`}>{label}</span>
-        {!compact && sub && <span className="text-10 text-gray-400 truncate ml-1">{sub}</span>}
-      </div>
-      <div className="field-box flex items-center bg-white dark:bg-gray-900 rounded-xl px-2.5 py-2 border border-gray-100 dark:border-gray-700 min-w-0">
-        <input
-          type="number"
-          inputMode="numeric"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className={`w-full min-w-0 bg-transparent font-bold text-gray-900 dark:text-white outline-none ${
-            compact ? 'text-xs' : 'text-sm'
-          }`}
-        />
-        <span className="text-10 font-semibold text-gray-400 shrink-0 ml-1">
-          {compact ? 'kcal' : 'g'}
-        </span>
-      </div>
-    </div>
-  );
-}

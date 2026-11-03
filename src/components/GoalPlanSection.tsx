@@ -6,6 +6,7 @@ import { formatShortDate, todayKey } from '@/lib/dateUtils';
 import { kgToUnit, unitToKg } from '@/lib/units';
 import { phaseOn, sortedPhases, WEEKDAY_NAMES } from '@/lib/goalPlan';
 import { CalendarRange, Plus, Trash2, Check, X } from 'lucide-react';
+import { cleanDecimal, parseDecimal } from '@/lib/decimal';
 import type { GoalPhase, WeightUnit } from '@/types';
 
 const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30';
@@ -193,7 +194,7 @@ function PhaseForm({ phase, unit, onSave, onCancel, onDelete }: {
 
   const save = () => {
     if (!valid) return;
-    const kg = dir === 'maintain' ? 0 : unitToKg(Math.abs(Number(pace) || 0), unit) * (dir === 'lose' ? -1 : 1);
+    const kg = dir === 'maintain' ? 0 : unitToKg(Math.abs(parseDecimal(pace) || 0), unit) * (dir === 'lose' ? -1 : 1);
     onSave({ ...phase, name: name.trim(), start, calorieGoal: Math.round(Number(kcal)), weeklyWeightTarget: +kg.toFixed(3) });
   };
 
@@ -224,7 +225,7 @@ function PhaseForm({ phase, unit, onSave, onCancel, onDelete }: {
       </div>
       {dir !== 'maintain' && (
         <div className="flex items-center gap-2">
-          <input type="number" inputMode="decimal" step={0.05} aria-label="Weekly pace" value={pace} onChange={(e) => setPace(e.target.value)} className="w-20 bg-white dark:bg-gray-900 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30" />
+          <input type="text" inputMode="decimal" aria-label="Weekly pace" value={pace} onChange={(e) => setPace(cleanDecimal(e.target.value))} className="w-20 bg-white dark:bg-gray-900 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30" />
           <span className="text-xs text-gray-500">{unit} per week</span>
         </div>
       )}

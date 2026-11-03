@@ -43,3 +43,16 @@ describe('useAutoSave', () => {
     expect(second).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('useAutoSave under React StrictMode (dev builds)', () => {
+  it('does not save when the screen opens, even though StrictMode runs effects twice', async () => {
+    const { StrictMode, createElement } = await import('react');
+    const save = vi.fn();
+    renderHook(({ v }) => useAutoSave(save, [v]), {
+      initialProps: { v: 1 },
+      wrapper: ({ children }) => createElement(StrictMode, null, children),
+    });
+    vi.advanceTimersByTime(5000);
+    expect(save).not.toHaveBeenCalled();
+  });
+});
