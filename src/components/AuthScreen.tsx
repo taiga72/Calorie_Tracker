@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '@/auth';
-import { Flame, Loader2, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Loader2, Mail, Lock, AlertCircle } from 'lucide-react';
+import TallyMark from './TallyMark';
 
 type Mode = 'signin' | 'signup' | 'reset';
 
@@ -58,10 +59,8 @@ export function AuthScreen() {
     <div className="min-h-screen bg-[#F4F5F6] dark:bg-[#0B0D10] flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-accent-600 flex items-center justify-center mb-4 shadow-lg shadow-accent-600/20">
-            <Flame size={28} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Calorie Tracker</h1>
+          <TallyMark size={64} className="mb-4 drop-shadow-lg dark:ring-1 dark:ring-white/10 rounded-[14px]" />
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Tally</h1>
           <p className="text-sm text-gray-400 mt-1">
             {mode === 'signin' ? 'Sign in to sync your data' : mode === 'signup' ? 'Create an account to get started' : "We'll email you a link to set a new password"}
           </p>

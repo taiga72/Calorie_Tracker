@@ -73,7 +73,7 @@ export function HealthSection() {
               <RefreshCw size={13} /> Sync now
             </button>
           </div>
-          <p className="text-10 text-gray-400 mt-1">To change what the app may read or write: iPhone Settings → Health → Data Access & Devices → Calorie Tracker.</p>
+          <p className="text-10 text-gray-400 mt-1">To change what the app may read or write: iPhone Settings → Health → Data Access & Devices → Tally.</p>
         </>
       )}
       {message && <p className="text-11 text-gray-500 dark:text-gray-400 mt-2">{message}</p>}

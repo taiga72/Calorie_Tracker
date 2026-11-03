@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // plus Apple Health, notifications, haptics and voice input. See docs/IOS.md.
 const config: CapacitorConfig = {
   appId: 'com.taiga72.calorietracker',
-  appName: 'Calorie Tracker',
+  appName: 'Tally',
   webDir: 'dist',
   ios: {
     // The page draws its own safe-area padding (viewport-fit=cover).
