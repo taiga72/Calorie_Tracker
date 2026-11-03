@@ -83,7 +83,7 @@ export function InsightsCard({ compact = false }: { compact?: boolean }) {
                 </p>
               </button>
             </div>
-            <button onClick={() => dismiss('plateau')} aria-label="Hide for a week" className="p-2 -m-2 text-gray-400 rounded-full"><X size={15} /></button>
+            <button onClick={() => dismiss('plateau')} aria-label="Hide for a week" className="tap p-2 -m-2 text-gray-400 rounded-full"><X size={15} /></button>
           </div>
           {open.plateau && (<>
           <ul className="mt-3 space-y-2">
@@ -124,7 +124,7 @@ export function InsightsCard({ compact = false }: { compact?: boolean }) {
                 </p>
               </button>
             </div>
-            <button onClick={() => dismiss('weekend')} aria-label="Hide for a week" className="p-2 -m-2 text-gray-400 rounded-full"><X size={15} /></button>
+            <button onClick={() => dismiss('weekend')} aria-label="Hide for a week" className="tap p-2 -m-2 text-gray-400 rounded-full"><X size={15} /></button>
           </div>
           {open.weekend && (<>
           <div className="grid grid-cols-7 gap-1 mt-3" aria-hidden>

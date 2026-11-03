@@ -381,7 +381,12 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   const resultAlreadyPinned = !!result && !!findDuplicatePin(pinned, result);
 
   return (
-    <Modal open={open} onClose={close} title={title}>
+    <Modal
+      open={open}
+      onClose={close}
+      title={title}
+      action={isEdit ? { label: 'Save', onClick: onSaveEdit } : mode === 'weight' && !editingPin ? { label: 'Save', onClick: onSaveWeight, disabled: !(parseFloat(weightVal) > 0) } : undefined}
+    >
       {/* Mode toggle (hidden in edit / weight-edit mode) */}
       {!isEdit && !isWeightEdit && !editingPin && (
         <div className="seg mb-4" role="tablist" aria-label="What to log">
@@ -612,12 +617,6 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             </button>
           </details>
 
-          <button
-            onClick={onSaveEdit}
-            className="w-full bg-accent-600 text-white font-semibold py-3.5 rounded-2xl text-sm mt-1 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
-          >
-            <Check size={16} /> Save changes
-          </button>
         </div>
       ) : mode === 'food' ? (
         editingPin ? (
@@ -873,16 +872,10 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             />
             <span className="text-sm font-semibold text-gray-400">{settings.weightUnit}</span>
           </div>
-          <button
-            onClick={onSaveWeight}
-            className="w-full bg-blue-600 text-white font-semibold py-3.5 rounded-2xl text-sm mt-4 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
-          >
-            <Check size={18} /> {existingWeight ? 'Update weight' : 'Save weight'}
-          </button>
           {isWeightEdit && existingWeight && (
             <button
               onClick={onDeleteWeight}
-              className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+              className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-5 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
             >
               <Trash2 size={16} /> Delete weight
             </button>

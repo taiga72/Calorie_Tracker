@@ -10,10 +10,10 @@ export default {
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     fontSize: {
-      // The smallest sizes are kept readable (10–10.5 px at standard size).
-      8: scaled('0.625rem', '0.875rem'),
-      9: scaled('0.65625rem', '0.875rem'),
-      10: scaled('0.625rem', '0.875rem'),
+      // Nothing smaller than 11 px at standard size (Apple's smallest text style).
+      8: scaled('0.6875rem', '0.875rem'),
+      9: scaled('0.6875rem', '0.875rem'),
+      10: scaled('0.6875rem', '0.875rem'),
       11: scaled('0.6875rem', '1rem'),
       xs: scaled('0.75rem', '1rem'),
       sm: scaled('0.875rem', '1.25rem'),

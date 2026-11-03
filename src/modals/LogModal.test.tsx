@@ -22,6 +22,7 @@ const unpinMeal = vi.fn((id: string) => { pinned = pinned.filter((p) => p.id !==
 const restorePin = vi.fn((pin: PinnedMeal) => { pinned = [pin, ...pinned]; });
 const updatePin = vi.fn();
 const updateMeal = vi.fn();
+const logWeightForDate = vi.fn();
 
 vi.mock('@/store', () => ({
   useStore: () => ({
@@ -30,7 +31,7 @@ vi.mock('@/store', () => ({
     deleteMeal,
     updateMeal,
     logWeight: vi.fn(),
-    logWeightForDate: vi.fn(),
+    logWeightForDate,
     deleteWeight: vi.fn(),
     weights: [],
     pinned,
@@ -320,7 +321,8 @@ describe('LogModal editing a meal', () => {
 
   it('keeps the day unless it is changed', () => {
     renderEdit();
-    fireEvent.click(screen.getByText('Save changes'));
+    expect(screen.queryByText('Save changes')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(updateMeal).toHaveBeenCalledWith('m1', expect.not.objectContaining({ date: expect.anything() }));
   });
 
@@ -328,7 +330,7 @@ describe('LogModal editing a meal', () => {
     renderEdit();
     fireEvent.change(screen.getByLabelText('Meal date'), { target: { value: '2026-09-30' } });
     expect(screen.getByText(/Will move to/)).toBeInTheDocument();
-    fireEvent.click(screen.getByText('Save changes'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(updateMeal).toHaveBeenCalledWith('m1', expect.objectContaining({ date: '2026-09-30', mealType: 'Lunch' }));
   });
 });
@@ -352,7 +354,7 @@ describe('LogModal re-estimating one item', () => {
     await act(async () => { fireEvent.click(screen.getByText('Estimate')); });
 
     expect(estimateItem).toHaveBeenCalledWith('', 'Chicken 200g', ['Rice 1 cup']);
-    fireEvent.click(screen.getByText('Save changes'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(updateMeal).toHaveBeenCalledWith('m2', expect.objectContaining({
       calories: 530,
       items: [twoItems.items[0], expect.objectContaining({ name: 'Chicken 200g', calories: 330 })],
@@ -436,5 +438,15 @@ describe('LogModal pinning one food', () => {
     await act(async () => { fireEvent.click(screen.getByText(/Estimate with AI|Analyze|Estimate/)); });
     fireEvent.click(screen.getByLabelText('Pin Chicken 100g'));
     expect(pinMeal).toHaveBeenCalledWith(expect.objectContaining({ name: 'Chicken 100g', mealType: 'Lunch', calories: 165 }));
+  });
+});
+
+describe('LogModal weight', () => {
+  it('saves a weight from the sheet\'s top bar', () => {
+    render(<UndoToastProvider><LogModal open onClose={vi.fn()} weightDate="2026-10-01" /></UndoToastProvider>);
+    expect(screen.queryByText(/Save weight/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('0.0'), { target: { value: '79.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(logWeightForDate).toHaveBeenCalledWith(79.5, '2026-10-01');
   });
 });

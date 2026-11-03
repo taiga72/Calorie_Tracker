@@ -89,7 +89,7 @@ export function ActivityCard({ date }: { date: string }) {
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1 text-xs font-semibold text-accent-600 py-1.5 px-2 -mr-2 rounded-full"
+          className="tap flex items-center gap-1 text-xs font-semibold text-accent-600 py-1.5 px-2 -mr-2 rounded-full"
         >
           <Plus size={14} /> Log
         </button>

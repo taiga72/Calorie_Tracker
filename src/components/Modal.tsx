@@ -1,6 +1,31 @@
-import { useEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type FocusEvent as ReactFocusEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 import { trackSheet } from '@/lib/sheetHistory';
+
+export interface SheetAction {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+const SheetActionContext = createContext<((a: SheetAction | null) => void) | null>(null);
+
+/**
+ * Puts a form's main action (Save, Done) in the top bar of the sheet it's in,
+ * as iOS sheets do. Returns false outside a sheet, where the form shows its
+ * own button.
+ */
+export function useSheetAction(action: SheetAction): boolean {
+  const set = useContext(SheetActionContext);
+  const run = useRef(action.onClick);
+  run.current = action.onClick;
+  useEffect(() => {
+    if (!set) return;
+    set({ label: action.label, disabled: action.disabled, onClick: () => run.current() } as SheetAction);
+  }, [set, action.label, action.disabled]);
+  useEffect(() => (set ? () => set(null) : undefined), [set]);
+  return !!set;
+}
 
 interface ModalProps {
   open: boolean;
@@ -8,6 +33,7 @@ interface ModalProps {
   title?: ReactNode;
   children: ReactNode;
   maxWidth?: string;
+  action?: SheetAction;
 }
 
 const DISMISS_THRESHOLD_PX = 100;
@@ -22,7 +48,10 @@ const KEYBOARD_MIN_PX = 120;
 const TYPABLE = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]), textarea, select, [contenteditable="true"]';
 const NO_DRAG = 'input, textarea, select, [contenteditable="true"], [data-chart]';
 
-export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }: ModalProps) {
+export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg', action }: ModalProps) {
+  // An action set by the content (useSheetAction) or passed in.
+  const [childAction, setChildAction] = useState<SheetAction | null>(null);
+  const headerAction = action ?? childAction;
   const [dragY, setDragY] = useState(0);
   const [dragging, setDragging] = useState(false);
   const dragStartY = useRef<number | null>(null);
@@ -186,15 +215,33 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
         >
           <div className="w-9 h-1.5 rounded-full bg-gray-300" />
         </div>
-        {title && (
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-4 bg-[#F8F9FA]/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+        {title && (headerAction ? (
+          // iOS sheet bar: Cancel · title · action.
+          <div className="sticky top-0 z-10 grid grid-cols-[1fr_auto_1fr] items-center gap-2 px-3 py-1.5 bg-[#F8F9FA]/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
+            <button type="button" onClick={onClose} className="justify-self-start min-h-11 px-2 text-base text-accent-600">
+              Cancel
+            </button>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white truncate text-center">{title}</h2>
+            <button
+              type="button"
+              onClick={headerAction.onClick}
+              disabled={headerAction.disabled}
+              className="justify-self-end min-h-11 px-2 text-base font-semibold text-accent-600 disabled:text-gray-300 dark:disabled:text-gray-600"
+            >
+              {headerAction.label}
+            </button>
+          </div>
+        ) : (
+          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 bg-[#F8F9FA]/95 dark:bg-gray-900/95 backdrop-blur border-b border-gray-100 dark:border-gray-800">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white">{title}</h2>
-            <button onClick={onClose} className="p-1.5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400" aria-label="Close">
+            <button onClick={onClose} className="w-11 h-11 -mr-2.5 flex items-center justify-center rounded-full hover:bg-gray-200 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400" aria-label="Close">
               <X size={20} />
             </button>
           </div>
-        )}
-        <div className="px-5 py-4">{children}</div>
+        ))}
+        <SheetActionContext.Provider value={setChildAction}>
+          <div className="px-5 py-4">{children}</div>
+        </SheetActionContext.Provider>
       </div>
     </div>
   );

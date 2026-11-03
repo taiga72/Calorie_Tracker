@@ -24,6 +24,7 @@ export function BottomNav({ active, onChange }: BottomNavProps) {
               <button
                 key={key}
                 onClick={() => onChange(key)}
+                aria-current={isActive ? 'page' : undefined}
                 className="flex flex-col items-center justify-center gap-1 py-2.5 transition-colors"
               >
                 <Icon

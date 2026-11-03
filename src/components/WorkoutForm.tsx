@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, Calendar, Check, Loader2, Mic, Plus, Sparkles, Trash2, Watch, X } from 'lucide-react';
 import { useStore } from '@/store';
 import { useUndoToast } from '@/components/UndoToastProvider';
+import { useSheetAction } from '@/components/Modal';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { friendlyAiError } from '@/lib/aiErrors';
 import { compressImage, RateLimitError } from '@/lib/gemini';
@@ -255,6 +256,8 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     requestUndo('Workout deleted', () => restoreWorkout(editWorkout));
     onDone();
   };
+
+  const inSheet = useSheetAction({ label: 'Save', onClick: onSave, disabled: !canSave });
 
   return (
     <div>
@@ -526,19 +529,21 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
         />
       </label>
 
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={!canSave}
-        className="w-full mt-5 bg-accent-600 disabled:opacity-40 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
-      >
-        <Check size={18} /> {editWorkout ? 'Save changes' : 'Save workout'}
-      </button>
+      {!inSheet && (
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!canSave}
+          className="w-full mt-5 bg-accent-600 disabled:opacity-40 text-white font-semibold py-3.5 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+        >
+          <Check size={18} /> {editWorkout ? 'Save changes' : 'Save workout'}
+        </button>
+      )}
       {editWorkout && (
         <button
           type="button"
           onClick={onDelete}
-          className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-2 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+          className="w-full bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 font-semibold py-3 rounded-2xl text-sm mt-5 flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
         >
           <Trash2 size={16} /> Delete workout
         </button>

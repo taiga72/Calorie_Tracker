@@ -126,28 +126,28 @@ export function HomeTab() {
     <button
       onClick={() => setWeightOpen(true)}
       aria-label="Log weight"
-      className="bg-blue-600 rounded-card p-3.5 shadow-sm text-white flex flex-col justify-between text-left active:scale-[.98] transition-transform"
+      className="card p-3.5 flex flex-col justify-between text-left active:scale-[.98] transition-transform"
     >
       <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-blue-100">Latest weight</span>
-        <Scale size={15} className="text-blue-100" />
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Latest weight</span>
+        <Scale size={15} className="text-blue-600 dark:text-blue-400" />
       </div>
       <div className="my-1">
         {latestWeight ? (
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-2xl font-bold leading-none">{fmtWeight(latestWeight.weight, settings.weightUnit, 1).split(' ')[0]}</span>
-            <span className="text-xs text-blue-100">{settings.weightUnit}</span>
+            <span className="text-2xl font-bold leading-none text-blue-600 dark:text-blue-400">{fmtWeight(latestWeight.weight, settings.weightUnit, 1).split(' ')[0]}</span>
+            <span className="text-xs text-gray-400">{settings.weightUnit}</span>
             {latestWeight.date !== todayKey && (
-              <span className="text-9 font-semibold text-blue-50 bg-white/15 px-1.5 py-0.5 rounded-full">
+              <span className="text-9 font-semibold text-blue-600 dark:text-blue-300 bg-blue-50 dark:bg-blue-950 px-1.5 py-0.5 rounded-full">
                 {relativeDayLabel(latestWeight.date)}
               </span>
             )}
           </div>
         ) : (
-          <span className="text-xs text-blue-100 block">No weight logged</span>
+          <span className="text-xs text-gray-400 block">No weight logged</span>
         )}
       </div>
-      <span className="text-10 text-blue-100 block">
+      <span className="text-10 text-gray-400 block">
         Goal {fmtWeight(settings.goalWeight, settings.weightUnit, 0)}
         {forecast.status === 'on-track' && <> · by ~{formatForecastDate(forecast.date, false)}</>}
       </span>
@@ -227,7 +227,7 @@ export function HomeTab() {
           <button
             type="button"
             onClick={() => setStreakOpen(true)}
-            className="flex-shrink-0 self-start mt-1 inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 px-2.5 py-1 text-xs font-bold active:scale-95 transition-transform"
+            className="tap flex-shrink-0 self-start mt-1 inline-flex items-center gap-1 rounded-full bg-orange-50 dark:bg-orange-950 text-orange-600 dark:text-orange-300 px-2.5 py-1 text-xs font-bold active:scale-95 transition-transform"
             aria-label={`${streak} day logging streak`}
           >
             <Flame size={13} /> {streak}

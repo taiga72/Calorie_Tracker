@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { Modal } from '@/components/Modal';
+import { Modal, useSheetAction } from '@/components/Modal';
 
 describe('Modal', () => {
   it('renders nothing when closed', () => {
@@ -181,5 +181,32 @@ describe('Modal swipe down to close (touch)', () => {
     vi.advanceTimersByTime(350);
     expect(spy).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }));
     vi.useRealTimers();
+  });
+
+  it('puts the sheet\'s action at the top right, with Cancel at the top left', () => {
+    const onClose = vi.fn();
+    const onSave = vi.fn();
+    render(<Modal open onClose={onClose} title="Edit" action={{ label: 'Save', onClick: onSave }}>content</Modal>);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('greys out the action when it can\'t be done yet', () => {
+    render(<Modal open onClose={vi.fn()} title="Edit" action={{ label: 'Save', onClick: vi.fn(), disabled: true }}>content</Modal>);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('lets the content inside the sheet set the action', () => {
+    const onSave = vi.fn();
+    function Form() {
+      const inSheet = useSheetAction({ label: 'Done', onClick: onSave });
+      return <p>{inSheet ? 'in header' : 'own button'}</p>;
+    }
+    render(<Modal open onClose={vi.fn()} title="Edit"><Form /></Modal>);
+    expect(screen.getByText('in header')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onSave).toHaveBeenCalledTimes(1);
   });
 });
