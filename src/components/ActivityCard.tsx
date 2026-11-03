@@ -54,7 +54,7 @@ export function WorkoutList({ workouts, onEdit, showDate = false }: { workouts: 
                 <span className="block text-11 text-gray-500 dark:text-gray-400 truncate mt-0.5">
                   {groupSets(w.sets).map((g) => {
                     const top = g.sets.reduce((a, b) => (b.weight > a.weight ? b : a));
-                    return `${g.exercise} ${g.sets.length}×${top.reps}${top.weight ? ` @ ${+kgToUnit(top.weight, unit).toFixed(1)}` : ''}`;
+                    return `${g.exercise} ${g.sets.length}×${top.reps}${top.weight ? ` @ ${+kgToUnit(top.weight, unit).toFixed(1)} ${unit}` : ''}`;
                   }).join(' · ')}
                 </span>
               ) : null}
@@ -102,7 +102,9 @@ export function ActivityCard({ date }: { date: string }) {
       ) : (
         <>
           <p className="text-11 text-gray-500 dark:text-gray-400 mt-1">
-            <span className="font-semibold text-sky-600">{minutes} min</span>
+            {minutes > 0
+              ? <span className="font-semibold text-sky-600">{minutes} min</span>
+              : <span className="font-semibold text-sky-600">{today.length} workout{today.length === 1 ? '' : 's'}</span>}
             {burned > 0 && <> · <span className="font-semibold text-sky-600">{burned} kcal</span> burned</>}
             {credit > 0 ? <> · <span className="font-semibold text-emerald-600">+{credit} kcal</span> added to today's goal</> : null}
           </p>

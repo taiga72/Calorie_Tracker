@@ -93,30 +93,6 @@ drop policy if exists "Users manage their own pinned meals" on public.pinned_mea
 create policy "Users manage their own pinned meals" on public.pinned_meals
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- Meal photos (added later — re-running this file creates it). A private
--- Storage bucket with one folder per user; meals reference files by path
--- instead of carrying base64 images inline.
-insert into storage.buckets (id, name, public)
-values ('meal-photos', 'meal-photos', false)
-on conflict (id) do nothing;
-
-drop policy if exists "Users read their own meal photos" on storage.objects;
-create policy "Users read their own meal photos" on storage.objects
-  for select using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
-
-drop policy if exists "Users upload their own meal photos" on storage.objects;
-create policy "Users upload their own meal photos" on storage.objects
-  for insert with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
-
-drop policy if exists "Users update their own meal photos" on storage.objects;
-create policy "Users update their own meal photos" on storage.objects
-  for update using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text)
-  with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
-
-drop policy if exists "Users delete their own meal photos" on storage.objects;
-create policy "Users delete their own meal photos" on storage.objects
-  for delete using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
-
 -- Workouts (added later — re-running this file creates the table). Until
 -- then they stay on each device.
 create table if not exists public.workouts (
@@ -183,3 +159,40 @@ as $$
 $$;
 revoke all on function public.delete_my_account() from public, anon;
 grant execute on function public.delete_my_account() to authenticated;
+
+-- Meal photos (added later — re-running this file creates it). A private
+-- Storage bucket with one folder per user; meals reference files by path
+-- instead of carrying base64 images inline.
+--
+-- Last in this file, and allowed to fail: some Supabase projects don't let
+-- the SQL editor change Storage's own tables. A refusal here is reported as
+-- a notice and leaves everything above in place (the app then keeps photos
+-- inside the meals, as before). Policies can also be added under Storage →
+-- Policies in the dashboard.
+do $storage$
+begin
+  insert into storage.buckets (id, name, public)
+  values ('meal-photos', 'meal-photos', false)
+  on conflict (id) do nothing;
+
+  drop policy if exists "Users read their own meal photos" on storage.objects;
+  create policy "Users read their own meal photos" on storage.objects
+    for select using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+  drop policy if exists "Users upload their own meal photos" on storage.objects;
+  create policy "Users upload their own meal photos" on storage.objects
+    for insert with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+  drop policy if exists "Users update their own meal photos" on storage.objects;
+  create policy "Users update their own meal photos" on storage.objects
+    for update using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text)
+    with check (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+  drop policy if exists "Users delete their own meal photos" on storage.objects;
+  create policy "Users delete their own meal photos" on storage.objects
+    for delete using (bucket_id = 'meal-photos' and (storage.foldername(name))[1] = auth.uid()::text);
+exception
+  when insufficient_privilege then
+    raise notice 'Skipped the meal-photo Storage setup (not allowed from here): %', sqlerrm;
+end
+$storage$;

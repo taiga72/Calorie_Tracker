@@ -7,7 +7,7 @@ import { exerciseCreditByDay, setExerciseCredit } from '@/lib/goalPlan';
 import { findDuplicatePin } from '@/lib/pinnedMeals';
 import { isDataUrl, photoStorageAvailable, photoToDataUrl, storeInlinePhotos } from '@/lib/photoStorage';
 import {
-  applyPending, describeOp, enqueue, isOnline, isRejection, loadOutbox, loadSnapshot, saveOutbox, saveSnapshot,
+  applyPending, describeOp, enqueue, isOnline, isRejection, loadOutbox, loadParked, loadSnapshot, saveOutbox, saveParked, saveSnapshot,
   type OutboxOp, type QueuedOp, type Snapshot, type SyncCursors,
 } from '@/lib/offline';
 import { useAuth } from '@/auth';
@@ -230,6 +230,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [pendingCount, setPendingCount] = useState(0);
 
   const queue = useRef<QueuedOp[]>([]);
+  const parked = useRef<QueuedOp[]>([]);
   const flushing = useRef<Promise<void> | null>(null);
   const syncInFlight = useRef<Promise<boolean> | null>(null);
   const lastSyncAttempt = useRef(0);
@@ -346,10 +347,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           if (!isOnline()) break;
           const error = storage.takeWriteError?.() ?? null;
           // Refused by the server: it would fail the same way forever and hold
-          // up everything queued after it, so it's dropped and named.
+          // up everything queued after it, so it's set aside (kept on this
+          // device and still shown) until Retry, and the reason is named.
           if (isRejection(error)) {
+            parked.current = [...parked.current, { ...item, attempts: 0 }];
+            saveParked(uid, parked.current);
             persistQueue(uid, queue.current.filter((q) => q.qid !== item.qid));
-            setSyncError(`Couldn't save ${describeOp(item.op)} — the server didn't accept it (${error?.message ?? 'unknown error'}).`);
+            setSyncError(`Couldn't save ${describeOp(item.op)} — the server didn't accept it (${error?.message ?? 'unknown error'}). It's kept on this device; Retry sends it again.`);
             continue;
           }
           // The sign-in expired (e.g. the app sat in the background): renew it
@@ -456,7 +460,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else {
         failed.push('workouts');
       }
-      applySnapshot(applyPending(next, queue.current));
+      applySnapshot(applyPending(next, [...parked.current, ...queue.current]));
       cursors.current = nextCursors;
       // Thumbnails for recent meals arrive shortly after, without holding up
       // the data itself.
@@ -481,12 +485,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userId) return;
     queue.current = loadOutbox(userId);
+    parked.current = loadParked(userId);
     setPendingCount(queue.current.length);
     // The last known state opens the app instantly (and offline); the server
     // copy replaces it as soon as it arrives.
     const cached = loadSnapshot(userId);
     cursors.current = cached?.cursors ?? null;
-    if (cached) applySnapshot(applyPending(cached, queue.current));
+    if (cached) applySnapshot(applyPending(cached, [...parked.current, ...queue.current]));
     setLoading(!cached);
   }, [userId, applySnapshot]);
 
@@ -585,6 +590,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const clearAll: StoreValue['clearAll'] = () => {
       if (!userId) return;
       persistQueue(userId, []);
+      parked.current = [];
+      saveParked(userId, []);
       photos.current.clear();
       cursors.current = null;
       setMeals([]);
@@ -605,6 +612,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (!payload.pinned) { keep.add('upsertPinned'); keep.add('deletePinned'); }
       if (!payload.workouts) { keep.add('upsertWorkout'); keep.add('deleteWorkout'); }
       persistQueue(userId, queue.current.filter((q) => keep.has(q.op.kind)));
+      parked.current = parked.current.filter((q) => keep.has(q.op.kind));
+      saveParked(userId, parked.current);
       const nextSettings = { ...DEFAULT_SETTINGS, ...payload.settings };
       const nextProfile = { ...DEFAULT_PROFILE, ...payload.profile };
       photos.current.clear();
@@ -753,6 +762,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     const refresh: StoreValue['refresh'] = async () => {
       if (!userId) return false;
+      // Writes the server refused before get another try (the cause may have
+      // been fixed since), ahead of anything queued after them.
+      if (parked.current.length > 0) {
+        const retry = parked.current;
+        parked.current = [];
+        saveParked(userId, []);
+        persistQueue(userId, [...retry, ...queue.current]);
+        setSyncError(null);
+      }
       setRefreshing(true);
       const ok = await loadAll(userId);
       setRefreshing(false);

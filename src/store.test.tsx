@@ -570,6 +570,24 @@ describe('offline logging', () => {
     expect(result.current.syncError).not.toMatch(/connection/);
   });
 
+  it('keeps a refused workout on the device and sends it again on Retry', async () => {
+    vi.mocked(storage.upsertWorkout).mockImplementationOnce(async () => {
+      writeError = { status: 403, code: '42501', message: 'new row violates row-level security policy for table "workouts"' };
+      return false;
+    });
+    const { result } = await renderStore();
+
+    await act(async () => { result.current.addWorkout({ date: '2026-01-05', kind: 'strength', name: 'Push', minutes: 0, calories: 0 }); });
+    await waitFor(() => expect(result.current.syncError).toMatch(/row-level security.*kept on this device/));
+
+    // Still shown, even after a sync that doesn't have it.
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.workouts.map((w) => w.name)).toEqual(['Push']);
+    // That refresh was the retry: this time the server took it.
+    expect(db.workouts?.map((w) => w.name)).toEqual(['Push']);
+    expect(result.current.syncError).toBeNull();
+  });
+
   it('renews an expired sign-in and sends the write again', async () => {
     vi.mocked(storage.upsertWeight).mockImplementationOnce(async () => {
       writeError = { status: 401, code: 'PGRST301', message: 'JWT expired' };
