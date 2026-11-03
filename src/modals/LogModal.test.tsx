@@ -319,6 +319,21 @@ describe('LogModal editing a meal', () => {
   };
   const renderEdit = () => render(<UndoToastProvider><LogModal open onClose={vi.fn()} editMeal={meal} /></UndoToastProvider>);
 
+  it('shows the meal\'s calories once, in the editable total', () => {
+    renderEdit();
+    expect(screen.getAllByDisplayValue('600').length).toBeGreaterThan(0);
+    expect(screen.queryByText('600')).not.toBeInTheDocument();
+  });
+
+  it('picks the meal type from a segmented control', () => {
+    renderEdit();
+    const group = screen.getByRole('group', { name: 'Meal' });
+    expect(group).toHaveClass('seg');
+    fireEvent.click(screen.getByRole('button', { name: 'Dinner' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(updateMeal).toHaveBeenCalledWith('m1', expect.objectContaining({ mealType: 'Dinner' }));
+  });
+
   it('keeps the day unless it is changed', () => {
     renderEdit();
     expect(screen.queryByText('Save changes')).not.toBeInTheDocument();
@@ -400,7 +415,7 @@ describe('LogModal saving and errors', () => {
   it('pre-picks the meal type from the time of day', () => {
     renderLog();
     const lunch = screen.getAllByText('Lunch').find((el) => el.tagName === 'BUTTON')!;
-    expect(lunch.className).toMatch(/accent/);
+    expect(lunch).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows a plain-language error with Try again', async () => {

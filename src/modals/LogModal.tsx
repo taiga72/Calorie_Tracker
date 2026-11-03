@@ -426,7 +426,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
         /* ---- Edit form (itemized) ---- */
         <div>
           {/* Meal type selector */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
+          <div className="seg mb-3" role="group" aria-label="Meal">
             {MEAL_TYPES.map((t) => (
               <Pill key={t} active={mealType === t} onClick={() => setMealType(t)}>{t}</Pill>
             ))}
@@ -538,11 +538,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           </div>
 
           {/* Live aggregated macro summary */}
-          <div className="grid grid-cols-5 gap-2 mb-3">
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-              <p className="text-sm font-bold text-gray-900 dark:text-white">{Math.round(editTotals.calories)}</p>
-              <p className="text-10 text-gray-400">kcal</p>
-            </div>
+          <div className="grid grid-cols-4 gap-2 mb-3">
             <div className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
               <p className="text-sm font-bold text-emerald-600">{fmtGrams(editTotals.protein)}</p>
               <p className="text-10 text-gray-400">Protein</p>
@@ -832,7 +828,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             {speech.error && !speech.listening && <p className="text-11 text-amber-600 mt-1.5">{speech.error}</p>}
 
             {/* Meal type selector */}
-            <div className="flex flex-wrap gap-1.5 mt-3">
+            <div className="seg mt-3" role="group" aria-label="Meal">
               <Pill active={mealType === 'auto'} onClick={() => { typePicked.current = true; setMealType('auto'); }}>Auto</Pill>
               {MEAL_TYPES.map((t) => (
                 <Pill key={t} active={mealType === t} onClick={() => { typePicked.current = true; setMealType(t); }}>{t}</Pill>
@@ -921,8 +917,9 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
+      type="button"
       aria-pressed={active}
-      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${active ? 'bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
+      className="seg-item !px-1 !text-xs"
     >
       {children}
     </button>

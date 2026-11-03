@@ -53,7 +53,6 @@ export function GoalPlanSection() {
   const baseToday = current?.calorieGoal ?? settings.calorieGoal;
   const weekAvg = offsets ? Math.round(baseToday + offsets.reduce((a, b) => a + b, 0) / 7) : baseToday;
 
-  const perKgShown = prefs.proteinPerKg ? +(unit === 'lb' ? prefs.proteinPerKg / 2.2046 : prefs.proteinPerKg).toFixed(2) : null;
 
   return (
     <div id="settings-goal-plan" className="card p-5 mt-4 scroll-mt-[calc(env(safe-area-inset-top)+12px)]">
@@ -61,7 +60,7 @@ export function GoalPlanSection() {
         <CalendarRange size={18} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Goal plan</h2>
       </div>
-      <p className="text-xs text-gray-400 mb-4">Phases, weekday goals and protein — each day is judged by the goal it had.</p>
+      <p className="text-xs text-gray-400 mb-4">Phases and weekday goals — each day is judged by the goal it had.</p>
 
       {/* Phases */}
       <p className="text-11 font-semibold text-gray-500 dark:text-gray-400 mb-2">Goal phases</p>
@@ -136,35 +135,7 @@ export function GoalPlanSection() {
         )}
       </div>
 
-      {/* Protein */}
-      <Segmented<'fixed' | 'perKg'>
-        label="Protein target"
-        value={prefs.proteinPerKg ? 'perKg' : 'fixed'}
-        onChange={(v) => updatePrefs({ proteinPerKg: v === 'perKg' ? 1.6 : null })}
-        options={[
-          { value: 'fixed', label: 'Fixed grams' },
-          { value: 'perKg', label: `Per ${unit} of weight` },
-        ]}
-      />
-      {perKgShown !== null && (
-        <div className="flex items-center gap-2 mt-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            step={0.1}
-            aria-label={`Protein grams per ${unit}`}
-            defaultValue={perKgShown}
-            onBlur={(e) => {
-              const v = Number(e.target.value);
-              if (v > 0) updatePrefs({ proteinPerKg: +(unit === 'lb' ? v * 2.2046 : v).toFixed(3) });
-            }}
-            className="w-20 bg-gray-50 dark:bg-gray-800 rounded-lg px-2 py-1.5 text-xs font-semibold text-gray-900 dark:text-white outline-none text-right focus:ring-2 focus:ring-accent-500/30"
-          />
-          <span className="text-xs text-gray-500">g per {unit} — follows your latest weigh-in</span>
-        </div>
-      )}
-
-      {/* Exercise calories */}
+      {/* Exercise calories (protein moved to Your goals → Macro targets) */}
       <div className="mt-4">
         <Segmented<'0' | '0.5' | '1'>
           label="Exercise calories"

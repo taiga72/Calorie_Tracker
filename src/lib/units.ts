@@ -25,3 +25,10 @@ export function fmtSignedChange(v: number, digits: number): string | null {
   if (r === 0) return null;
   return `${r > 0 ? '+' : '−'}${Math.abs(r).toFixed(digits)}`;
 }
+
+/** A typed weight re-expressed in another unit (for switching kg ↔ lb mid-edit); text that isn't a number is kept. */
+export function convertWeightText(text: string, from: WeightUnit, to: WeightUnit, digits: number): string {
+  const v = parseFloat(text);
+  if (from === to || !Number.isFinite(v)) return text;
+  return kgToUnit(unitToKg(v, from), to).toFixed(digits);
+}
