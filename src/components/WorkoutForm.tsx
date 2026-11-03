@@ -5,7 +5,7 @@ import { useUndoToast } from '@/components/UndoToastProvider';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { friendlyAiError } from '@/lib/aiErrors';
 import { RateLimitError } from '@/lib/gemini';
-import { estimateBurn, estimateWorkout, groupSets, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
+import { estimateBurn, estimateWorkout, groupSets, liftKey, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
 import { kgToUnit, unitToKg } from '@/lib/units';
 import { formatHeaderDate, fromKey, todayKey } from '@/lib/dateUtils';
 import type { WeightUnit, Workout, WorkoutKind } from '@/types';
@@ -19,19 +19,48 @@ interface SetRow {
 interface ExerciseBlock {
   key: number;
   name: string;
+  /** What this exercise's weights are entered in (saved in kg either way). */
+  unit: WeightUnit;
+  /** Picked by hand: typing the name no longer switches it. */
+  unitChosen?: boolean;
   sets: SetRow[];
 }
+
+// The unit last used for each exercise (dumbbells in lb, the bar in kg…),
+// so it comes up the same way next time. Kept on this device.
+const LIFT_UNITS_KEY = 'calorie_tracker_lift_units';
+function liftUnits(): Record<string, WeightUnit> {
+  try {
+    return JSON.parse(localStorage.getItem(LIFT_UNITS_KEY) || '{}') as Record<string, WeightUnit>;
+  } catch {
+    return {};
+  }
+}
+function rememberLiftUnits(blocks: ExerciseBlock[]): void {
+  try {
+    const all = liftUnits();
+    for (const b of blocks) if (b.name.trim()) all[liftKey(b.name)] = b.unit;
+    localStorage.setItem(LIFT_UNITS_KEY, JSON.stringify(all));
+  } catch {
+    // ignore
+  }
+}
+const unitFor = (name: string, fallback: WeightUnit): WeightUnit => liftUnits()[liftKey(name)] ?? fallback;
 
 let nextBlockKey = 1;
 const emptySet = (): SetRow => ({ reps: '', weight: '' });
 
 /** Saved sets (one list, each naming its exercise) → a block per exercise. */
-function toBlocks(sets: { exercise: string; reps: number; weight: number }[] | undefined, unit: WeightUnit): ExerciseBlock[] {
-  return groupSets(sets ?? []).map((g) => ({
-    key: nextBlockKey++,
-    name: g.exercise,
-    sets: g.sets.map((x) => ({ reps: String(x.reps), weight: x.weight ? trimNum(kgToUnit(x.weight, unit)) : '' })),
-  }));
+function toBlocks(sets: { exercise: string; reps: number; weight: number }[] | undefined, fallback: WeightUnit): ExerciseBlock[] {
+  return groupSets(sets ?? []).map((g) => {
+    const unit = unitFor(g.exercise, fallback);
+    return {
+      key: nextBlockKey++,
+      name: g.exercise,
+      unit,
+      sets: g.sets.map((x) => ({ reps: String(x.reps), weight: x.weight ? trimNum(kgToUnit(x.weight, unit)) : '' })),
+    };
+  });
 }
 
 const num = (s: string) => {
@@ -54,9 +83,6 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const { settings, weights, workouts, addWorkout, updateWorkout, deleteWorkout, restoreWorkout } = useStore();
   const { requestUndo, notify } = useUndoToast();
   const unit = settings.weightUnit;
-  // The unit the sets are entered in: the app's by default, switchable per
-  // workout (gym plates in kg, dumbbells in lb…). Saved in kg either way.
-  const [liftUnit, setLiftUnit] = useState<WeightUnit>(unit);
   const bodyWeight = weights.length ? weights[weights.length - 1].weight : null;
 
   const [text, setText] = useState('');
@@ -118,7 +144,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setMinutes(w.minutes ? String(w.minutes) : '');
     setCalories(w.calories ? String(w.calories) : '');
     setCaloriesSet(w.calories > 0);
-    setBlocks(toBlocks(w.sets, liftUnit));
+    setBlocks(toBlocks(w.sets, unit));
   };
 
   const onEstimate = async () => {
@@ -147,17 +173,22 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   // A new set copies the one before: usually the same weight, maybe a rep less.
   const addSet = (key: number) => updateBlock(key, (b) => ({ ...b, sets: [...b.sets, b.sets.length ? { ...b.sets[b.sets.length - 1] } : emptySet()] }));
   const removeSet = (key: number, i: number) => updateBlock(key, (b) => ({ ...b, sets: b.sets.filter((_, j) => j !== i) }));
-  const addExercise = () => setBlocks((prev) => [...prev, { key: nextBlockKey++, name: '', sets: [emptySet()] }]);
+  // A new exercise starts in the unit of the one before (or the app's).
+  const addExercise = () => setBlocks((prev) => [...prev, { key: nextBlockKey++, name: '', unit: prev[prev.length - 1]?.unit ?? unit, sets: [emptySet()] }]);
+  // Naming an exercise brings back the unit it was last logged in.
+  const renameExercise = (key: number, name: string) =>
+    updateBlock(key, (b) => ({ ...b, name, unit: b.unitChosen ? b.unit : unitFor(name, b.unit) }));
   const removeExercise = (key: number) => setBlocks((prev) => prev.filter((b) => b.key !== key));
 
   // Saved as one list of sets, each naming its exercise, in the order shown.
   const cleanSets = blocks.flatMap((b) => b.sets
-    .map((x) => ({ exercise: b.name.trim(), reps: Math.round(num(x.reps)), weight: +unitToKg(num(x.weight), liftUnit).toFixed(2) }))
+    .map((x) => ({ exercise: b.name.trim(), reps: Math.round(num(x.reps)), weight: +unitToKg(num(x.weight), b.unit).toFixed(2) }))
     .filter((x) => x.exercise && x.reps > 0));
   const canSave = name.trim().length > 0 && (num(minutes) > 0 || num(calories) > 0 || cleanSets.length > 0);
 
   const onSave = () => {
     if (!canSave) return;
+    rememberLiftUnits(blocks);
     const data = {
       date: editWorkout && /^\d{4}-\d{2}-\d{2}$/.test(editDate) ? editDate : editWorkout?.date ?? date,
       kind,
@@ -308,21 +339,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
 
       {(kind === 'strength' || blocks.length > 0) && (
         <div className="mt-4">
-          <div className="flex items-center justify-between">
-            <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Exercises</p>
-            <label className="flex items-center gap-1.5 text-10 font-semibold text-gray-400">
-              Weights in
-              <select
-                value={liftUnit}
-                onChange={(e) => setLiftUnit(e.target.value as WeightUnit)}
-                aria-label="Weight unit for these sets"
-                className="bg-gray-100 dark:bg-gray-800 rounded-lg px-2 py-1 text-11 font-semibold text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-accent-500/30"
-              >
-                <option value="kg">kg</option>
-                <option value="lb">lb</option>
-              </select>
-            </label>
-          </div>
+          <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Exercises</p>
           <datalist id="known-lifts">
             {knownLifts.map((n) => <option key={n} value={n} />)}
           </datalist>
@@ -332,7 +349,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                 <div className="flex items-center gap-1.5">
                   <input
                     value={b.name}
-                    onChange={(e) => updateBlock(b.key, (x) => ({ ...x, name: e.target.value }))}
+                    onChange={(e) => renameExercise(b.key, e.target.value)}
                     list="known-lifts"
                     placeholder="Exercise, e.g. Bench press"
                     aria-label={`Exercise ${bi + 1} name`}
@@ -347,7 +364,17 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                   <div className="flex items-center gap-1.5 mt-2 mb-1 text-10 font-semibold text-gray-400">
                     <span className="w-8 text-center">Set</span>
                     <span className="flex-1 text-center">Reps</span>
-                    <span className="flex-1 text-center">{liftUnit}</span>
+                    <span className="flex-1 flex justify-center">
+                      <select
+                        value={b.unit}
+                        onChange={(e) => updateBlock(b.key, (x) => ({ ...x, unit: e.target.value as WeightUnit, unitChosen: true }))}
+                        aria-label={`Exercise ${bi + 1} weight unit`}
+                        className="bg-gray-100 dark:bg-gray-900 rounded-md pl-2 pr-1 py-1 text-11 font-semibold text-gray-600 dark:text-gray-300 outline-none focus:ring-2 focus:ring-accent-500/30"
+                      >
+                        <option value="kg">kg</option>
+                        <option value="lb">lb</option>
+                      </select>
+                    </span>
                     <span className="w-9 -mr-1" />
                   </div>
                 )}
