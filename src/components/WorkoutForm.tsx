@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Calendar, Check, Loader2, Mic, Plus, Sparkles, Trash2, X } from 'lucide-react';
+import { AlertCircle, Calendar, Check, Loader2, Mic, Plus, Sparkles, Trash2, Watch, X } from 'lucide-react';
 import { useStore } from '@/store';
 import { useUndoToast } from '@/components/UndoToastProvider';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { friendlyAiError } from '@/lib/aiErrors';
-import { RateLimitError } from '@/lib/gemini';
-import { estimateBurn, estimateWorkout, groupSets, liftKey, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
+import { compressImage, RateLimitError } from '@/lib/gemini';
+import { estimateBurn, estimateWorkout, groupSets, liftKey, liftRecords, newRecords, readWatchScreenshots, WORKOUT_KINDS, type EstimatedWorkout, type WatchWorkout } from '@/lib/workouts';
 import { kgToUnit, unitToKg } from '@/lib/units';
 import { formatHeaderDate, fromKey, todayKey } from '@/lib/dateUtils';
 import type { WeightUnit, Workout, WorkoutKind } from '@/types';
@@ -99,6 +99,10 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState<(() => void) | null>(null);
+  // Imported from watch screenshots: what the watch said, shown under Calories.
+  const [watch, setWatch] = useState<WatchWorkout | null>(null);
+  const [reading, setReading] = useState(false);
+  const watchInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!editWorkout) return;
@@ -160,6 +164,33 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       setRetry(() => () => void onEstimate());
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Watch screenshots: the type, duration, calories and heart rate come from
+  // the watch; exercises already typed in here are kept.
+  const onWatchScreens = async (files: File[]) => {
+    if (files.length === 0 || reading) return;
+    setReading(true);
+    setError(null);
+    setRetry(null);
+    try {
+      const images = await Promise.all(files.slice(0, 4).map((f) => compressImage(f, 1600, 0.8)));
+      const w = await readWatchScreenshots(settings.geminiApiKey, images.map((i) => i.base64));
+      setKind(w.kind);
+      setName((prev) => prev.trim() || w.name);
+      setMinutes(w.minutes ? String(w.minutes) : '');
+      setCalories(w.calories ? String(w.calories) : '');
+      setCaloriesSet(true);
+      const hr = [w.avgHeartRate ? `avg ${w.avgHeartRate}` : null, w.maxHeartRate ? `max ${w.maxHeartRate}` : null].filter(Boolean).join(', ');
+      const note = `Watch: ${w.watchCalories} kcal${hr ? ` · HR ${hr} bpm` : ''}`;
+      setNotes((prev) => (prev.trim() ? `${prev.trim()} · ${note}` : note));
+      setWatch(w);
+    } catch (e) {
+      setError(e instanceof RateLimitError ? `The AI is busy — try again in ${e.retryAfterSec}s.` : friendlyAiError(e));
+      setRetry(() => () => void onWatchScreens(files));
+    } finally {
+      setReading(false);
     }
   };
 
@@ -256,6 +287,24 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             {loading ? 'Working it out…' : 'Fill in with AI'}
           </button>
+          <input
+            ref={watchInput}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            aria-label="Watch screenshots"
+            onChange={(e) => { const files = Array.from(e.target.files ?? []); e.target.value = ''; void onWatchScreens(files); }}
+          />
+          <button
+            type="button"
+            onClick={() => watchInput.current?.click()}
+            disabled={reading}
+            className="w-full mt-2 bg-gray-100 dark:bg-gray-800 disabled:opacity-60 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-2xl text-sm flex items-center justify-center gap-2 active:scale-[.99] transition-transform"
+          >
+            {reading ? <Loader2 size={16} className="animate-spin" /> : <Watch size={16} />}
+            {reading ? 'Reading your watch…' : 'Import from watch screenshot'}
+          </button>
           {error && (
             <div className="flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs rounded-xl p-3 mt-3">
               <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
@@ -336,6 +385,14 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
         </label>
       </div>
       {!caloriesSet && num(calories) > 0 && <p className="text-10 text-gray-400 mt-1">Calories estimated from the type and duration — change them if your watch says otherwise.</p>}
+      {watch && (
+        <p className="text-10 text-gray-500 dark:text-gray-400 mt-1">
+          From your watch{watch.avgHeartRate ? ` (avg ${watch.avgHeartRate} bpm)` : ''}.
+          {watch.kind === 'strength' && watch.watchCalories !== watch.calories
+            ? ` It said ${watch.watchCalories} kcal — heart rate overstates lifting, so ${watch.calories} is used. Change it if you like.`
+            : ''}
+        </p>
+      )}
 
       {(kind === 'strength' || blocks.length > 0) && (
         <div className="mt-4">

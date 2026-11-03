@@ -62,6 +62,72 @@ export async function estimateWorkout(apiKey: string, text: string, bodyWeightKg
   return generateJson(key, body, normalizeWorkout);
 }
 
+// ---- Importing a fitness watch's workout summary (screenshots)
+
+export interface WatchWorkout extends EstimatedWorkout {
+  /** kcal exactly as the watch showed them (`calories` may be adjusted). */
+  watchCalories: number;
+  avgHeartRate?: number;
+  maxHeartRate?: number;
+}
+
+const WATCH_PROMPT = `You read screenshots of a workout summary from a fitness watch or its phone app (CMF, Garmin, Apple, Samsung, Fitbit, Huawei…). Several screenshots may show the same workout: combine them.
+Respond with ONLY a JSON object (no markdown) with this exact shape:
+{
+  "kind": "cardio" | "strength" | "sport" | "other",
+  "name": string,
+  "minutes": number,
+  "calories": number,
+  "avgHeartRate": number,
+  "maxHeartRate": number
+}
+Rules:
+- Read the numbers as shown; never estimate. Use 0 for anything not shown.
+- kind: running, walking, cycling, rowing, elliptical, swimming, HIIT → "cardio"; strength / weight / functional training → "strength"; ball and racket sports → "sport"; yoga, stretching, anything else → "other".
+- name: the workout type as shown, in sentence case, e.g. "Strength training", "Outdoor run".
+- minutes: the duration rounded to whole minutes ("44:11" → 44, "1:05:30" → 66).
+- calories: the workout's kcal as shown (if both active and total are shown, use active).
+- Output ONLY the JSON object.`;
+
+/**
+ * Heart rate overstates the burn of lifting: it climbs under strain and stays
+ * up through the rests, while little energy is used. Watches apply a cardio
+ * formula anyway, so a strength session's figure is cut to about two thirds.
+ */
+export const STRENGTH_WATCH_FACTOR = 2 / 3;
+
+export function adjustWatchCalories(kind: WorkoutKind, kcal: number): number {
+  return Math.round(kind === 'strength' ? kcal * STRENGTH_WATCH_FACTOR : kcal);
+}
+
+function normalizeWatchWorkout(raw: unknown): WatchWorkout {
+  const r = raw as Partial<WatchWorkout> & { avgHeartRate?: number; maxHeartRate?: number };
+  const kind: WorkoutKind = WORKOUT_KINDS.some((k) => k.key === r.kind) ? (r.kind as WorkoutKind) : 'other';
+  const minutes = Math.max(0, Math.round(Number(r.minutes) || 0));
+  const watchCalories = Math.max(0, Math.round(Number(r.calories) || 0));
+  if (!minutes && !watchCalories) throw new Error("Couldn't find a workout in those screenshots.");
+  const hr = (v: unknown) => { const n = Math.round(Number(v) || 0); return n >= 30 && n <= 240 ? n : undefined; };
+  return {
+    kind,
+    name: String(r.name ?? '').trim() || WORKOUT_KINDS.find((k) => k.key === kind)!.label,
+    minutes,
+    calories: adjustWatchCalories(kind, watchCalories),
+    watchCalories,
+    avgHeartRate: hr(r.avgHeartRate),
+    maxHeartRate: hr(r.maxHeartRate),
+  };
+}
+
+/** Reads the duration, calories and heart rate off watch screenshots. */
+export async function readWatchScreenshots(apiKey: string, images: { data: string; mimeType: string }[]): Promise<WatchWorkout> {
+  const key = resolveApiKey(apiKey);
+  const body = {
+    contents: [{ role: 'user', parts: [{ text: WATCH_PROMPT }, ...images.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.data } }))] }],
+    generationConfig: { responseMimeType: 'application/json', maxOutputTokens: 1024 },
+  };
+  return generateJson(key, body, normalizeWatchWorkout);
+}
+
 // Rough MET values, for estimating a manual entry without the AI.
 const MET: Record<WorkoutKind, number> = { cardio: 7, strength: 5, sport: 7, other: 3.5 };
 

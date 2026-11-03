@@ -304,7 +304,8 @@ export function fileToBase64(file: File): Promise<{ data: string; mimeType: stri
 const COMPRESS_MAX = 480;
 const COMPRESS_QUALITY = 0.7;
 
-export function compressImage(file: File): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
+/** Shrinks a photo for upload; `maxSize` is the longest side (screenshots to read need more). */
+export function compressImage(file: File, maxSize = COMPRESS_MAX, quality = COMPRESS_QUALITY): Promise<{ dataUrl: string; base64: { data: string; mimeType: string } }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -312,8 +313,8 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
       const img = new Image();
       img.onload = () => {
         let { width, height } = img;
-        if (width > COMPRESS_MAX || height > COMPRESS_MAX) {
-          const ratio = Math.min(COMPRESS_MAX / width, COMPRESS_MAX / height);
+        if (width > maxSize || height > maxSize) {
+          const ratio = Math.min(maxSize / width, maxSize / height);
           width = Math.round(width * ratio);
           height = Math.round(height * ratio);
         }
@@ -325,7 +326,7 @@ export function compressImage(file: File): Promise<{ dataUrl: string; base64: { 
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', COMPRESS_QUALITY);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
         const comma = dataUrl.indexOf(',');
         resolve({
           dataUrl,
