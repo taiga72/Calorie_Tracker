@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from '@/store';
 import { isNative } from '@/lib/native';
 import { kgToUnit } from '@/lib/units';
-import { loadHealthPrefs, markImported, newHealthWeights, newHealthWorkouts, saveHealthPrefs, writeMealsToHealth } from '@/lib/health';
+import { loadHealthPrefs, markImported, newHealthWeights, newHealthWorkouts, saveHealthPrefs, tidyHealthImport, writeMealsToHealth } from '@/lib/health';
 
 const FIRST_LOOKBACK_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -18,9 +18,9 @@ export interface HealthSyncResult {
  * back to the front; new meals' calories go out as they're logged.
  */
 export function useHealthSync(enabled: boolean) {
-  const { meals, workouts, weights, settings, restoreWorkout, logWeightForDate } = useStore();
-  const latest = useRef({ workouts, weights, settings, restoreWorkout, logWeightForDate });
-  latest.current = { workouts, weights, settings, restoreWorkout, logWeightForDate };
+  const { meals, workouts, weights, settings, restoreWorkout, updateWorkout, logWeightForDate } = useStore();
+  const latest = useRef({ workouts, weights, settings, restoreWorkout, updateWorkout, logWeightForDate });
+  latest.current = { workouts, weights, settings, restoreWorkout, updateWorkout, logWeightForDate };
   const running = useRef(false);
 
   const syncNow = useCallback(async (): Promise<HealthSyncResult | null> => {
@@ -29,10 +29,12 @@ export function useHealthSync(enabled: boolean) {
     running.current = true;
     try {
       const since = prefs.lastSync ? new Date(Date.parse(prefs.lastSync) - DAY_MS) : new Date(Date.now() - FIRST_LOOKBACK_DAYS * DAY_MS);
-      const { workouts: have, weights: haveWeights, settings: s, restoreWorkout: addWorkout, logWeightForDate: addWeight } = latest.current;
+      const { workouts: have, weights: haveWeights, settings: s, restoreWorkout: addWorkout, updateWorkout, logWeightForDate: addWeight } = latest.current;
       let nWorkouts = 0;
       let nWeights = 0;
       if (prefs.workouts) {
+        // Earlier imports kept heart rate and Health's calories in the note.
+        for (const w of have) { const patch = tidyHealthImport(w); if (patch) updateWorkout(w.id, patch); }
         const found = await newHealthWorkouts(since);
         const ids = new Set(have.map((w) => w.id));
         for (const w of found) if (!ids.has(w.id)) { addWorkout(w); nWorkouts++; }

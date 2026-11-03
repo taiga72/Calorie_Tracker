@@ -16,7 +16,7 @@ vi.mock('@/lib/supabaseClient', () => ({
 const { storage } = await import('@/lib/storage');
 const { supabase } = await import('@/lib/supabaseClient');
 const { resetPhotoStorageState } = await import('@/lib/photoStorage');
-const { resetPrefsColumnState, resetUpdatedAtState } = await import('@/lib/storage');
+const { resetPrefsColumnState, resetUpdatedAtState, resetHeartRateColumnState } = await import('@/lib/storage');
 
 type Result = { data?: unknown; error?: unknown; status?: number };
 
@@ -292,6 +292,40 @@ describe('getWeights / upsertWeight / deleteWeight', () => {
     await expect(runWithFakeTimers(() => storage.getWeights(USER_ID))).rejects.toBeTruthy();
     expect(spy).toHaveBeenCalledWith('Failed to load weights', { message: 'boom' });
     spy.mockRestore();
+  });
+});
+
+describe('workouts: average heart rate', () => {
+  const lift = { id: 'hk-1', date: '2026-11-03', kind: 'strength' as const, name: 'Strength training', minutes: 44, calories: 416, avgHeartRate: 125, notes: 'From Apple Health', createdAt: 1 };
+
+  it('saves and loads the average heart rate', async () => {
+    resetHeartRateColumnState();
+    const { from } = makeFrom({ error: null });
+    vi.mocked(supabase.from).mockReturnValue(from as never);
+    expect(await storage.upsertWorkout(USER_ID, lift)).toBe(true);
+    expect(from.upsert).toHaveBeenCalledWith(expect.objectContaining({ id: 'hk-1', avg_heart_rate: 125 }), { onConflict: 'id' });
+
+    const loaded = makeFrom({ data: [{ id: 'hk-1', date: '2026-11-03', kind: 'strength', name: 'Strength training', minutes: 44, calories: 416, sets: null, notes: 'From Apple Health', avg_heart_rate: 125, created_at: 1 }], error: null });
+    vi.mocked(supabase.from).mockReturnValue(loaded.from as never);
+    expect(await storage.getWorkouts(USER_ID)).toEqual([lift]);
+  });
+
+  it('still saves a workout when the avg_heart_rate column is missing, without it', async () => {
+    resetHeartRateColumnState();
+    const missing = { status: 400, error: { code: 'PGRST204', message: "Could not find the 'avg_heart_rate' column of 'workouts' in the schema cache" } };
+    const upsert = vi.fn()
+      .mockImplementationOnce(() => Promise.resolve(missing))
+      .mockImplementation(() => Promise.resolve({ error: null }));
+    vi.mocked(supabase.from).mockReturnValue({ upsert } as never);
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    expect(await storage.upsertWorkout(USER_ID, lift)).toBe(true);
+    expect(upsert).toHaveBeenCalledTimes(2);
+    expect(upsert.mock.calls[1][0]).not.toHaveProperty('avg_heart_rate');
+    expect(upsert.mock.calls[1][0]).toMatchObject({ id: 'hk-1', calories: 416 });
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+    resetHeartRateColumnState();
   });
 });
 

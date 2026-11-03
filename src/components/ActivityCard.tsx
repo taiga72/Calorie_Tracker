@@ -48,7 +48,7 @@ export function WorkoutList({ workouts, onEdit, showDate = false }: { workouts: 
             <span className="flex-1 min-w-0">
               <span className="block text-sm font-semibold text-gray-900 dark:text-white truncate">{w.name}</span>
               <span className="block text-11 text-gray-400">
-                {[showDate ? dayLabel(w.date) : null, w.minutes ? `${w.minutes} min` : null, w.calories ? `${w.calories} kcal` : null, w.sets?.length ? `${w.sets.length} sets` : null].filter(Boolean).join(' · ')}
+                {[showDate ? dayLabel(w.date) : null, w.minutes ? `${w.minutes} min` : null, w.calories ? `${w.calories} kcal` : null, w.avgHeartRate ? `avg ${w.avgHeartRate} bpm` : null, w.sets?.length ? `${w.sets.length} sets` : null].filter(Boolean).join(' · ')}
               </span>
               {w.sets?.length ? (
                 <span className="block text-11 text-gray-500 dark:text-gray-400 truncate mt-0.5">
