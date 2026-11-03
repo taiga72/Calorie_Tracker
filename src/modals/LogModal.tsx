@@ -384,7 +384,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
     <Modal open={open} onClose={close} title={title}>
       {/* Mode toggle (hidden in edit / weight-edit mode) */}
       {!isEdit && !isWeightEdit && !editingPin && (
-        <div className="flex gap-2 mb-4">
+        <div className="seg mb-4" role="tablist" aria-label="What to log">
           <ModeBtn active={mode === 'food'} onClick={() => { setMode('food'); setError(null); }} Icon={Sparkles} label="Food" />
           <ModeBtn active={mode === 'exercise'} onClick={() => { setMode('exercise'); setError(null); }} Icon={Dumbbell} label="Exercise" />
           <ModeBtn active={mode === 'weight'} onClick={() => { setMode('weight'); setError(null); }} Icon={Scale} label="Weight" />
@@ -511,7 +511,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           {/* AI Estimation callout */}
           {editReasoning && (
             <div className="bg-accent-50/70 dark:bg-accent-950/50 border border-accent-100 dark:border-accent-900 rounded-2xl p-3.5 mb-3">
-              <p className="text-10 font-bold text-accent-700 dark:text-accent-400 tracking-wider mb-1">✨ AI ESTIMATION NOTE</p>
+              <p className="text-11 font-semibold text-accent-700 dark:text-accent-400 mb-1">✨ How the AI estimated it</p>
               <p className="text-xs text-gray-600 dark:text-gray-300 italic leading-relaxed">{editReasoning}</p>
             </div>
           )}
@@ -647,7 +647,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                     <p className="text-sm font-semibold text-gray-900 dark:text-white">{it.name}</p>
                     <p className="text-11 text-gray-400 mt-0.5">
                       <span className="text-orange-500 font-semibold">{Math.round(it.calories)} kcal</span>
-                      {' · P '}{fmtGrams(it.protein)}g · C {fmtGrams(it.carbs)}g · F {fmtGrams(it.fat)}g
+                      {' · P '}{fmtGrams(it.protein)} g · C {fmtGrams(it.carbs)} g · F {fmtGrams(it.fat)} g
                     </p>
                   </div>
                   {result.items.length > 1 && <PinMealButton item={it} mealType={result.mealType} size={15} />}
@@ -672,7 +672,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
                 { l: 'Fiber', v: result.fiber, c: 'text-purple-500' },
               ].map((m) => (
                 <div key={m.l} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
-                  <p className={`text-sm font-bold ${m.c}`}>{fmtGrams(m.v)}g</p>
+                  <p className={`text-sm font-bold ${m.c}`}>{fmtGrams(m.v)} g</p>
                   <p className="text-10 text-gray-400">{m.l}</p>
                 </div>
               ))}
@@ -769,7 +769,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
             )}
 
             {/* Input type toggle */}
-            <div className="flex gap-2 mb-3">
+            <div className="seg mb-3">
               <InputToggle active={foodInput !== 'image'} onClick={() => setFoodInput(text.trim() || imageB64s.length > 0 ? 'both' : 'text')} Icon={Type} label="Text" />
               <InputToggle active={foodInput !== 'text'} onClick={() => fileRef.current?.click()} Icon={Camera} label="Photo" />
             </div>
@@ -910,10 +910,7 @@ function ItemNumInput({ label, value, onChange }: { label: string; value: number
 
 function ModeBtn({ active, onClick, Icon, label }: { active: boolean; onClick: () => void; Icon: typeof Sparkles; label: string }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
-    >
+    <button role="tab" aria-selected={active} onClick={onClick} className="seg-item">
       <Icon size={15} /> {label}
     </button>
   );
@@ -921,10 +918,7 @@ function ModeBtn({ active, onClick, Icon, label }: { active: boolean; onClick: (
 
 function InputToggle({ active, onClick, Icon, label }: { active: boolean; onClick: () => void; Icon: typeof Type; label: string }) {
   return (
-    <button
-      onClick={onClick}
-      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold transition-colors ${active ? 'bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
-    >
+    <button type="button" aria-pressed={active} onClick={onClick} className="seg-item">
       {label === 'Photo' ? <Camera size={15} /> : <Icon size={15} />} {label}
     </button>
   );
@@ -934,7 +928,8 @@ function Pill({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${active ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+      aria-pressed={active}
+      className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${active ? 'bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
     >
       {children}
     </button>

@@ -81,7 +81,7 @@ describe('WeeklyRecapCard Monday to Thursday', () => {
   it('shows just the numbers when there was no brief', () => {
     render(<WeeklyRecapCard />);
     expect(screen.getByText('1,950 kcal')).toBeInTheDocument();
-    expect(screen.queryByText('FRIDAY BRIEF')).not.toBeInTheDocument();
+    expect(screen.queryByText('Friday brief')).not.toBeInTheDocument();
     expect(getWeeklySummary).not.toHaveBeenCalled();
   });
 

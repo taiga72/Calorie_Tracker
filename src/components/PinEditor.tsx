@@ -87,7 +87,7 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
             key={t}
             onClick={() => setMealType(t)}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-              mealType === t ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+              mealType === t ? 'bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
             }`}
           >
             {t}

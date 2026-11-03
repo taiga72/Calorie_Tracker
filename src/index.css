@@ -161,6 +161,48 @@
 }
 
 @layer components {
+  /* iOS-style segmented control: a grey track with the chosen segment on a
+     raised white thumb (capsule-shaped, as iOS draws them now). Every
+     either/or choice in the app uses it. */
+  .seg {
+    display: flex;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 9999px;
+    background-color: rgb(118 118 128 / .12);
+  }
+  .dark .seg { background-color: rgb(118 118 128 / .24); }
+  .seg-item {
+    position: relative;
+    flex: 1 1 0%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .375rem;
+    border-radius: 9999px;
+    padding: .5rem .5rem;
+    font-size: .8125rem;
+    font-weight: 500;
+    color: #374151;
+    transition: background-color .2s, box-shadow .2s, color .2s;
+  }
+  .dark .seg-item { color: #D1D5DB; }
+  .seg-item[aria-selected="true"], .seg-item[aria-checked="true"], .seg-item[aria-pressed="true"] {
+    background-color: #fff;
+    color: #111827;
+    font-weight: 600;
+    box-shadow: 0 3px 8px rgb(0 0 0 / .12), 0 3px 1px rgb(0 0 0 / .04);
+  }
+  .dark .seg-item[aria-selected="true"], .dark .seg-item[aria-checked="true"], .dark .seg-item[aria-pressed="true"] {
+    background-color: #636366;
+    color: #fff;
+  }
+  /* Taller segments with an icon over the label (Settings → Look). */
+  .seg-tall { border-radius: 1rem; }
+  .seg-tall .seg-item { flex-direction: column; gap: .25rem; border-radius: .8125rem; padding: .5rem .25rem; }
+  [data-density="compact"] .seg-item { padding-top: .375rem; padding-bottom: .375rem; }
+
   /* A box holding a borderless field (an icon or unit beside it): it shows
      the same focus ring the stand-alone fields do. */
   .field-box:focus-within {

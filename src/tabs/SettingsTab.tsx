@@ -23,7 +23,7 @@ import { phaseOn } from '@/lib/goalPlan';
 import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
-  Trash2, AlertTriangle, User, Camera, Flame, Activity, TrendingDown, Utensils,
+  Trash2, AlertTriangle, User, Camera, Activity, Utensils,
   ChevronDown, ChevronUp, Save, RefreshCw, Info,
 } from 'lucide-react';
 
@@ -260,10 +260,10 @@ export function SettingsTab() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Settings</h1>
 
       {/* Page switcher (also swipeable), like Statistics */}
-      <div role="tablist" aria-label="Settings pages" className="relative grid grid-cols-3 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+      <div role="tablist" aria-label="Settings pages" className="seg relative grid grid-cols-3 gap-0 mt-5">
         <span
           aria-hidden
-          className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/3)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
+          className="absolute top-[3px] bottom-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-full bg-white dark:bg-[#636366] shadow-[0_3px_8px_rgb(0_0_0/.12),0_3px_1px_rgb(0_0_0/.04)] transition-transform duration-300 ease-out"
           style={{ transform: `translateX(${PAGES.findIndex((x) => x.key === page) * 100}%)` }}
         />
         {PAGES.map((x) => (
@@ -272,7 +272,7 @@ export function SettingsTab() {
             role="tab"
             aria-selected={page === x.key}
             onClick={() => goToPage(x.key)}
-            className={`relative z-10 py-2 rounded-full text-xs font-semibold transition-colors ${page === x.key ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}
+            className={`relative z-10 py-1.5 rounded-full text-[13px] transition-colors ${page === x.key ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-600 dark:text-gray-300'}`}
           >
             {x.label}
           </button>
@@ -323,15 +323,13 @@ export function SettingsTab() {
           <>
             {/* Summary pills — always visible */}
             <div className="grid grid-cols-4 gap-2 mb-1">
-              <SummaryStat icon={<Flame size={12} className="text-orange-500" />} label="At rest" value={calc!.bmr} />
-              <SummaryStat icon={<Activity size={12} className="text-blue-500" />} label="Daily burn" value={calc!.tdee} />
+              <SummaryStat label="At rest" value={calc!.bmr} />
+              <SummaryStat label="Daily burn" value={calc!.tdee} />
               <SummaryStat
-                icon={<TrendingDown size={12} className={liveDeficit < 0 ? 'text-red-500' : 'text-emerald-500'} />}
                 label={liveDeficit > 0 ? 'Surplus' : 'Deficit'}
                 value={Math.abs(liveDeficit)}
               />
               <SummaryStat
-                icon={<Target size={12} className="text-accent-600" />}
                 label="Goal by"
                 value={liveGoalDate ? new Date(liveGoalDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 isText
@@ -392,16 +390,18 @@ export function SettingsTab() {
                 </Field>
 
                 <Field label="Weekly weight target">
-                  <div className="flex gap-2">
+                  <div className="seg">
                     <button
                       onClick={() => setLose(true)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${lose ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                      aria-pressed={lose}
+                      className="seg-item"
                     >
                       Lose
                     </button>
                     <button
                       onClick={() => setLose(false)}
-                      className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${!lose ? 'bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                      aria-pressed={!lose}
+                      className="seg-item"
                     >
                       Gain
                     </button>
@@ -420,12 +420,13 @@ export function SettingsTab() {
                 </Field>
 
                 <Field label="Weight unit">
-                  <div className="flex gap-2">
+                  <div className="seg">
                     {(['kg', 'lb'] as WeightUnit[]).map((u) => (
                       <button
                         key={u}
                         onClick={() => setUnit(u)}
-                        className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                        aria-pressed={unit === u}
+                        className="seg-item"
                       >
                         {u === 'kg' ? 'Kilograms' : 'Pounds'}
                       </button>
@@ -450,7 +451,7 @@ export function SettingsTab() {
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-4 overflow-hidden">
                   <div className="flex items-center gap-2 mb-3">
                     <Utensils size={14} className="text-gray-400" />
-                    <p className="text-xs font-semibold text-gray-400">MEAL CALORIE SPLIT</p>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Calories per meal</p>
                   </div>
                   <div className="grid grid-cols-2 gap-2.5">
                     <MacroField label="Breakfast" value={breakfast} onChange={setBreakfast} color="text-accent-600" compact />
@@ -698,13 +699,10 @@ function ActionBtn({
   );
 }
 
-function SummaryStat({ icon, label, value, isText }: { icon: React.ReactNode; label: string; value: number | string; isText?: boolean }) {
+function SummaryStat({ label, value, isText }: { label: string; value: number | string; isText?: boolean }) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl p-2.5 border border-gray-50 dark:border-gray-800 text-center">
-      <div className="flex items-center justify-center gap-1 mb-0.5">
-        {icon}
-        <p className="text-9 font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide whitespace-nowrap">{label}</p>
-      </div>
+      <p className="text-10 font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap mb-0.5">{label}</p>
       <p className={`font-bold text-gray-900 dark:text-white ${isText ? 'text-11' : 'text-sm'}`}>{typeof value === 'number' ? Math.round(value).toLocaleString() : value}</p>
     </div>
   );

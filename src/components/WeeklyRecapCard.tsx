@@ -119,8 +119,8 @@ export function WeeklyRecapCard({ onDismiss }: WeeklyRecapCardProps) {
 
       {(summary || summaryState === 'loading') && (
         <div className="mt-3 bg-accent-50/70 dark:bg-accent-950/50 border border-accent-100 dark:border-accent-900 rounded-2xl p-3">
-          <p className="flex items-center gap-1.5 text-10 font-bold text-accent-700 dark:text-accent-400 tracking-wider mb-1">
-            <Sparkles size={11} /> FRIDAY BRIEF
+          <p className="flex items-center gap-1.5 text-11 font-semibold text-accent-700 dark:text-accent-400 mb-1">
+            <Sparkles size={12} /> Friday brief
           </p>
           {summary ? (
             <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{cleanCoachText(summary)}</p>

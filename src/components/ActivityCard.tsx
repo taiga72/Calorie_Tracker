@@ -71,14 +71,13 @@ export function WorkoutList({ workouts, onEdit, showDate = false }: { workouts: 
 
 /** Home: today's exercise, and a quick way to log some. */
 export function ActivityCard({ date }: { date: string }) {
-  const { workouts, settings } = useStore();
+  const { workouts } = useStore();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Workout | null>(null);
   const today = workoutsOn(workouts, date);
   const burned = today.reduce((a, w) => a + w.calories, 0);
   const minutes = today.reduce((a, w) => a + w.minutes, 0);
   const credit = exerciseCreditOn(date);
-  const share = settings.prefs?.exerciseCredit ?? 0;
 
   return (
     <div className="card p-4">
@@ -112,9 +111,6 @@ export function ActivityCard({ date }: { date: string }) {
             <WorkoutList workouts={today} onEdit={setEditing} />
           </div>
         </>
-      )}
-      {today.length > 0 && share === 0 && (
-        <p className="text-10 text-gray-400 mt-1">Exercise isn't added to your calorie goal — change that in Settings → Goals.</p>
       )}
       <WorkoutSheet open={adding} onClose={() => setAdding(false)} date={date} />
       <WorkoutSheet open={editing !== null} onClose={() => setEditing(null)} date={date} workout={editing} />

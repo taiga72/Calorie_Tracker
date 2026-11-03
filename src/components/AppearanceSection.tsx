@@ -150,18 +150,14 @@ export function Segmented<T extends string>({ label, value, onChange, options }:
   return (
     <div className="mt-4 first:mt-0">
       <p className="text-11 font-semibold text-gray-500 dark:text-gray-400 mb-2">{label}</p>
-      <div className="flex gap-2" role="radiogroup" aria-label={label}>
+      <div className={`seg ${options.some((o) => o.icon) ? 'seg-tall' : ''}`} role="radiogroup" aria-label={label}>
         {options.map((o) => (
           <button
             key={o.value}
             role="radio"
             aria-checked={value === o.value}
             onClick={() => onChange(o.value)}
-            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-1 py-2.5 compact:py-2 rounded-xl text-xs font-semibold transition-colors ${
-              value === o.value
-                ? 'bg-gray-900 dark:bg-accent-600 text-white'
-                : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-            }`}
+            className={`seg-item ${options.length >= 4 ? 'text-xs px-1' : ''}`}
           >
             {o.icon && <span className="h-5 flex items-center">{o.icon}</span>}
             <span className="truncate max-w-full px-1">{o.label}</span>

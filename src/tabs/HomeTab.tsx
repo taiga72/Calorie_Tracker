@@ -72,10 +72,10 @@ export function HomeTab() {
   const calorieCard = (
     <div className={`card p-4 flex flex-col h-full justify-between transition-colors duration-300 ${overTarget ? 'border-rose-100 dark:border-rose-900' : ''}`}>
       <div className="flex items-center justify-between">
-        <span className="text-10 font-bold tracking-wider text-gray-400">TODAY'S CALORIES</span>
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Today's calories</span>
         {overTarget && (
-          <span className="inline-flex items-center justify-center whitespace-nowrap text-8 font-extrabold text-rose-600 bg-rose-100/90 px-2 py-1 rounded-full uppercase tracking-wider leading-none">
-            OVER TARGET
+          <span className="inline-flex items-center justify-center whitespace-nowrap text-10 font-semibold text-rose-600 bg-rose-100/90 dark:bg-rose-950 dark:text-rose-300 px-2 py-1 rounded-full leading-none">
+            Over goal
           </span>
         )}
       </div>
@@ -85,20 +85,20 @@ export function HomeTab() {
           goal={goal}
           size={108}
           color={overTarget ? '#F43F5E' : '#F97316'}
-          label={`${Math.round(day.totalCalories)}`}
-          sublabel={`of ${goal}`}
+          label={Math.round(day.totalCalories).toLocaleString()}
+          sublabel={`of ${goal.toLocaleString()}`}
         />
       </div>
       <div className="w-full space-y-1 pt-2 border-t border-gray-50 dark:border-gray-800 text-11">
         {overTarget ? (
           <div className="flex justify-between items-baseline gap-2">
-            <span className="text-rose-400">Over target</span>
-            <span className="font-bold text-rose-600 whitespace-nowrap">+{overAmount}<span className="text-9 font-normal opacity-70"> kcal</span></span>
+            <span className="text-rose-400">Over goal</span>
+            <span className="font-bold text-rose-600 whitespace-nowrap">+{overAmount.toLocaleString()}<span className="text-9 font-normal opacity-70"> kcal</span></span>
           </div>
         ) : overAmount > 0 ? (
           <div className="flex justify-between items-baseline gap-2">
             <span className="text-gray-400">On target</span>
-            <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">+{overAmount}<span className="text-9 font-normal opacity-70"> kcal</span></span>
+            <span className="font-semibold text-gray-700 dark:text-gray-200 whitespace-nowrap">+{overAmount.toLocaleString()}<span className="text-9 font-normal opacity-70"> kcal</span></span>
           </div>
         ) : (
           <div className="flex justify-between items-baseline gap-2">
@@ -129,7 +129,7 @@ export function HomeTab() {
       className="bg-blue-600 rounded-card p-3.5 shadow-sm text-white flex flex-col justify-between text-left active:scale-[.98] transition-transform"
     >
       <div className="flex items-center justify-between">
-        <span className="text-10 font-bold tracking-wider text-blue-100">LATEST WEIGHT</span>
+        <span className="text-xs font-semibold text-blue-100">Latest weight</span>
         <Scale size={15} className="text-blue-100" />
       </div>
       <div className="my-1">
@@ -156,7 +156,7 @@ export function HomeTab() {
   const macrosCard = (
     <div className="card p-3 flex-1 flex flex-col justify-between">
       <div className="flex items-center justify-between mb-1">
-        <span className="text-9 font-bold tracking-wider text-gray-400">TODAY'S MACROS</span>
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Today's macros</span>
         <span className="text-8 font-semibold text-gray-400">g</span>
       </div>
       <MacroProgress label="Protein" value={day.totalProtein} target={protein ?? undefined} color="bg-emerald-500" track="bg-emerald-50 dark:bg-emerald-950" text="text-emerald-600" />
@@ -191,7 +191,7 @@ export function HomeTab() {
       <div className="pt-2">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-gray-900 dark:text-white">Meals today</h2>
-          <span className="text-sm font-semibold text-accent-600">{day.meals.length}</span>
+          <span className="text-sm font-medium text-gray-400">{day.meals.length} {day.meals.length === 1 ? 'meal' : 'meals'}</span>
         </div>
         {day.meals.length === 0 ? (
           <div className="card card-sm p-6 text-center mt-3">

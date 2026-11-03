@@ -139,7 +139,7 @@ export function InsightsCard({ compact = false }: { compact?: boolean }) {
             })}
           </div>
           <div className="flex gap-2 mt-3">
-            <button onClick={applyShift} className="flex-1 bg-gray-900 dark:bg-accent-600 text-white text-xs font-semibold py-2.5 rounded-full">
+            <button onClick={applyShift} className="flex-1 bg-accent-600 text-white text-xs font-semibold py-2.5 rounded-full">
               Shift budget to weekends
             </button>
             <button

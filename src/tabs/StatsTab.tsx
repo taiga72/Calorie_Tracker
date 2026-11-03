@@ -30,10 +30,10 @@ const pageIndex = (p: Page) => PAGES.findIndex((x) => x.key === p);
 
 type Range = '7d' | '30d' | '3m' | '1y';
 const RANGES: { key: Range; label: string; days: number }[] = [
-  { key: '7d', label: '7 Days', days: 7 },
-  { key: '30d', label: '30 Days', days: 30 },
-  { key: '3m', label: '3 Months', days: 90 },
-  { key: '1y', label: '1 Year', days: 365 },
+  { key: '7d', label: '7 days', days: 7 },
+  { key: '30d', label: '30 days', days: 30 },
+  { key: '3m', label: '3 months', days: 90 },
+  { key: '1y', label: '1 year', days: 365 },
 ];
 
 export function StatsTab() {
@@ -141,14 +141,14 @@ export function StatsTab() {
   // Cards in the order and selection from Settings → Layout. The range
   // picker sits just above the first chart that uses it.
   const rangePicker = (
-    <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-1 px-1">
+    <div className="seg" role="radiogroup" aria-label="Time range">
       {RANGES.map((r) => (
         <button
           key={r.key}
+          role="radio"
+          aria-checked={range === r.key}
           onClick={() => setRange(r.key)}
-          className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-            range === r.key ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400 border border-gray-100 dark:border-gray-800'
-          }`}
+          className="seg-item whitespace-nowrap"
         >
           {r.label}
         </button>
@@ -313,10 +313,10 @@ export function StatsTab() {
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mt-0.5">Statistics</h1>
 
       {/* Page switcher (also swipeable) */}
-      <div role="tablist" aria-label="Statistics pages" className="relative grid grid-cols-3 mt-5 p-1 rounded-full bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+      <div role="tablist" aria-label="Statistics pages" className="seg relative grid grid-cols-3 gap-0 mt-5">
         <span
           aria-hidden
-          className="absolute top-1 bottom-1 left-1 w-[calc((100%-8px)/3)] rounded-full bg-gray-900 dark:bg-accent-600 transition-transform duration-300 ease-out"
+          className="absolute top-[3px] bottom-[3px] left-[3px] w-[calc((100%-6px)/3)] rounded-full bg-white dark:bg-[#636366] shadow-[0_3px_8px_rgb(0_0_0/.12),0_3px_1px_rgb(0_0_0/.04)] transition-transform duration-300 ease-out"
           style={{ transform: pageIndex(page) ? `translateX(${pageIndex(page) * 100}%)` : undefined }}
         />
         {PAGES.map((p) => (
@@ -325,7 +325,7 @@ export function StatsTab() {
             role="tab"
             aria-selected={page === p.key}
             onClick={() => goToPage(p.key)}
-            className={`relative z-10 py-2 rounded-full text-xs font-semibold transition-colors ${page === p.key ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}
+            className={`relative z-10 py-1.5 rounded-full text-[13px] transition-colors ${page === p.key ? 'font-semibold text-gray-900 dark:text-white' : 'font-medium text-gray-600 dark:text-gray-300'}`}
           >
             {p.label}
           </button>

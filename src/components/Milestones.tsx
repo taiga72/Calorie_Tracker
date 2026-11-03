@@ -109,12 +109,13 @@ function AddMilestone({ onDone }: { onDone: () => void }) {
   const kindInfo = MILESTONE_KINDS.find((k) => k.kind === kind)!;
   return (
     <div className="mt-3 bg-gray-50 dark:bg-gray-800 rounded-xl p-3 space-y-2">
-      <div className="grid grid-cols-2 gap-1.5">
+      <div className="seg">
         {MILESTONE_KINDS.map((k) => (
           <button
             key={k.kind}
             onClick={() => setKind(k.kind)}
-            className={`py-2 rounded-lg text-xs font-semibold ${kind === k.kind ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400'}`}
+            aria-pressed={kind === k.kind}
+            className="seg-item"
           >
             {k.label}
           </button>
