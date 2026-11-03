@@ -5,15 +5,33 @@ import { useUndoToast } from '@/components/UndoToastProvider';
 import { useSpeechInput } from '@/lib/useSpeechInput';
 import { friendlyAiError } from '@/lib/aiErrors';
 import { RateLimitError } from '@/lib/gemini';
-import { estimateBurn, estimateWorkout, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
+import { estimateBurn, estimateWorkout, groupSets, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
 import { kgToUnit, unitToKg } from '@/lib/units';
 import { formatHeaderDate, fromKey, todayKey } from '@/lib/dateUtils';
 import type { WeightUnit, Workout, WorkoutKind } from '@/types';
 
 interface SetRow {
-  exercise: string;
   reps: string;
-  weight: string; // in the display unit
+  weight: string; // in the unit the sets are entered in
+}
+
+/** One exercise and its sets, as the form shows them. */
+interface ExerciseBlock {
+  key: number;
+  name: string;
+  sets: SetRow[];
+}
+
+let nextBlockKey = 1;
+const emptySet = (): SetRow => ({ reps: '', weight: '' });
+
+/** Saved sets (one list, each naming its exercise) → a block per exercise. */
+function toBlocks(sets: { exercise: string; reps: number; weight: number }[] | undefined, unit: WeightUnit): ExerciseBlock[] {
+  return groupSets(sets ?? []).map((g) => ({
+    key: nextBlockKey++,
+    name: g.exercise,
+    sets: g.sets.map((x) => ({ reps: String(x.reps), weight: x.weight ? trimNum(kgToUnit(x.weight, unit)) : '' })),
+  }));
 }
 
 const num = (s: string) => {
@@ -48,7 +66,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const [calories, setCalories] = useState('');
   // Calories follow the duration until they're typed in (or come from the AI).
   const [caloriesSet, setCaloriesSet] = useState(false);
-  const [sets, setSets] = useState<SetRow[]>([]);
+  const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
   const [notes, setNotes] = useState('');
   // Editing: move the workout if it was logged on the wrong day.
   const [editDate, setEditDate] = useState(editWorkout?.date ?? date);
@@ -63,7 +81,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setMinutes(editWorkout.minutes ? String(editWorkout.minutes) : '');
     setCalories(editWorkout.calories ? String(editWorkout.calories) : '');
     setCaloriesSet(true);
-    setSets((editWorkout.sets ?? []).map((s) => ({ exercise: s.exercise, reps: String(s.reps), weight: s.weight ? trimNum(kgToUnit(s.weight, unit)) : '' })));
+    setBlocks(toBlocks(editWorkout.sets, unit));
     setNotes(editWorkout.notes ?? '');
     setEditDate(editWorkout.date);
   }, [editWorkout, unit]);
@@ -100,7 +118,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setMinutes(w.minutes ? String(w.minutes) : '');
     setCalories(w.calories ? String(w.calories) : '');
     setCaloriesSet(w.calories > 0);
-    setSets((w.sets ?? []).map((s) => ({ exercise: s.exercise, reps: String(s.reps), weight: s.weight ? trimNum(kgToUnit(s.weight, liftUnit)) : '' })));
+    setBlocks(toBlocks(w.sets, liftUnit));
   };
 
   const onEstimate = async () => {
@@ -123,13 +141,19 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     if (!caloriesSet) setCalories(num(m) > 0 ? String(estimateBurn(k, num(m), bodyWeight)) : '');
   };
 
-  const updateSet = (i: number, patch: Partial<SetRow>) => setSets((prev) => prev.map((s, j) => (j === i ? { ...s, ...patch } : s)));
-  // A new row copies the last one: the next set is usually the same lift.
-  const addSet = () => setSets((prev) => [...prev, prev.length ? { ...prev[prev.length - 1] } : { exercise: '', reps: '', weight: '' }]);
+  const updateBlock = (key: number, f: (b: ExerciseBlock) => ExerciseBlock) => setBlocks((prev) => prev.map((b) => (b.key === key ? f(b) : b)));
+  const updateSet = (key: number, i: number, patch: Partial<SetRow>) =>
+    updateBlock(key, (b) => ({ ...b, sets: b.sets.map((x, j) => (j === i ? { ...x, ...patch } : x)) }));
+  // A new set copies the one before: usually the same weight, maybe a rep less.
+  const addSet = (key: number) => updateBlock(key, (b) => ({ ...b, sets: [...b.sets, b.sets.length ? { ...b.sets[b.sets.length - 1] } : emptySet()] }));
+  const removeSet = (key: number, i: number) => updateBlock(key, (b) => ({ ...b, sets: b.sets.filter((_, j) => j !== i) }));
+  const addExercise = () => setBlocks((prev) => [...prev, { key: nextBlockKey++, name: '', sets: [emptySet()] }]);
+  const removeExercise = (key: number) => setBlocks((prev) => prev.filter((b) => b.key !== key));
 
-  const cleanSets = sets
-    .map((s) => ({ exercise: s.exercise.trim(), reps: Math.round(num(s.reps)), weight: +unitToKg(num(s.weight), liftUnit).toFixed(2) }))
-    .filter((s) => s.exercise && s.reps > 0);
+  // Saved as one list of sets, each naming its exercise, in the order shown.
+  const cleanSets = blocks.flatMap((b) => b.sets
+    .map((x) => ({ exercise: b.name.trim(), reps: Math.round(num(x.reps)), weight: +unitToKg(num(x.weight), liftUnit).toFixed(2) }))
+    .filter((x) => x.exercise && x.reps > 0));
   const canSave = name.trim().length > 0 && (num(minutes) > 0 || num(calories) > 0 || cleanSets.length > 0);
 
   const onSave = () => {
@@ -282,67 +306,93 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       </div>
       {!caloriesSet && num(calories) > 0 && <p className="text-10 text-gray-400 mt-1">Calories estimated from the type and duration — change them if your watch says otherwise.</p>}
 
-      {(kind === 'strength' || sets.length > 0) && (
+      {(kind === 'strength' || blocks.length > 0) && (
         <div className="mt-4">
-          <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Sets</p>
-          <p className="text-10 text-gray-400 mb-1.5">Leave the weight empty for bodyweight moves.</p>
-          {sets.length > 0 && (
-            <div className="flex items-center gap-1.5 mb-1 text-10 font-semibold text-gray-400">
-              <span className="flex-1 pl-1">Exercise</span>
-              <span className="w-14 text-center">Reps</span>
+          <div className="flex items-center justify-between">
+            <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Exercises</p>
+            <label className="flex items-center gap-1.5 text-10 font-semibold text-gray-400">
+              Weights in
               <select
                 value={liftUnit}
                 onChange={(e) => setLiftUnit(e.target.value as WeightUnit)}
                 aria-label="Weight unit for these sets"
-                className="w-16 bg-gray-100 dark:bg-gray-800 rounded-lg py-1 text-center text-11 font-semibold text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-accent-500/30"
+                className="bg-gray-100 dark:bg-gray-800 rounded-lg px-2 py-1 text-11 font-semibold text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-accent-500/30"
               >
                 <option value="kg">kg</option>
                 <option value="lb">lb</option>
               </select>
-              <span className="w-9 -mr-1" />
-            </div>
-          )}
+            </label>
+          </div>
           <datalist id="known-lifts">
             {knownLifts.map((n) => <option key={n} value={n} />)}
           </datalist>
-          <div className="space-y-1.5">
-            {sets.map((s, i) => (
-              <div key={i} className="flex items-center gap-1.5">
-                <input
-                  value={s.exercise}
-                  onChange={(e) => updateSet(i, { exercise: e.target.value })}
-                  list="known-lifts"
-                  placeholder="Exercise"
-                  aria-label={`Set ${i + 1} exercise`}
-                  className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
-                />
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={s.reps}
-                  onChange={(e) => updateSet(i, { reps: e.target.value.replace(/\D/g, '') })}
-                  placeholder="reps"
-                  aria-label={`Set ${i + 1} reps`}
-                  className="w-14 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
-                />
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={s.weight}
-                  onChange={(e) => updateSet(i, { weight: decimalInput(e.target.value) })}
-                  placeholder={liftUnit}
-                  aria-label={`Set ${i + 1} weight`}
-                  className="w-16 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
-                />
-                <button type="button" onClick={() => setSets((prev) => prev.filter((_, j) => j !== i))} aria-label={`Remove set ${i + 1}`} className="w-9 h-9 -mr-1 flex items-center justify-center text-gray-400 hover:text-red-500 rounded-full">
-                  <X size={15} />
+          <div className="space-y-2.5 mt-2">
+            {blocks.map((b, bi) => (
+              <div key={b.key} className="bg-white dark:bg-gray-800/70 border border-gray-100 dark:border-gray-800 shadow-sm dark:shadow-none rounded-2xl p-3">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    value={b.name}
+                    onChange={(e) => updateBlock(b.key, (x) => ({ ...x, name: e.target.value }))}
+                    list="known-lifts"
+                    placeholder="Exercise, e.g. Bench press"
+                    aria-label={`Exercise ${bi + 1} name`}
+                    autoFocus={!b.name && b.sets.length === 1 && !b.sets[0].reps}
+                    className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900 rounded-xl px-3 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
+                  />
+                  <button type="button" onClick={() => removeExercise(b.key)} aria-label={`Remove exercise ${bi + 1}`} className="w-9 h-9 -mr-1 flex items-center justify-center text-gray-400 hover:text-red-500 rounded-full">
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+                {b.sets.length > 0 && (
+                  <div className="flex items-center gap-1.5 mt-2 mb-1 text-10 font-semibold text-gray-400">
+                    <span className="w-8 text-center">Set</span>
+                    <span className="flex-1 text-center">Reps</span>
+                    <span className="flex-1 text-center">{liftUnit}</span>
+                    <span className="w-9 -mr-1" />
+                  </div>
+                )}
+                <div className="space-y-1.5">
+                  {b.sets.map((x, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <span className="w-8 text-center text-xs font-bold text-gray-400">{i + 1}</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={x.reps}
+                        onChange={(e) => updateSet(b.key, i, { reps: e.target.value.replace(/\D/g, '') })}
+                        placeholder="0"
+                        aria-label={`Exercise ${bi + 1} set ${i + 1} reps`}
+                        className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
+                      />
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={x.weight}
+                        onChange={(e) => updateSet(b.key, i, { weight: decimalInput(e.target.value) })}
+                        placeholder="—"
+                        aria-label={`Exercise ${bi + 1} set ${i + 1} weight`}
+                        className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-900 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
+                      />
+                      <button type="button" onClick={() => removeSet(b.key, i)} aria-label={`Remove exercise ${bi + 1} set ${i + 1}`} className="w-9 h-9 -mr-1 flex items-center justify-center text-gray-400 hover:text-red-500 rounded-full">
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" onClick={() => addSet(b.key)} aria-label={`Add set to exercise ${bi + 1}`} className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-accent-600 py-1.5">
+                  <Plus size={14} /> Add set
                 </button>
               </div>
             ))}
           </div>
-          <button type="button" onClick={addSet} className="mt-2 flex items-center gap-1 text-xs font-semibold text-accent-600 py-1.5">
-            <Plus size={14} /> Add set
+          <button
+            type="button"
+            onClick={addExercise}
+            className="w-full mt-2.5 border border-dashed border-gray-300 dark:border-gray-700 rounded-2xl py-2.5 text-sm font-semibold text-accent-600 flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
+          >
+            <Plus size={16} /> Add exercise
           </button>
+          <p className="text-10 text-gray-400 mt-1.5">Leave the weight empty for bodyweight moves.</p>
         </div>
       )}
 
