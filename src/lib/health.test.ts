@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fromHealthWorkout, kindOf, tidyHealthImport, workoutName } from '@/lib/health';
+import { fromHealthWorkout, heartRateForWorkout, kindOf, tidyHealthImport, workoutName } from '@/lib/health';
 import type { Workout } from '@/types';
 import { plannedReminders, DEFAULT_REMINDERS } from '@/lib/reminders';
 
 vi.mock('@/lib/native', () => ({ isNative: () => false, setNativeStatusBar: () => {} }));
+const readSamples = vi.fn();
+vi.mock('@capgo/capacitor-health', () => ({ Health: { readSamples: (o: unknown) => readSamples(o) } }));
 
 describe('Apple Health workouts', () => {
   it('sorts workout types into the app\'s kinds and names them', () => {
@@ -42,6 +44,16 @@ describe('Apple Health workouts', () => {
     const typed: Workout = { id: 'w1', date: '2026-11-03', kind: 'cardio', name: 'Run', minutes: 30, calories: 320, notes: 'Apple Health: 320 kcal', createdAt: 1 };
     expect(tidyHealthImport(tidy)).toBeNull();
     expect(tidyHealthImport(typed)).toBeNull();
+  });
+
+  it('reads heart rate again from Health over the workout\'s own time', async () => {
+    readSamples.mockResolvedValueOnce({ samples: [{ value: 120 }, { value: 130 }, { value: 125 }] });
+    const start = Date.parse('2026-11-03T09:11:00Z');
+    const w: Workout = { id: 'hk-A', date: '2026-11-03', kind: 'strength', name: 'Lift', minutes: 44, calories: 416, notes: 'From Apple Health', createdAt: start };
+    expect(await heartRateForWorkout(w)).toBe(125);
+    expect(readSamples).toHaveBeenCalledWith(expect.objectContaining({ dataType: 'heartRate', startDate: '2026-11-03T09:11:00.000Z', endDate: '2026-11-03T09:55:00.000Z' }));
+    readSamples.mockResolvedValueOnce({ samples: [] });
+    expect(await heartRateForWorkout(w)).toBeUndefined();
   });
 });
 
