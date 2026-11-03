@@ -8,7 +8,7 @@ import { RateLimitError } from '@/lib/gemini';
 import { estimateBurn, estimateWorkout, liftRecords, newRecords, WORKOUT_KINDS, type EstimatedWorkout } from '@/lib/workouts';
 import { kgToUnit, unitToKg } from '@/lib/units';
 import { formatHeaderDate, fromKey, todayKey } from '@/lib/dateUtils';
-import type { Workout, WorkoutKind } from '@/types';
+import type { WeightUnit, Workout, WorkoutKind } from '@/types';
 
 interface SetRow {
   exercise: string;
@@ -21,6 +21,11 @@ const num = (s: string) => {
   return Number.isFinite(v) ? v : 0;
 };
 const trimNum = (n: number) => String(+n.toFixed(1));
+/**
+ * What a decimal box accepts while typing: digits and one "." or "," (a text
+ * box, not type="number", which drops "62,5" on phones set to a comma).
+ */
+const decimalInput = (s: string) => s.replace(/[^\d.,]/g, '').replace(/([.,].*)[.,]/g, '$1');
 
 /**
  * Log or edit a workout: describe it (typed or spoken) and let the AI fill in
@@ -31,6 +36,9 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const { settings, weights, workouts, addWorkout, updateWorkout, deleteWorkout, restoreWorkout } = useStore();
   const { requestUndo, notify } = useUndoToast();
   const unit = settings.weightUnit;
+  // The unit the sets are entered in: the app's by default, switchable per
+  // workout (gym plates in kg, dumbbells in lb…). Saved in kg either way.
+  const [liftUnit, setLiftUnit] = useState<WeightUnit>(unit);
   const bodyWeight = weights.length ? weights[weights.length - 1].weight : null;
 
   const [text, setText] = useState('');
@@ -92,7 +100,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setMinutes(w.minutes ? String(w.minutes) : '');
     setCalories(w.calories ? String(w.calories) : '');
     setCaloriesSet(w.calories > 0);
-    setSets((w.sets ?? []).map((s) => ({ exercise: s.exercise, reps: String(s.reps), weight: s.weight ? trimNum(kgToUnit(s.weight, unit)) : '' })));
+    setSets((w.sets ?? []).map((s) => ({ exercise: s.exercise, reps: String(s.reps), weight: s.weight ? trimNum(kgToUnit(s.weight, liftUnit)) : '' })));
   };
 
   const onEstimate = async () => {
@@ -120,7 +128,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const addSet = () => setSets((prev) => [...prev, prev.length ? { ...prev[prev.length - 1] } : { exercise: '', reps: '', weight: '' }]);
 
   const cleanSets = sets
-    .map((s) => ({ exercise: s.exercise.trim(), reps: Math.round(num(s.reps)), weight: +unitToKg(num(s.weight), unit).toFixed(2) }))
+    .map((s) => ({ exercise: s.exercise.trim(), reps: Math.round(num(s.reps)), weight: +unitToKg(num(s.weight), liftUnit).toFixed(2) }))
     .filter((s) => s.exercise && s.reps > 0);
   const canSave = name.trim().length > 0 && (num(minutes) > 0 || num(calories) > 0 || cleanSets.length > 0);
 
@@ -276,10 +284,24 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
 
       {(kind === 'strength' || sets.length > 0) && (
         <div className="mt-4">
-          <div className="flex items-baseline justify-between mb-1.5">
-            <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Sets</p>
-            <p className="text-10 text-gray-400">reps × {unit} · leave weight empty for bodyweight</p>
-          </div>
+          <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Sets</p>
+          <p className="text-10 text-gray-400 mb-1.5">Leave the weight empty for bodyweight moves.</p>
+          {sets.length > 0 && (
+            <div className="flex items-center gap-1.5 mb-1 text-10 font-semibold text-gray-400">
+              <span className="flex-1 pl-1">Exercise</span>
+              <span className="w-14 text-center">Reps</span>
+              <select
+                value={liftUnit}
+                onChange={(e) => setLiftUnit(e.target.value as WeightUnit)}
+                aria-label="Weight unit for these sets"
+                className="w-16 bg-gray-100 dark:bg-gray-800 rounded-lg py-1 text-center text-11 font-semibold text-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-accent-500/30"
+              >
+                <option value="kg">kg</option>
+                <option value="lb">lb</option>
+              </select>
+              <span className="w-9 -mr-1" />
+            </div>
+          )}
           <datalist id="known-lifts">
             {knownLifts.map((n) => <option key={n} value={n} />)}
           </datalist>
@@ -295,20 +317,20 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                   className="min-w-0 flex-1 bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
                 <input
-                  type="number"
+                  type="text"
                   inputMode="numeric"
                   value={s.reps}
-                  onChange={(e) => updateSet(i, { reps: e.target.value })}
+                  onChange={(e) => updateSet(i, { reps: e.target.value.replace(/\D/g, '') })}
                   placeholder="reps"
                   aria-label={`Set ${i + 1} reps`}
                   className="w-14 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />
                 <input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   value={s.weight}
-                  onChange={(e) => updateSet(i, { weight: e.target.value })}
-                  placeholder={unit}
+                  onChange={(e) => updateSet(i, { weight: decimalInput(e.target.value) })}
+                  placeholder={liftUnit}
                   aria-label={`Set ${i + 1} weight`}
                   className="w-16 bg-gray-50 dark:bg-gray-800 rounded-xl px-2 py-2 text-sm text-center text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
                 />

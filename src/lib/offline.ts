@@ -79,6 +79,7 @@ export interface SyncCursors {
 }
 
 const outboxKey = (userId: string) => `calorie_tracker_outbox_${userId}`;
+const parkedKey = (userId: string) => `calorie_tracker_parked_${userId}`;
 const snapshotKey = (userId: string) => `calorie_tracker_cache_${userId}`;
 
 export function loadOutbox(userId: string): QueuedOp[] {
@@ -138,9 +139,34 @@ export function saveSnapshot(userId: string, snap: Snapshot, cursors?: SyncCurso
   }
 }
 
+/**
+ * Writes the server refused (e.g. a database permission rule). They're held
+ * here instead of being thrown away — still shown in the app — and sent again
+ * when the user taps Retry (after fixing whatever the server objected to).
+ */
+export function loadParked(userId: string): QueuedOp[] {
+  try {
+    const raw = localStorage.getItem(parkedKey(userId));
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as QueuedOp[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveParked(userId: string, ops: QueuedOp[]): void {
+  try {
+    if (ops.length === 0) localStorage.removeItem(parkedKey(userId));
+    else localStorage.setItem(parkedKey(userId), JSON.stringify(ops));
+  } catch {
+    // Kept in memory for this session.
+  }
+}
+
 export function clearOfflineData(userId: string): void {
   try {
     localStorage.removeItem(outboxKey(userId));
+    localStorage.removeItem(parkedKey(userId));
     localStorage.removeItem(snapshotKey(userId));
   } catch {
     // ignore

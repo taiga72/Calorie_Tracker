@@ -111,4 +111,22 @@ describe('WorkoutForm', () => {
     renderForm();
     expect(screen.queryByLabelText('Workout date')).toBeNull();
   });
+
+  it('takes decimal weights with a comma or a point, in kg or lb', () => {
+    renderForm();
+    fireEvent.click(screen.getByText('Strength'));
+    fireEvent.change(screen.getByPlaceholderText(/Upper body/), { target: { value: 'Push' } });
+    fireEvent.click(screen.getByText('Add set'));
+    fireEvent.change(screen.getByLabelText('Set 1 exercise'), { target: { value: 'Incline bench' } });
+    fireEvent.change(screen.getByLabelText('Set 1 reps'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Set 1 weight'), { target: { value: '22,5' } });
+    expect(screen.getByLabelText('Set 1 weight')).toHaveValue('22,5');
+    fireEvent.click(screen.getByText('Add set'));
+    fireEvent.change(screen.getByLabelText('Set 2 weight'), { target: { value: '22.5' } });
+    fireEvent.change(screen.getByLabelText('Weight unit for these sets'), { target: { value: 'lb' } });
+    fireEvent.click(screen.getByText('Save workout'));
+    const saved = addWorkout.mock.calls[0][0];
+    // 22.5 lb ≈ 10.21 kg, stored in kg.
+    expect(saved.sets?.map((x) => x.weight)).toEqual([10.21, 10.21]);
+  });
 });
