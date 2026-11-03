@@ -48,7 +48,7 @@ on inside the app.
 4. In Xcode, select the **App** project → **App** target → **Signing &
    Capabilities**:
    - **Team**: add your Apple ID (Xcode → Settings → Accounts) and pick it.
-   - **Bundle Identifier**: `com.taiga72.calorietracker` — change it if Xcode
+   - **Bundle Identifier**: `com.kimsantiago.tally` — change it if Xcode
      says it's taken (e.g. add your initials).
    - Check that **HealthKit** is listed; if not, **+ Capability → HealthKit**.
 5. On the iPhone: Settings → Privacy & Security → **Developer Mode** → on

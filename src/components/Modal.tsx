@@ -170,7 +170,7 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
       <div
         ref={sheetRef}
         onFocus={onFocusIn}
-        className={`relative w-full ${maxWidth} bg-[#F8F9FA] dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] overflow-y-auto overflow-x-hidden overscroll-contain animate-[slideUp_.25s_ease]`}
+        className={`relative w-full ${maxWidth} bg-[#F8F9FA] dark:bg-gray-900 rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[calc(100dvh-env(safe-area-inset-top)-12px)] overflow-y-auto overflow-x-hidden overscroll-contain animate-[slideUp_.25s_ease]`}
         style={{
           transform: dragY ? `translateY(${dragY}px)` : undefined,
           transition: dragging ? 'none' : 'transform .2s ease',

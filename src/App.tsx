@@ -177,9 +177,11 @@ function AppInner() {
   if (loading) return null;
 
   return (
-    <div className="min-h-screen text-gray-900 dark:text-gray-100 max-w-md mx-auto">
+    <div className="min-h-screen text-gray-900 dark:text-gray-100 max-w-md mx-auto pt-[env(safe-area-inset-top)]">
+      {/* Frosted strip behind the clock and Dynamic Island so scrolled content doesn't show through. */}
+      <div aria-hidden className="fixed top-0 inset-x-0 z-50 h-[env(safe-area-inset-top)] bg-[#F4F5F6]/85 dark:bg-[#0B0D10]/85 backdrop-blur-md pointer-events-none" />
       {syncError && (
-        <div className="sticky top-0 z-50 flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs p-3 border-b border-red-100 dark:border-red-900">
+        <div className="sticky top-[env(safe-area-inset-top)] z-50 flex items-start gap-2 bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-300 text-xs p-3 border-b border-red-100 dark:border-red-900">
           <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
           <span className="flex-1">{syncError}</span>
           <button
@@ -196,7 +198,7 @@ function AppInner() {
         </div>
       )}
       {(!online || pendingCount > 0) && (
-        <div className="sticky top-0 z-40 flex justify-center pt-2 -mb-9 pointer-events-none">
+        <div className="sticky top-[env(safe-area-inset-top)] z-40 flex justify-center pt-2 -mb-9 pointer-events-none">
           <span role="status" className="pointer-events-auto inline-flex items-center gap-1.5 text-11 font-semibold px-3 py-1.5 rounded-full shadow-sm bg-gray-900/90 dark:bg-white/90 text-white dark:text-gray-900 backdrop-blur animate-[slideDown_.25s_ease-out]">
             {!online ? (
               <><CloudOff size={12} /> Offline{pendingCount > 0 ? ` · ${pendingCount} change${pendingCount === 1 ? '' : 's'} saved on this device` : ''}</>
