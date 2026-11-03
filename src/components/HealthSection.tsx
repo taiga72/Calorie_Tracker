@@ -6,7 +6,7 @@ import { formatRelativeTime } from '@/lib/dateUtils';
 import { connectHealth, healthAvailable, loadHealthPrefs, saveHealthPrefs, type HealthPrefs } from '@/lib/health';
 import { HEALTH_SYNC_EVENT } from '@/lib/useHealthSync';
 
-/** Settings → Goals, in the iPhone app only: Apple Health in and out. */
+/** Settings → App, in the iPhone app only: Apple Health in and out. */
 export function HealthSection() {
   const [prefs, setPrefs] = useState<HealthPrefs>(loadHealthPrefs);
   const [busy, setBusy] = useState(false);

@@ -13,7 +13,8 @@ export interface LayoutDef<T extends string> {
 }
 
 export const HOME_LAYOUT: LayoutDef<HomeCardId> = {
-  defaults: ['summary', 'brief', 'insights', 'quickPins', 'forecast', 'milestones', 'activity', 'meals'],
+  // Today's log first (meals, then exercise), tips after it.
+  defaults: ['summary', 'brief', 'quickPins', 'meals', 'activity', 'insights', 'forecast', 'milestones'],
   hiddenByDefault: ['quickPins', 'forecast', 'milestones'],
   labels: {
     summary: "Today's summary",

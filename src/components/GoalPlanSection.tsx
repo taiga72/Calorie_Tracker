@@ -56,7 +56,7 @@ export function GoalPlanSection() {
   const perKgShown = prefs.proteinPerKg ? +(unit === 'lb' ? prefs.proteinPerKg / 2.2046 : prefs.proteinPerKg).toFixed(2) : null;
 
   return (
-    <div className="card p-5 mt-4">
+    <div id="settings-goal-plan" className="card p-5 mt-4 scroll-mt-[calc(env(safe-area-inset-top)+12px)]">
       <div className="flex items-center gap-2 mb-1">
         <CalendarRange size={18} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Goal plan</h2>

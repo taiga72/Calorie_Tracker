@@ -7,8 +7,8 @@ const INPUT = 'w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm
 
 type Panel = 'email' | 'password' | null;
 
-/** Settings → Account: email, password, sign out. */
-export function AccountSection() {
+/** Settings → Account: email, password, sign out. `bare`: without its own card, inside another. */
+export function AccountSection({ bare = false }: { bare?: boolean } = {}) {
   const { user, signOut, updateEmail, updatePassword, status } = useAuth();
   const [panel, setPanel] = useState<Panel>(null);
   const [email, setEmail] = useState('');
@@ -49,11 +49,13 @@ export function AccountSection() {
   };
 
   return (
-    <div className="card p-5 mt-4">
-      <div className="flex items-center gap-2 mb-3">
-        <User size={18} className="text-accent-600" />
-        <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
-      </div>
+    <div className={bare ? '' : 'card p-5 mt-4'}>
+      {!bare && (
+        <div className="flex items-center gap-2 mb-3">
+          <User size={18} className="text-accent-600" />
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Account</h2>
+        </div>
+      )}
       <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
 
       <div className="grid grid-cols-2 gap-2">

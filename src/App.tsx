@@ -19,6 +19,7 @@ import { OPEN_COACH_EVENT } from '@/lib/coachLauncher';
 import { StreakModal } from '@/modals/StreakModal';
 import { HomeTab } from '@/tabs/HomeTab';
 import { useTabScroll } from '@/lib/useTabScroll';
+import { OPEN_SETTINGS_EVENT, type SettingsSection } from '@/lib/settingsLauncher';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
 import { newlyAchieved } from '@/lib/milestones';
 import { todayKey } from '@/lib/dateUtils';
@@ -101,6 +102,16 @@ function writeFlag(key: string): void {
 
 function AppInner() {
   const [tab, setTab] = useTabScroll<TabKey>('home');
+  // "Edit" links elsewhere open Settings at a section.
+  const [settingsFocus, setSettingsFocus] = useState<SettingsSection | null>(null);
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      setSettingsFocus((e as CustomEvent<SettingsSection>).detail);
+      setTab('settings');
+    };
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+  }, [setTab]);
   const [logOpen, setLogOpen] = useState(false);
   const [logMode, setLogMode] = useState<'food' | 'weight'>('food');
   const [coachOpen, setCoachOpen] = useState(false);
@@ -222,7 +233,7 @@ function AppInner() {
         <Suspense fallback={<ScreenSkeleton />}>
           {tab === 'stats' && <StatsTab />}
           {tab === 'calendar' && <CalendarTab />}
-          {tab === 'settings' && <SettingsTab />}
+          {tab === 'settings' && <SettingsTab focus={settingsFocus} onFocused={() => setSettingsFocus(null)} />}
         </Suspense>
       </main>
 
