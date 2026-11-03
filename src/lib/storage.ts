@@ -296,7 +296,22 @@ interface WorkoutRow {
   calories: number;
   sets: Workout['sets'] | null;
   notes: string | null;
+  avg_heart_rate?: number | null;
   created_at: number;
+}
+
+// The workouts.avg_heart_rate column was added after launch. Until the updated
+// supabase/schema.sql has been run, workouts save without it.
+let heartRateColumn: boolean | null = null;
+
+/** For tests: forget what's known about the avg_heart_rate column. */
+export function resetHeartRateColumnState(): void {
+  heartRateColumn = null;
+}
+
+function isMissingHeartRateColumn(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | null;
+  return (e?.code === 'PGRST204' || e?.code === '42703') && /avg_heart_rate/.test(e?.message ?? '');
 }
 
 function rowToWorkout(row: WorkoutRow): Workout {
@@ -308,6 +323,7 @@ function rowToWorkout(row: WorkoutRow): Workout {
     minutes: Number(row.minutes) || 0,
     calories: Number(row.calories) || 0,
     ...(row.sets?.length ? { sets: row.sets } : {}),
+    ...(row.avg_heart_rate ? { avgHeartRate: Number(row.avg_heart_rate) } : {}),
     ...(row.notes ? { notes: row.notes } : {}),
     createdAt: row.created_at,
   };
@@ -324,6 +340,7 @@ function workoutToRow(userId: string, w: Workout) {
     calories: num(w.calories),
     sets: w.sets?.length ? w.sets : null,
     notes: w.notes || null,
+    ...(heartRateColumn !== false ? { avg_heart_rate: w.avgHeartRate ? Math.round(w.avgHeartRate) : null } : {}),
     created_at: Math.round(num(w.createdAt, Date.now())),
   };
 }
@@ -701,7 +718,12 @@ export const storage = {
   },
 
   upsertWorkout: async (userId: string, w: Workout): Promise<boolean> => {
-    const { error } = await withRetry(() => supabase.from('workouts').upsert(workoutToRow(userId, w), { onConflict: 'id' }));
+    const save = () => withRetry(() => supabase.from('workouts').upsert(workoutToRow(userId, w), { onConflict: 'id' }));
+    let { error } = await save();
+    if (error && heartRateColumn !== false && isMissingHeartRateColumn(error)) {
+      heartRateColumn = false;
+      ({ error } = await save());
+    }
     if (error && !isMissingTable(error)) console.error('Failed to save workout', error);
     return !error || isMissingTable(error);
   },

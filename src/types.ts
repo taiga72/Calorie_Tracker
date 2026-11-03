@@ -180,6 +180,8 @@ export interface Workout {
   /** Estimated kcal burned. */
   calories: number;
   sets?: StrengthSet[];
+  /** Average heart rate during the workout (bpm). */
+  avgHeartRate?: number;
   notes?: string;
   createdAt: number;
 }

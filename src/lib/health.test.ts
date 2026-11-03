@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fromHealthWorkout, kindOf, workoutName } from '@/lib/health';
+import { fromHealthWorkout, kindOf, tidyHealthImport, workoutName } from '@/lib/health';
+import type { Workout } from '@/types';
 import { plannedReminders, DEFAULT_REMINDERS } from '@/lib/reminders';
 
 vi.mock('@/lib/native', () => ({ isNative: () => false, setNativeStatusBar: () => {} }));
@@ -15,12 +16,32 @@ describe('Apple Health workouts', () => {
     expect(workoutName('tableTennis')).toBe('Table tennis');
   });
 
-  it('turns a Health workout into one here, correcting lifting calories', () => {
+  it('turns a Health workout into one here, with Health\'s calories and average heart rate in their own fields', () => {
     const w = fromHealthWorkout({ workoutType: 'traditionalStrengthTraining', duration: 2651, totalEnergyBurned: 416, startDate: '2026-11-03T09:11:00', endDate: '2026-11-03T09:55:11', sourceName: 'CMF Watch', platformId: 'ABC' }, 124);
-    expect(w).toMatchObject({ id: 'hk-ABC', date: '2026-11-03', kind: 'strength', name: 'Strength training', minutes: 44, calories: 277 });
-    expect(w.notes).toBe('Apple Health (CMF Watch): 416 kcal · HR avg 124 bpm');
+    expect(w).toMatchObject({ id: 'hk-ABC', date: '2026-11-03', kind: 'strength', name: 'Strength training', minutes: 44, calories: 416, avgHeartRate: 124 });
+    expect(w.notes).toBe('From Apple Health (CMF Watch)');
     const run = fromHealthWorkout({ workoutType: 'running', duration: 1800, totalEnergyBurned: 320, startDate: '2026-11-02T07:00:00', endDate: '2026-11-02T07:30:00' });
-    expect(run).toMatchObject({ kind: 'cardio', calories: 320, minutes: 30, notes: 'Apple Health: 320 kcal' });
+    expect(run).toMatchObject({ kind: 'cardio', calories: 320, minutes: 30, notes: 'From Apple Health' });
+    expect(run).not.toHaveProperty('avgHeartRate');
+  });
+
+  it('tidies a workout imported the old way: heart rate and Health calories out of the note', () => {
+    const old: Workout = { id: 'hk-ABC', date: '2026-11-03', kind: 'strength', name: 'Strength training', minutes: 44, calories: 277, notes: 'Apple Health (Nothing X): 416 kcal · HR avg 125 bpm', createdAt: 1 };
+    expect(tidyHealthImport(old)).toEqual({ calories: 416, avgHeartRate: 125, notes: 'From Apple Health (Nothing X)' });
+  });
+
+  it('keeps calories the user changed when tidying an old import', () => {
+    const edited: Workout = { id: 'hk-A', date: '2026-11-03', kind: 'strength', name: 'Lift', minutes: 44, calories: 300, notes: 'Apple Health (Nothing X): 416 kcal · HR avg 125 bpm', createdAt: 1 };
+    expect(tidyHealthImport(edited)).toEqual({ avgHeartRate: 125, notes: 'From Apple Health (Nothing X)' });
+    const noHr: Workout = { id: 'hk-B', date: '2026-11-02', kind: 'cardio', name: 'Walking', minutes: 9, calories: 51, notes: 'Apple Health: 51 kcal', createdAt: 1 };
+    expect(tidyHealthImport(noHr)).toEqual({ notes: 'From Apple Health' });
+  });
+
+  it('leaves alone workouts that are not old Health imports', () => {
+    const tidy: Workout = { id: 'hk-C', date: '2026-11-03', kind: 'cardio', name: 'Run', minutes: 30, calories: 320, avgHeartRate: 140, notes: 'From Apple Health', createdAt: 1 };
+    const typed: Workout = { id: 'w1', date: '2026-11-03', kind: 'cardio', name: 'Run', minutes: 30, calories: 320, notes: 'Apple Health: 320 kcal', createdAt: 1 };
+    expect(tidyHealthImport(tidy)).toBeNull();
+    expect(tidyHealthImport(typed)).toBeNull();
   });
 });
 

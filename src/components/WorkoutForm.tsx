@@ -90,6 +90,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
   const [name, setName] = useState('');
   const [minutes, setMinutes] = useState('');
   const [calories, setCalories] = useState('');
+  const [heartRate, setHeartRate] = useState('');
   // Calories follow the duration until they're typed in (or come from the AI).
   const [caloriesSet, setCaloriesSet] = useState(false);
   const [blocks, setBlocks] = useState<ExerciseBlock[]>([]);
@@ -111,6 +112,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
     setMinutes(editWorkout.minutes ? String(editWorkout.minutes) : '');
     setCalories(editWorkout.calories ? String(editWorkout.calories) : '');
     setCaloriesSet(true);
+    setHeartRate(editWorkout.avgHeartRate ? String(editWorkout.avgHeartRate) : '');
     setBlocks(toBlocks(editWorkout.sets, unit));
     setNotes(editWorkout.notes ?? '');
     setEditDate(editWorkout.date);
@@ -182,6 +184,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       setMinutes(w.minutes ? String(w.minutes) : '');
       setCalories(w.calories ? String(w.calories) : '');
       setCaloriesSet(true);
+      if (w.avgHeartRate) setHeartRate(String(w.avgHeartRate));
       const hr = [w.avgHeartRate ? `avg ${w.avgHeartRate}` : null, w.maxHeartRate ? `max ${w.maxHeartRate}` : null].filter(Boolean).join(', ');
       const note = `Watch: ${w.watchCalories} kcal${hr ? ` · HR ${hr} bpm` : ''}`;
       setNotes((prev) => (prev.trim() ? `${prev.trim()} · ${note}` : note));
@@ -226,6 +229,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       name: name.trim(),
       minutes: Math.round(num(minutes)),
       calories: Math.round(num(calories)),
+      avgHeartRate: num(heartRate) > 0 ? Math.round(num(heartRate)) : undefined,
       ...(cleanSets.length ? { sets: cleanSets } : { sets: undefined }),
       notes: notes.trim() || undefined,
     };
@@ -360,7 +364,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
           className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
       </label>
-      <div className="grid grid-cols-2 gap-2 mt-2">
+      <div className="grid grid-cols-3 gap-2 mt-2">
         <label className="block">
           <span className="text-11 font-semibold text-gray-500 dark:text-gray-400">Minutes</span>
           <input
@@ -380,6 +384,17 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             value={calories}
             onChange={(e) => { setCalories(e.target.value); setCaloriesSet(true); }}
             placeholder="0"
+            className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
+          />
+        </label>
+        <label className="block">
+          <span className="text-11 font-semibold text-gray-500 dark:text-gray-400">Avg heart rate</span>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={heartRate}
+            onChange={(e) => setHeartRate(e.target.value)}
+            placeholder="bpm"
             className="mt-1 w-full bg-gray-50 dark:bg-gray-800 rounded-xl px-3 py-2.5 text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
           />
         </label>
@@ -422,15 +437,20 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
                     <span className="w-8 text-center">Set</span>
                     <span className="flex-1 text-center">Reps</span>
                     <span className="flex-1 flex justify-center">
-                      <select
-                        value={b.unit}
-                        onChange={(e) => updateBlock(b.key, (x) => ({ ...x, unit: e.target.value as WeightUnit, unitChosen: true }))}
-                        aria-label={`Exercise ${bi + 1} weight unit`}
-                        className="bg-gray-100 dark:bg-gray-900 rounded-md pl-2 pr-1 py-1 text-11 font-semibold text-gray-600 dark:text-gray-300 outline-none focus:ring-2 focus:ring-accent-500/30"
-                      >
-                        <option value="kg">kg</option>
-                        <option value="lb">lb</option>
-                      </select>
+                      {/* Both units in view, one tap to switch (like iOS's segmented controls). */}
+                      <span role="group" aria-label={`Exercise ${bi + 1} weight unit`} className="seg w-24">
+                        {(['kg', 'lb'] as WeightUnit[]).map((u) => (
+                          <button
+                            key={u}
+                            type="button"
+                            onClick={() => updateBlock(b.key, (x) => ({ ...x, unit: u, unitChosen: true }))}
+                            aria-pressed={b.unit === u}
+                            className="seg-item !py-1 !text-11"
+                          >
+                            {u}
+                          </button>
+                        ))}
+                      </span>
                     </span>
                     <span className="w-9 -mr-1" />
                   </div>

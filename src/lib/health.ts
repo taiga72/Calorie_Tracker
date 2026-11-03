@@ -132,23 +132,38 @@ export function workoutName(type: WorkoutType): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** One Health workout as a workout here (calories corrected like watch screenshots). */
+/** One Health workout as a workout here: Health's calories and average heart rate as they are. */
 export function fromHealthWorkout(w: HKWorkout, avgHeartRate?: number): Workout {
   const kind = kindOf(w.workoutType);
-  const raw = Math.round(w.totalEnergyBurned ?? 0);
   const start = new Date(w.startDate);
-  const source = w.sourceName ? `Apple Health (${w.sourceName})` : 'Apple Health';
-  const details = [raw ? `${raw} kcal` : null, avgHeartRate ? `HR avg ${avgHeartRate} bpm` : null].filter(Boolean).join(' · ');
   return {
     id: `hk-${w.platformId ?? w.startDate}`,
     date: toKey(start),
     kind,
     name: workoutName(w.workoutType),
     minutes: Math.max(1, Math.round(w.duration / 60)),
-    calories: adjustWatchCalories(kind, raw),
-    notes: details ? `${source}: ${details}` : source,
+    calories: Math.round(w.totalEnergyBurned ?? 0),
+    ...(avgHeartRate ? { avgHeartRate } : {}),
+    notes: w.sourceName ? `From Apple Health (${w.sourceName})` : 'From Apple Health',
     createdAt: start.getTime(),
   };
+}
+
+// Imports before heart rate had its own field kept the numbers in the note
+// ("Apple Health (Watch): 416 kcal · HR avg 125 bpm") and cut lifting calories.
+const OLD_NOTE = /^Apple Health(?: \(([^)]*)\))?(?::\s*(?:(\d+) kcal)?(?:\s*·\s*)?(?:HR avg (\d+) bpm)?)?$/;
+
+/** For an old-style Health import, the fields that move out of its note; null if there's nothing to tidy. */
+export function tidyHealthImport(w: Workout): Partial<Workout> | null {
+  const m = w.id.startsWith('hk-') && w.notes ? OLD_NOTE.exec(w.notes.trim()) : null;
+  if (!m) return null;
+  const [, source, kcal, hr] = m;
+  const patch: Partial<Workout> = {};
+  // Calories still at the old lifting cut go back to Health's figure; a value the user typed stays.
+  if (kcal && Number(kcal) !== w.calories && w.calories === adjustWatchCalories(w.kind, Number(kcal))) patch.calories = Number(kcal);
+  if (hr && !w.avgHeartRate) patch.avgHeartRate = Number(hr);
+  patch.notes = source ? `From Apple Health (${source})` : 'From Apple Health';
+  return patch;
 }
 
 async function averageHeartRate(start: string, end: string): Promise<number | undefined> {

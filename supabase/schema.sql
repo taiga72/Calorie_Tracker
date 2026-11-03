@@ -108,6 +108,8 @@ create table if not exists public.workouts (
   created_at bigint not null
 );
 create index if not exists workouts_user_date_idx on public.workouts(user_id, date);
+-- Average heart rate during the workout (bpm), e.g. from Apple Health. Added after launch.
+alter table public.workouts add column if not exists avg_heart_rate numeric;
 
 alter table public.workouts enable row level security;
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup, within } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { Settings, Workout } from '@/types';
 
@@ -36,6 +36,9 @@ function renderForm(props: Partial<Parameters<typeof WorkoutForm>[0]> = {}) {
   render(<UndoToastProvider><WorkoutForm date="2026-10-13" onDone={onDone} {...props} /></UndoToastProvider>);
   return onDone;
 }
+
+const unitButton = (exercise: number, unit: 'kg' | 'lb') =>
+  within(screen.getByRole('group', { name: `Exercise ${exercise} weight unit` })).getByRole('button', { name: unit });
 
 beforeEach(() => {
   localStorage.clear();
@@ -98,6 +101,24 @@ describe('WorkoutForm', () => {
     expect(updateWorkout).toHaveBeenCalledWith('w2', expect.objectContaining({ minutes: 40, calories: 250, date: '2026-10-11' }));
   });
 
+  it('shows and saves the average heart rate in its own field', () => {
+    const w: Workout = { id: 'hk-1', date: '2026-11-03', kind: 'strength', name: 'Strength training', minutes: 44, calories: 416, avgHeartRate: 125, notes: 'From Apple Health (Nothing X)', createdAt: 1 };
+    renderForm({ editWorkout: w });
+    const hr = screen.getByLabelText('Avg heart rate');
+    expect(hr).toHaveValue(125);
+    fireEvent.change(hr, { target: { value: '130' } });
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateWorkout).toHaveBeenCalledWith('hk-1', expect.objectContaining({ avgHeartRate: 130, calories: 416, notes: 'From Apple Health (Nothing X)' }));
+  });
+
+  it('saves no heart rate when the field is left empty', () => {
+    renderForm();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Morning run'), { target: { value: 'Run' } });
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '30' } });
+    fireEvent.click(screen.getByText('Save workout'));
+    expect(addWorkout.mock.calls[0][0].avgHeartRate).toBeUndefined();
+  });
+
   it('offers Undo after deleting', () => {
     const w: Workout = { id: 'w3', date: '2026-10-11', kind: 'cardio', name: 'Swim', minutes: 30, calories: 250, createdAt: 1 };
     renderForm({ editWorkout: w });
@@ -132,7 +153,11 @@ describe('WorkoutForm', () => {
     expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('22,5');
     fireEvent.click(screen.getByLabelText('Add set to exercise 1'));
     fireEvent.change(screen.getByLabelText('Exercise 1 set 2 weight'), { target: { value: '22.5' } });
-    fireEvent.change(screen.getByLabelText('Exercise 1 weight unit'), { target: { value: 'lb' } });
+    const units = within(screen.getByRole('group', { name: 'Exercise 1 weight unit' }));
+    expect(units.getByRole('button', { name: 'kg' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(units.getByRole('button', { name: 'lb' }));
+    expect(units.getByRole('button', { name: 'lb' })).toHaveAttribute('aria-pressed', 'true');
+    expect(units.getByRole('button', { name: 'kg' })).toHaveAttribute('aria-pressed', 'false');
     fireEvent.click(screen.getByText('Save workout'));
     const saved = addWorkout.mock.calls[0][0];
     // 22.5 lb ≈ 10.21 kg, stored in kg.
@@ -186,10 +211,10 @@ describe('WorkoutForm', () => {
     fireEvent.change(screen.getByLabelText('Exercise 1 set 1 weight'), { target: { value: '30' } });
     fireEvent.click(screen.getByText('Add exercise'));
     fireEvent.change(screen.getByLabelText('Exercise 2 name'), { target: { value: 'Dumbbell curl' } });
-    fireEvent.change(screen.getByLabelText('Exercise 2 weight unit'), { target: { value: 'lb' } });
+    fireEvent.click(unitButton(2, 'lb'));
     fireEvent.change(screen.getByLabelText('Exercise 2 set 1 reps'), { target: { value: '12' } });
     fireEvent.change(screen.getByLabelText('Exercise 2 set 1 weight'), { target: { value: '25' } });
-    expect(screen.getByLabelText('Exercise 1 weight unit')).toHaveValue('kg');
+    expect(unitButton(1, 'kg')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByText('Save workout'));
     expect(addWorkout.mock.calls[0][0].sets).toEqual([
       { exercise: 'Barbell curl', reps: 10, weight: 30 },
@@ -202,7 +227,7 @@ describe('WorkoutForm', () => {
     fireEvent.click(screen.getByText('Strength'));
     fireEvent.click(screen.getByText('Add exercise'));
     fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'dumbbell curl' } });
-    expect(screen.getByLabelText('Exercise 1 weight unit')).toHaveValue('lb');
+    expect(unitButton(1, 'lb')).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('imports a watch screenshot, keeping the exercises already typed', async () => {
