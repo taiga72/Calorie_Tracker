@@ -6,7 +6,7 @@ export function ReminderBanner({ id, onLog, onDismiss }: { id: ReminderId; onLog
   return (
     <div
       role="status"
-      className="fixed top-3 inset-x-3 z-50 max-w-md mx-auto bg-white dark:bg-gray-900 border border-accent-100 dark:border-accent-900 shadow-lg rounded-2xl p-3 flex items-start gap-3 animate-[slideDown_.25s_ease-out]"
+      className="fixed top-[calc(env(safe-area-inset-top)+12px)] inset-x-3 z-50 max-w-md mx-auto bg-white dark:bg-gray-900 border border-accent-100 dark:border-accent-900 shadow-lg rounded-2xl p-3 flex items-start gap-3 animate-[slideDown_.25s_ease-out]"
     >
       <div className="w-9 h-9 rounded-xl bg-accent-50 dark:bg-accent-950 flex items-center justify-center flex-shrink-0">
         <Bell size={17} className="text-accent-600" />

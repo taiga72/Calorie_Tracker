@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 // The iPhone app: the same web app (built into dist/) inside a native shell,
 // plus Apple Health, notifications, haptics and voice input. See docs/IOS.md.
 const config: CapacitorConfig = {
-  appId: 'com.taiga72.calorietracker',
+  appId: 'com.kimsantiago.tally',
   appName: 'Tally',
   webDir: 'dist',
   ios: {
