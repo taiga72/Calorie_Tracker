@@ -90,9 +90,9 @@ Rules:
 - Output ONLY the JSON object.`;
 
 /**
- * Heart rate overstates the burn of lifting: it climbs under strain and stays
- * up through the rests, while little energy is used. Watches apply a cardio
- * formula anyway, so a strength session's figure is cut to about two thirds.
+ * Workouts used to have a watch's lifting calories cut to about two thirds.
+ * Calories are now taken as the watch or Health gives them; this is kept only
+ * to recognise workouts saved with the cut (see tidyHealthImport).
  */
 export const STRENGTH_WATCH_FACTOR = 2 / 3;
 
@@ -111,7 +111,7 @@ function normalizeWatchWorkout(raw: unknown): WatchWorkout {
     kind,
     name: String(r.name ?? '').trim() || WORKOUT_KINDS.find((k) => k.key === kind)!.label,
     minutes,
-    calories: adjustWatchCalories(kind, watchCalories),
+    calories: watchCalories,
     watchCalories,
     avgHeartRate: hr(r.avgHeartRate),
     maxHeartRate: hr(r.maxHeartRate),

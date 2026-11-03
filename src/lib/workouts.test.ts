@@ -68,7 +68,7 @@ describe('watch screenshots', () => {
   afterEach(() => vi.unstubAllGlobals());
   const answer = (o: Record<string, unknown>) => vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(o) }] } }] }), { status: 200 }));
 
-  it('cuts a lifting session to about two thirds, leaves cardio as the watch said', () => {
+  it('knows the old two-thirds lifting cut (to recognise workouts saved with it)', () => {
     expect(adjustWatchCalories('strength', 416)).toBe(277);
     expect(adjustWatchCalories('cardio', 416)).toBe(416);
   });
@@ -77,7 +77,7 @@ describe('watch screenshots', () => {
     const fetchMock = answer({ kind: 'strength', name: 'Strength training', minutes: 44, calories: 416, avgHeartRate: 124, maxHeartRate: 142 });
     vi.stubGlobal('fetch', fetchMock);
     const w = await readWatchScreenshots('k', [{ data: 'AAA', mimeType: 'image/jpeg' }, { data: 'BBB', mimeType: 'image/jpeg' }]);
-    expect(w).toMatchObject({ kind: 'strength', name: 'Strength training', minutes: 44, watchCalories: 416, calories: 277, avgHeartRate: 124, maxHeartRate: 142 });
+    expect(w).toMatchObject({ kind: 'strength', name: 'Strength training', minutes: 44, watchCalories: 416, calories: 416, avgHeartRate: 124, maxHeartRate: 142 });
     const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
     expect(body.contents[0].parts.filter((p: { inlineData?: unknown }) => p.inlineData)).toHaveLength(2);
   });

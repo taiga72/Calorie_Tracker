@@ -185,8 +185,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       setCalories(w.calories ? String(w.calories) : '');
       setCaloriesSet(true);
       if (w.avgHeartRate) setHeartRate(String(w.avgHeartRate));
-      const hr = [w.avgHeartRate ? `avg ${w.avgHeartRate}` : null, w.maxHeartRate ? `max ${w.maxHeartRate}` : null].filter(Boolean).join(', ');
-      const note = `Watch: ${w.watchCalories} kcal${hr ? ` · HR ${hr} bpm` : ''}`;
+      const note = `From watch screenshots${w.maxHeartRate ? ` · HR max ${w.maxHeartRate} bpm` : ''}`;
       setNotes((prev) => (prev.trim() ? `${prev.trim()} · ${note}` : note));
       setWatch(w);
     } catch (e) {
@@ -402,10 +401,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
       {!caloriesSet && num(calories) > 0 && <p className="text-10 text-gray-400 mt-1">Calories estimated from the type and duration — change them if your watch says otherwise.</p>}
       {watch && (
         <p className="text-10 text-gray-500 dark:text-gray-400 mt-1">
-          From your watch{watch.avgHeartRate ? ` (avg ${watch.avgHeartRate} bpm)` : ''}.
-          {watch.kind === 'strength' && watch.watchCalories !== watch.calories
-            ? ` It said ${watch.watchCalories} kcal — heart rate overstates lifting, so ${watch.calories} is used. Change it if you like.`
-            : ''}
+          From your watch.
         </p>
       )}
 
