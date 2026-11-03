@@ -176,12 +176,13 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
       {step === 2 && (
         <div>
           <p className="text-sm text-gray-500 mb-4">How tall are you?</p>
-          <div className="flex gap-2 mb-3">
+          <div className="seg mb-3">
             {(['cm', 'in'] as HeightUnit[]).map((u) => (
               <button
                 key={u}
                 onClick={() => setHeightUnit(u)}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${heightUnit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+                aria-pressed={heightUnit === u}
+                className="seg-item"
               >
                 {u === 'cm' ? 'Centimeters' : 'Inches'}
               </button>
@@ -293,7 +294,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           <div className="bg-gradient-to-br from-accent-50 to-teal-50 dark:from-accent-950 dark:to-teal-950 rounded-2xl p-4 mb-4 border border-accent-100/60 dark:border-accent-900">
             <div className="flex items-center gap-2 mb-2">
               <Target size={16} className="text-accent-600" />
-              <p className="text-xs font-bold tracking-wider text-accent-600">ESTIMATED GOAL DATE</p>
+              <p className="text-xs font-semibold text-accent-600">Estimated goal date</p>
             </div>
             <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-3">{fmtGoalDate(result.goalDate, result.weeksToGoal)}</p>
             <div className="bg-white/70 dark:bg-gray-900/60 rounded-xl p-3">
@@ -321,7 +322,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
 
           {/* Macros */}
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-50 dark:border-gray-800 mb-4">
-            <p className="text-xs font-semibold text-gray-400 mb-3">RECOMMENDED MACROS</p>
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-3">Recommended macros</p>
             <div className="space-y-3">
               <MacroRow label="Protein" value={result.protein} color="text-emerald-600" sub="Preserves muscle during weight loss" />
               <MacroRow label="Carbs" value={result.carbs} color="text-orange-500" sub="Fuels daily activity and exercise" />
@@ -333,7 +334,7 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-50 dark:border-gray-800 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <Utensils size={14} className="text-gray-400" />
-              <p className="text-xs font-semibold text-gray-400">SUGGESTED MEAL CALORIE SPLIT</p>
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Suggested calories per meal</p>
             </div>
             <div className="grid grid-cols-4 gap-2 text-center">
               <MealSplitCol label="Breakfast" value={result.mealSplit.breakfast} />
@@ -391,12 +392,13 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
 
 function UnitToggle({ unit, onChange }: { unit: InputWeightUnit; onChange: (u: InputWeightUnit) => void }) {
   return (
-    <div className="flex gap-2 mb-3">
+    <div className="seg mb-3">
       {(['kg', 'lb'] as InputWeightUnit[]).map((u) => (
         <button
           key={u}
           onClick={() => onChange(u)}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors ${unit === u ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+          aria-pressed={unit === u}
+          className="seg-item"
         >
           {u === 'kg' ? 'Kilograms' : 'Pounds'}
         </button>
@@ -439,7 +441,7 @@ function MacroRow({ label, value, color, sub }: { label: string; value: number; 
   return (
     <div className="flex items-center justify-between">
       <div className="min-w-0">
-        <p className={`text-sm font-bold ${color}`}>{label} {value}g</p>
+        <p className={`text-sm font-bold ${color}`}>{label} {value} g</p>
         <p className="text-10 text-gray-400">{sub}</p>
       </div>
     </div>

@@ -331,7 +331,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
           )}
           <div className="flex items-center gap-2 my-4">
             <span className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
-            <span className="text-10 font-semibold text-gray-400">OR ENTER IT YOURSELF</span>
+            <span className="text-11 font-medium text-gray-400">or enter it yourself</span>
             <span className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
           </div>
         </>
@@ -344,7 +344,7 @@ export function WorkoutForm({ date, editWorkout, onDone }: { date: string; editW
             type="button"
             onClick={() => { setKind(k.key); autoCalories(k.key, minutes); }}
             aria-pressed={kind === k.key}
-            className={`py-2 rounded-xl text-11 font-semibold flex flex-col items-center gap-0.5 ${kind === k.key ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}
+            className={`py-2 rounded-xl text-11 font-semibold flex flex-col items-center gap-0.5 ${kind === k.key ? 'bg-accent-600 text-white' : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}
           >
             <span aria-hidden className="text-base leading-none">{k.emoji}</span>{k.label}
           </button>

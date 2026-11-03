@@ -56,7 +56,7 @@ describe('StatsTab layout', () => {
     expect(titles.indexOf('Weight trend')).toBeLessThan(titles.indexOf('Calories trend'));
     expect(screen.queryByText('Macros breakdown')).not.toBeInTheDocument();
     // The range picker comes before the weight chart (the first chart now).
-    const picker = screen.getByText('30 Days');
+    const picker = screen.getByText('30 days');
     expect(picker.compareDocumentPosition(screen.getByText('Weight trend')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(picker.compareDocumentPosition(screen.getByText('Weekly recap card')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     delete settings.prefs;
@@ -68,7 +68,7 @@ describe('StatsTab pages', () => {
     render(<StatsTab />);
     expect(screen.getByRole('tab', { name: 'Trends' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Weekly recap card')).toBeInTheDocument();
-    expect(screen.getByText('30 Days')).toBeInTheDocument();
+    expect(screen.getByText('30 days')).toBeInTheDocument();
     expect(screen.getByText('Calories trend')).toBeInTheDocument();
     expect(screen.getByText('Macros breakdown')).toBeInTheDocument();
     expect(screen.getByText('Weight trend')).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe('StatsTab pages', () => {
     expect(screen.getByText('Goal plan card')).toBeInTheDocument();
     expect(screen.getByText('Insights card')).toBeInTheDocument();
     expect(screen.getByText('Habits card')).toBeInTheDocument();
-    expect(screen.queryByText('30 Days')).not.toBeInTheDocument();
+    expect(screen.queryByText('30 days')).not.toBeInTheDocument();
     expect(screen.queryByText('Calories trend')).not.toBeInTheDocument();
   });
 

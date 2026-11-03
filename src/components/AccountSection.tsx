@@ -57,10 +57,10 @@ export function AccountSection() {
       <p className="text-xs text-gray-400 mb-4 truncate">Signed in as {user?.email}</p>
 
       <div className="grid grid-cols-2 gap-2">
-        <button onClick={() => open('email')} aria-expanded={panel === 'email'} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold ${panel === 'email' ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+        <button onClick={() => open('email')} aria-expanded={panel === 'email'} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold ${panel === 'email' ? 'bg-accent-50 dark:bg-accent-950 text-accent-700 dark:text-accent-300' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
           <Mail size={14} /> Change email
         </button>
-        <button onClick={() => open('password')} aria-expanded={panel === 'password'} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold ${panel === 'password' ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
+        <button onClick={() => open('password')} aria-expanded={panel === 'password'} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold ${panel === 'password' ? 'bg-accent-50 dark:bg-accent-950 text-accent-700 dark:text-accent-300' : 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300'}`}>
           <KeyRound size={14} /> Change password
         </button>
       </div>

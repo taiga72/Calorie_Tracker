@@ -161,7 +161,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               ].map(({ label, val, Icon, color }) => (
                 <div key={label} className={`rounded-2xl p-3 flex flex-col items-center ${color}`}>
                   <Icon size={16} />
-                  <span className="text-base font-bold mt-1">{val}g</span>
+                  <span className="text-base font-bold mt-1">{val} g</span>
                   <span className="text-10 font-medium opacity-80">{label}</span>
                 </div>
               ))}
@@ -169,7 +169,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
 
             {/* Meal cards */}
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                 Meals ({day.meals.length})
               </h3>
               <button
@@ -187,7 +187,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
 
             {/* Exercise */}
             <div className="flex items-center justify-between mt-5 mb-2">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
                 Exercise ({dayWorkouts.length})
               </h3>
               <button

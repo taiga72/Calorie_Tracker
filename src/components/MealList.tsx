@@ -98,7 +98,7 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
                         <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{itemNames || m.mealType}</p>
                         <p className="text-11 text-gray-400 mt-0.5">
                           <span className="text-orange-500 font-semibold">{Math.round(m.calories)} kcal</span>
-                          {' · P '}{m.protein.toFixed(0)}g · C {m.carbs.toFixed(0)}g · F {m.fat.toFixed(0)}g
+                          {' · P '}{m.protein.toFixed(0)} g · C {m.carbs.toFixed(0)} g · F {m.fat.toFixed(0)} g
                         </p>
                         {m.items.length > 1 && (
                           <button

@@ -83,7 +83,7 @@ export function GoalPlanSection() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
                 {p.name}
-                {current?.id === p.id && <span className="ml-2 text-9 font-bold uppercase tracking-wider text-accent-600 bg-accent-50 dark:bg-accent-950 rounded-full px-1.5 py-0.5 align-middle">Now</span>}
+                {current?.id === p.id && <span className="ml-2 text-10 font-semibold text-accent-600 bg-accent-50 dark:bg-accent-950 rounded-full px-1.5 py-0.5 align-middle">Now</span>}
               </p>
               <p className="text-11 text-gray-400">
                 {p.start > today ? 'Starts' : 'From'} {formatShortDate(p.start)} · {paceLabel(p.weeklyWeightTarget, unit)}
@@ -239,12 +239,13 @@ function PhaseForm({ phase, unit, onSave, onCancel, onDelete }: {
           <input type="number" inputMode="numeric" aria-label="Phase calorie goal" value={kcal} onChange={(e) => setKcal(e.target.value)} className={`${INPUT.replace('bg-gray-50 dark:bg-gray-800', 'bg-white dark:bg-gray-900')} mt-1`} />
         </label>
       </div>
-      <div className="flex gap-1.5">
+      <div className="seg">
         {(['lose', 'maintain', 'gain'] as const).map((d) => (
           <button
             key={d}
             onClick={() => setDir(d)}
-            className={`flex-1 py-2 rounded-lg text-xs font-semibold capitalize ${dir === d ? 'bg-gray-900 dark:bg-accent-600 text-white' : 'bg-white dark:bg-gray-900 text-gray-500 dark:text-gray-400'}`}
+            aria-pressed={dir === d}
+            className="seg-item capitalize"
           >
             {d}
           </button>
