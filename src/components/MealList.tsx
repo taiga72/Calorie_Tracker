@@ -105,7 +105,7 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
                             type="button"
                             onClick={() => toggle(m.id)}
                             aria-expanded={expanded.has(m.id)}
-                            className="mt-0.5 -ml-1 flex items-center gap-0.5 text-11 font-semibold text-gray-500 dark:text-gray-400 hover:text-accent-600 py-1 pr-2 pl-1"
+                            className="tap mt-0.5 -ml-1 flex items-center gap-0.5 text-11 font-semibold text-gray-500 dark:text-gray-400 hover:text-accent-600 py-1 pr-2 pl-1"
                           >
                             <ChevronRight size={11} className={`transition-transform ${expanded.has(m.id) ? 'rotate-90' : ''}`} />
                             {m.items.length} items
@@ -113,7 +113,7 @@ export function MealList({ meals, onEdit }: { meals: MealEntry[]; onEdit: (meal:
                         )}
                       </div>
                       <PinMealButton meal={m} />
-                      <button onClick={() => onEdit(m)} className="flex-shrink-0 text-gray-400 hover:text-accent-600 transition-colors p-2.5 -m-1.5 rounded-full" aria-label="Edit meal">
+                      <button onClick={() => onEdit(m)} className="flex-shrink-0 w-11 h-11 -my-2 -mx-1 flex items-center justify-center text-gray-400 hover:text-accent-600 transition-colors rounded-full" aria-label="Edit meal">
                         <Pencil size={14} />
                       </button>
                     </div>

@@ -174,7 +174,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               </h3>
               <button
                 onClick={() => setLogOpen(true)}
-                className="flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+                className="tap flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
               >
                 <Plus size={14} /> Log meal
               </button>
@@ -192,7 +192,7 @@ export function DayDetailModal({ dateKey, onClose, onNavigate }: DayDetailModalP
               </h3>
               <button
                 onClick={() => setWorkoutOpen(true)}
-                className="flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
+                className="tap flex items-center gap-1 bg-accent-600 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:scale-95 transition-transform"
               >
                 <Plus size={14} /> Log exercise
               </button>

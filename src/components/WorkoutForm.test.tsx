@@ -30,6 +30,7 @@ vi.mock('@/store', () => ({
 }));
 
 const { WorkoutForm } = await import('@/components/WorkoutForm');
+const { Modal } = await import('@/components/Modal');
 
 function renderForm(props: Partial<Parameters<typeof WorkoutForm>[0]> = {}) {
   const onDone = vi.fn();
@@ -251,5 +252,17 @@ describe('WorkoutForm', () => {
       name: 'Push Workout', minutes: 44, calories: 416, avgHeartRate: 124, notes: 'From watch screenshots · HR max 142 bpm',
       sets: [{ exercise: 'Incline bench', reps: 8, weight: 0 }],
     }));
+  });
+
+  it('in a sheet, saves from the sheet\'s top bar instead of a button at the bottom', () => {
+    const onDone = vi.fn();
+    render(<UndoToastProvider><Modal open onClose={vi.fn()} title="Log exercise"><WorkoutForm date="2026-10-13" onDone={onDone} /></Modal></UndoToastProvider>);
+    expect(screen.queryByText('Save workout')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.change(screen.getByPlaceholderText('e.g. Morning run'), { target: { value: 'Run' } });
+    fireEvent.change(screen.getByLabelText('Minutes'), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(addWorkout).toHaveBeenCalledWith(expect.objectContaining({ name: 'Run', minutes: 30 }));
+    expect(onDone).toHaveBeenCalled();
   });
 });

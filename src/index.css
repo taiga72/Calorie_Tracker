@@ -246,6 +246,18 @@
 }
 
 @layer utilities {
+  /* Small controls get an invisible touch area of at least 44 × 44 points
+     (Apple's minimum) without changing how they look. */
+  .tap { position: relative; }
+  .tap::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   .line-clamp-1 {

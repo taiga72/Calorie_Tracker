@@ -18,6 +18,7 @@ import { LogModal } from '@/modals/LogModal';
 import { OPEN_COACH_EVENT } from '@/lib/coachLauncher';
 import { StreakModal } from '@/modals/StreakModal';
 import { HomeTab } from '@/tabs/HomeTab';
+import { useTabScroll } from '@/lib/useTabScroll';
 import { calculateStreak, shouldShowStreakPopup } from '@/lib/streakUtils';
 import { newlyAchieved } from '@/lib/milestones';
 import { todayKey } from '@/lib/dateUtils';
@@ -99,7 +100,7 @@ function writeFlag(key: string): void {
 }
 
 function AppInner() {
-  const [tab, setTab] = useState<TabKey>('home');
+  const [tab, setTab] = useTabScroll<TabKey>('home');
   const [logOpen, setLogOpen] = useState(false);
   const [logMode, setLogMode] = useState<'food' | 'weight'>('food');
   const [coachOpen, setCoachOpen] = useState(false);
@@ -188,11 +189,11 @@ function AppInner() {
             onClick={() => refresh()}
             disabled={refreshing}
             aria-label="Retry"
-            className="flex-shrink-0 flex items-center gap-1 font-semibold underline disabled:opacity-50"
+            className="tap flex-shrink-0 flex items-center gap-1 font-semibold underline disabled:opacity-50"
           >
             {refreshing ? <Loader2 size={13} className="animate-spin" /> : 'Retry now'}
           </button>
-          <button onClick={dismissSyncError} aria-label="Dismiss" className="flex-shrink-0">
+          <button onClick={dismissSyncError} aria-label="Dismiss" className="tap flex-shrink-0">
             <X size={16} />
           </button>
         </div>
@@ -225,12 +226,15 @@ function AppInner() {
         </Suspense>
       </main>
 
-      <FAB
-        onClick={() => openLog('food')}
-        onCoachClick={() => { dismissCoachHint(); setCoachOpen(true); }}
-        coachHint={coachHint && !welcomeOpen && tab === 'home'}
-        onHintDismiss={() => { dismissCoachHint(); setCoachOpen(true); }}
-      />
+      {/* Logging and the coach belong with your data, not in Settings. */}
+      {tab !== 'settings' && (
+        <FAB
+          onClick={() => openLog('food')}
+          onCoachClick={() => { dismissCoachHint(); setCoachOpen(true); }}
+          coachHint={coachHint && !welcomeOpen && tab === 'home'}
+          onHintDismiss={() => { dismissCoachHint(); setCoachOpen(true); }}
+        />
+      )}
       <BottomNav active={tab} onChange={(t) => { if (coachHint && t !== tab) dismissCoachHint(); setTab(t); }} />
       <LogModal open={logOpen} onClose={() => setLogOpen(false)} initialMode={logMode} />
       {coachMounted && (
