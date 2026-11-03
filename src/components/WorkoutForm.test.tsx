@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, cleanup } from '@testing-library/react';
 import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { Settings, Workout } from '@/types';
 
@@ -32,6 +32,7 @@ function renderForm(props: Partial<Parameters<typeof WorkoutForm>[0]> = {}) {
 }
 
 beforeEach(() => {
+  localStorage.clear();
   vi.clearAllMocks();
   workouts = [];
 });
@@ -125,7 +126,7 @@ describe('WorkoutForm', () => {
     expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('22,5');
     fireEvent.click(screen.getByLabelText('Add set to exercise 1'));
     fireEvent.change(screen.getByLabelText('Exercise 1 set 2 weight'), { target: { value: '22.5' } });
-    fireEvent.change(screen.getByLabelText('Weight unit for these sets'), { target: { value: 'lb' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 weight unit'), { target: { value: 'lb' } });
     fireEvent.click(screen.getByText('Save workout'));
     const saved = addWorkout.mock.calls[0][0];
     // 22.5 lb ≈ 10.21 kg, stored in kg.
@@ -167,5 +168,34 @@ describe('WorkoutForm', () => {
     expect(updateWorkout).toHaveBeenCalledWith('w9', expect.objectContaining({ sets: [
       { exercise: 'Bench press', reps: 8, weight: 60 }, { exercise: 'Bench press', reps: 6, weight: 65 },
     ] }));
+  });
+
+  it('lets each exercise use its own unit, and remembers it next time', () => {
+    renderForm();
+    fireEvent.click(screen.getByText('Strength'));
+    fireEvent.change(screen.getByPlaceholderText(/Upper body/), { target: { value: 'Arms' } });
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'Barbell curl' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 reps'), { target: { value: '10' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 weight'), { target: { value: '30' } });
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 2 name'), { target: { value: 'Dumbbell curl' } });
+    fireEvent.change(screen.getByLabelText('Exercise 2 weight unit'), { target: { value: 'lb' } });
+    fireEvent.change(screen.getByLabelText('Exercise 2 set 1 reps'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Exercise 2 set 1 weight'), { target: { value: '25' } });
+    expect(screen.getByLabelText('Exercise 1 weight unit')).toHaveValue('kg');
+    fireEvent.click(screen.getByText('Save workout'));
+    expect(addWorkout.mock.calls[0][0].sets).toEqual([
+      { exercise: 'Barbell curl', reps: 10, weight: 30 },
+      { exercise: 'Dumbbell curl', reps: 12, weight: 11.34 },
+    ]);
+    cleanup();
+
+    // Next time, naming the exercise brings lb back.
+    renderForm();
+    fireEvent.click(screen.getByText('Strength'));
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'dumbbell curl' } });
+    expect(screen.getByLabelText('Exercise 1 weight unit')).toHaveValue('lb');
   });
 });
