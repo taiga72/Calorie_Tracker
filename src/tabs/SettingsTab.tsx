@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
+import { useAutoSave } from '@/lib/useAutoSave';
+import { ProteinTarget } from '@/components/ProteinTarget';
 import type { SettingsSection } from '@/lib/settingsLauncher';
 import type { WeightUnit } from '@/types';
-import { unitToKg, kgToUnit } from '@/lib/units';
+import { unitToKg, kgToUnit, convertWeightText } from '@/lib/units';
 import { downloadCsv, downloadWeightsCsv, downloadWorkoutsCsv } from '@/lib/csv';
 import { useTheme, type ThemePreference } from '@/lib/theme';
 import { parseAppearance, readAppearance } from '@/lib/appearance';
@@ -26,7 +28,7 @@ import { photoStorageAvailable } from '@/lib/photoStorage';
 import {
   Sparkles, Target, Check, Download, Upload, FileSpreadsheet,
   Trash2, AlertTriangle, User, Camera, Activity, Utensils,
-  ChevronDown, ChevronUp, Save, RefreshCw, Info,
+  ChevronDown, ChevronUp, RefreshCw, Info,
 } from 'lucide-react';
 
 type Page = 'goals' | 'app' | 'account';
@@ -99,7 +101,6 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
 
   const [name, setName] = useState(profile.name);
   const [avatar, setAvatar] = useState<string | undefined>(profile.avatar);
-  const [profileSaved, setProfileSaved] = useState(false);
   const avatarRef = useRef<HTMLInputElement>(null);
 
   const [calorieGoal, setCalorieGoal] = useState(String(displayCalorieGoal));
@@ -124,8 +125,12 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
   const [liveGoalDate, setLiveGoalDate] = useState<string | null>(calc?.estimatedGoalDate ?? null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Auto-calculate macros, deficit, and goal date when calorie goal or target weight changes
+  // Auto-calculate macros, deficit, and goal date when the calorie goal or
+  // goal weight is changed here (not on opening: that would replace saved
+  // macros with calculated ones, which auto-save would then keep).
+  const recalcReady = useRef(false);
   useEffect(() => {
+    if (!recalcReady.current) { recalcReady.current = true; return; }
     if (!calc) return;
     const newCal = Math.max(0, parseInt(calorieGoal) || 0);
     const deficit = newCal - calc.tdee;
@@ -156,7 +161,7 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
       setLiveGoalDate(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calorieGoal, goalWeight, latestWeightKg]);
+  }, [calorieGoal, goalWeight]);
 
   const onPickAvatar = async (file: File) => {
     try {
@@ -167,13 +172,12 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
     }
   };
 
-  const onSaveProfile = () => {
-    updateProfile({ name: name.trim(), avatar });
-    setProfileSaved(true);
-    setTimeout(() => setProfileSaved(false), 1800);
-  };
+  // Saved as you go, like iOS Settings.
+  useAutoSave(() => updateProfile({ name: name.trim(), avatar }), [name, avatar]);
 
   const onSaveGoals = () => {
+    // Half-typed or cleared: wait for a usable number.
+    if (!(parseInt(calorieGoal) > 0) || !(parseFloat(goalWeight) > 0)) return;
     const gWeight = unitToKg(parseFloat(goalWeight) || 0, unit);
     const weeklyAbs = unitToKg(parseFloat(weeklyTarget) || 0, unit);
     const newCalorieGoal = Math.max(0, parseInt(calorieGoal) || 0);
@@ -202,6 +206,14 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1800);
+  };
+  useAutoSave(onSaveGoals, [calorieGoal, goalWeight, weeklyTarget, lose, unit, protein, carbs, fat, breakfast, lunch, dinner, snack]);
+  // kg ↔ lb: the typed weights follow, so 70 kg doesn't become 70 lb.
+  const switchUnit = (next: WeightUnit) => {
+    if (next === unit) return;
+    setGoalWeight((v) => convertWeightText(v, unit, next, 1));
+    setWeeklyTarget((v) => convertWeightText(v, unit, next, 2));
+    setUnit(next);
   };
 
   const [exporting, setExporting] = useState(false);
@@ -313,6 +325,9 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
         <div className="flex items-center gap-2 mb-4">
           <Target size={18} className="text-accent-600" />
           <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your goals</h2>
+          <span role="status" className={`ml-auto flex items-center gap-1 text-11 font-semibold text-accent-600 transition-opacity ${saved ? 'opacity-100' : 'opacity-0'}`}>
+            <Check size={12} /> Saved
+          </span>
         </div>
         {activePhase && (
           <p className="text-11 text-accent-700 dark:text-accent-300 bg-accent-50 dark:bg-accent-950 rounded-xl px-3 py-2 -mt-2 mb-3">
@@ -442,7 +457,7 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
                     {(['kg', 'lb'] as WeightUnit[]).map((u) => (
                       <button
                         key={u}
-                        onClick={() => setUnit(u)}
+                        onClick={() => switchUnit(u)}
                         aria-pressed={unit === u}
                         className="seg-item"
                       >
@@ -459,7 +474,7 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
                     <p className="text-11 font-semibold text-gray-500 dark:text-gray-400">Macro targets</p>
                   </div>
                   <div className="space-y-3">
-                    <MacroField label="Protein" value={protein} onChange={setProtein} color="text-emerald-600" sub="Preserves muscle" />
+                    <ProteinTarget grams={protein} onGramsChange={setProtein} latestWeightKg={latestWeightKg ?? null} />
                     <MacroField label="Carbs" value={carbs} onChange={setCarbs} color="text-orange-500" sub="Fuels activity" />
                     <MacroField label="Fat" value={fat} onChange={setFat} color="text-amber-500" sub="Hormones & satiety" />
                   </div>
@@ -485,12 +500,6 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
                     className="flex-1 bg-accent-50 dark:bg-accent-950 text-accent-800 dark:text-accent-300 font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
                   >
                     <Sparkles size={15} /> Re-calculate
-                  </button>
-                  <button
-                    onClick={onSaveGoals}
-                    className="flex-1 bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm flex items-center justify-center gap-1.5 active:scale-[.99] transition-transform"
-                  >
-                    {saved ? <><Check size={15} /> Saved</> : <><Save size={15} /> Save goals</>}
                   </button>
                 </div>
               </div>
@@ -571,12 +580,6 @@ export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | nu
             />
           </div>
         </Field>
-        <button
-          onClick={onSaveProfile}
-          className="w-full bg-accent-600 text-white font-semibold py-3 rounded-xl text-sm mt-4 active:scale-[.99] transition-transform flex items-center justify-center gap-2"
-        >
-          {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
-        </button>
         <div className="border-t border-gray-100 dark:border-gray-800 mt-5 pt-4">
           <AccountSection bare />
         </div>

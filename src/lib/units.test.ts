@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { kgToUnit, unitToKg, fmtWeight, fmtSignedChange, KG_TO_LB, LB_TO_KG } from '@/lib/units';
+import { kgToUnit, unitToKg, fmtWeight, fmtSignedChange, convertWeightText, KG_TO_LB, LB_TO_KG } from '@/lib/units';
 
 describe('kgToUnit', () => {
   it('passes kg through unchanged', () => {
@@ -55,5 +55,18 @@ describe('fmtSignedChange', () => {
     expect(fmtSignedChange(-0.04, 1)).toBeNull();
     expect(fmtSignedChange(0.004, 2)).toBeNull();
     expect(fmtSignedChange(0.006, 2)).toBe('+0.01');
+  });
+});
+
+describe('convertWeightText', () => {
+  it('converts a typed weight when the unit is switched, so 70 kg stays 70 kg', () => {
+    expect(convertWeightText('70', 'kg', 'lb', 1)).toBe('154.3');
+    expect(convertWeightText('154.3', 'lb', 'kg', 1)).toBe('70.0');
+    expect(convertWeightText('0.45', 'kg', 'lb', 2)).toBe('0.99');
+  });
+
+  it('leaves the text alone when the unit is the same or it isn\'t a number', () => {
+    expect(convertWeightText('70', 'kg', 'kg', 1)).toBe('70');
+    expect(convertWeightText('', 'kg', 'lb', 1)).toBe('');
   });
 });
