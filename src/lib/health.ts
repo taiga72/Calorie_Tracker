@@ -63,14 +63,14 @@ function saveSet(key: string, set: Set<string>): void {
 const READ: HealthDataType[] = ['workouts', 'weight', 'heartRate'];
 const WRITE: HealthDataType[] = ['dietaryEnergyConsumed'];
 
-async function plugin() {
-  return (await import('@capgo/capacitor-health')).Health;
-}
+// Loads the module, not the plugin: awaiting a Capacitor plugin object makes
+// it call a native "then" method that never answers, so the await hangs.
+const healthModule = () => import('@capgo/capacitor-health');
 
 export async function healthAvailable(): Promise<boolean> {
   if (!isNative()) return false;
   try {
-    return (await (await plugin()).isAvailable()).available;
+    return (await (await healthModule()).Health.isAvailable()).available;
   } catch {
     return false;
   }
@@ -79,7 +79,7 @@ export async function healthAvailable(): Promise<boolean> {
 /** Shows iOS's Health permission sheet. */
 export async function connectHealth(): Promise<boolean> {
   try {
-    await (await plugin()).requestAuthorization({ read: READ, write: WRITE });
+    await (await healthModule()).Health.requestAuthorization({ read: READ, write: WRITE });
     return true;
   } catch {
     return false;
@@ -153,7 +153,7 @@ export function fromHealthWorkout(w: HKWorkout, avgHeartRate?: number): Workout 
 
 async function averageHeartRate(start: string, end: string): Promise<number | undefined> {
   try {
-    const { samples } = await (await plugin()).readSamples({ dataType: 'heartRate', startDate: start, endDate: end, limit: 1000 });
+    const { samples } = await (await healthModule()).Health.readSamples({ dataType: 'heartRate', startDate: start, endDate: end, limit: 1000 });
     if (!samples.length) return undefined;
     return Math.round(samples.reduce((a, s) => a + s.value, 0) / samples.length);
   } catch {
@@ -164,7 +164,7 @@ async function averageHeartRate(start: string, end: string): Promise<number | un
 /** Workouts recorded since `since` that haven't been imported before. */
 export async function newHealthWorkouts(since: Date): Promise<Workout[]> {
   const imported = loadSet(IMPORTED_KEY);
-  const { workouts } = await (await plugin()).queryWorkouts({ startDate: since.toISOString(), endDate: new Date().toISOString(), limit: 100, ascending: true });
+  const { workouts } = await (await healthModule()).Health.queryWorkouts({ startDate: since.toISOString(), endDate: new Date().toISOString(), limit: 100, ascending: true });
   const out: Workout[] = [];
   for (const w of workouts) {
     const id = `hk-${w.platformId ?? w.startDate}`;
@@ -185,7 +185,7 @@ export function markImported(ids: string[]): void {
 /** The last weigh-in of each day since `since`, in kg, for days not imported before. */
 export async function newHealthWeights(since: Date): Promise<{ date: string; kg: number }[]> {
   const imported = loadSet(IMPORTED_KEY);
-  const { samples } = await (await plugin()).readSamples({ dataType: 'weight', startDate: since.toISOString(), endDate: new Date().toISOString(), limit: 500, ascending: true });
+  const { samples } = await (await healthModule()).Health.readSamples({ dataType: 'weight', startDate: since.toISOString(), endDate: new Date().toISOString(), limit: 500, ascending: true });
   const byDay = new Map<string, number>();
   for (const s of samples) if (s.value > 20 && s.value < 400) byDay.set(toKey(new Date(s.startDate)), s.value);
   return [...byDay.entries()].filter(([date]) => !imported.has(`hk-weight-${date}`)).map(([date, kg]) => ({ date, kg: +kg.toFixed(1) }));
@@ -197,7 +197,7 @@ export async function writeMealsToHealth(meals: MealEntry[]): Promise<number> {
   const written = loadSet(WRITTEN_KEY);
   const todo = meals.filter((m) => !written.has(m.id) && m.calories > 0);
   if (todo.length === 0) return 0;
-  const health = await plugin();
+  const { Health: health } = await healthModule();
   let n = 0;
   for (const m of todo) {
     try {

@@ -116,9 +116,9 @@ export type NotificationSupport = 'granted' | 'denied' | 'default' | 'unsupporte
 // The iPhone app asks iOS (asynchronously); the answer is kept here.
 let nativePermission: NotificationSupport = 'default';
 
-async function localNotifications() {
-  return (await import('@capacitor/local-notifications')).LocalNotifications;
-}
+// Loads the module, not the plugin: awaiting a Capacitor plugin object makes
+// it call a native "then" method that never answers, so the await hangs.
+const notificationsModule = () => import('@capacitor/local-notifications');
 
 function fromNative(state: string): NotificationSupport {
   return state === 'granted' ? 'granted' : state === 'denied' ? 'denied' : 'default';
@@ -128,7 +128,7 @@ function fromNative(state: string): NotificationSupport {
 export async function refreshNotificationPermission(): Promise<NotificationSupport> {
   if (!isNative()) return notificationSupport();
   try {
-    nativePermission = fromNative((await (await localNotifications()).checkPermissions()).display);
+    nativePermission = fromNative((await (await notificationsModule()).LocalNotifications.checkPermissions()).display);
   } catch {
     // keep the last known answer
   }
@@ -144,7 +144,7 @@ export function notificationSupport(): NotificationSupport {
 export async function requestNotificationPermission(): Promise<NotificationSupport> {
   if (isNative()) {
     try {
-      nativePermission = fromNative((await (await localNotifications()).requestPermissions()).display);
+      nativePermission = fromNative((await (await notificationsModule()).LocalNotifications.requestPermissions()).display);
     } catch {
       // keep the last known answer
     }
@@ -163,7 +163,7 @@ export async function showSystemNotification(title: string, body: string, tag: s
   if (notificationSupport() !== 'granted') return false;
   if (isNative()) {
     try {
-      await (await localNotifications()).schedule({ notifications: [{ id: 999, title, body, schedule: { at: new Date(Date.now() + 1000) } }] });
+      await (await notificationsModule()).LocalNotifications.schedule({ notifications: [{ id: 999, title, body, schedule: { at: new Date(Date.now() + 1000) } }] });
       return true;
     } catch {
       return false;
@@ -211,7 +211,7 @@ export function plannedReminders(config: ReminderConfig, now: Date, today: DaySt
 
 export async function scheduleNativeReminders(config: ReminderConfig, today: DayStatus, now = new Date()): Promise<void> {
   if (!isNative()) return;
-  const ln = await localNotifications();
+  const { LocalNotifications: ln } = await notificationsModule();
   const pending = await ln.getPending();
   const ours = pending.notifications.filter((n) => n.id >= NATIVE_ID_BASE && n.id < NATIVE_ID_BASE + SCHEDULE_DAYS * REMINDER_IDS.length);
   if (ours.length) await ln.cancel({ notifications: ours.map((n) => ({ id: n.id })) });
