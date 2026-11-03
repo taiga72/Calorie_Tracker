@@ -4,9 +4,15 @@ import { UndoToastProvider } from '@/components/UndoToastProvider';
 import type { Settings, Workout } from '@/types';
 
 const estimateWorkout = vi.fn();
+const readWatchScreenshots = vi.fn();
 vi.mock('@/lib/workouts', async (orig) => ({
   ...(await orig<typeof import('@/lib/workouts')>()),
   estimateWorkout: (...args: unknown[]) => estimateWorkout(...args),
+  readWatchScreenshots: (...args: unknown[]) => readWatchScreenshots(...args),
+}));
+vi.mock('@/lib/gemini', async (orig) => ({
+  ...(await orig<typeof import('@/lib/gemini')>()),
+  compressImage: async () => ({ dataUrl: 'data:image/jpeg;base64,AAA', base64: { data: 'AAA', mimeType: 'image/jpeg' } }),
 }));
 
 const settings: Settings = { calorieGoal: 2000, goalWeight: 70, weeklyWeightTarget: -0.5, weightUnit: 'kg', geminiApiKey: 'k' };
@@ -197,5 +203,27 @@ describe('WorkoutForm', () => {
     fireEvent.click(screen.getByText('Add exercise'));
     fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'dumbbell curl' } });
     expect(screen.getByLabelText('Exercise 1 weight unit')).toHaveValue('lb');
+  });
+
+  it('imports a watch screenshot, keeping the exercises already typed', async () => {
+    readWatchScreenshots.mockResolvedValueOnce({ kind: 'strength', name: 'Strength training', minutes: 44, calories: 277, watchCalories: 416, avgHeartRate: 124, maxHeartRate: 142 });
+    renderForm();
+    fireEvent.click(screen.getByText('Strength'));
+    fireEvent.change(screen.getByPlaceholderText(/Upper body/), { target: { value: 'Push Workout' } });
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'Incline bench' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 reps'), { target: { value: '8' } });
+    const shot = new File(['x'], 'watch.png', { type: 'image/png' });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Watch screenshots'), { target: { files: [shot] } }); });
+    expect(readWatchScreenshots).toHaveBeenCalledWith('k', [{ data: 'AAA', mimeType: 'image/jpeg' }]);
+    expect(screen.getByDisplayValue('Push Workout')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('44')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('277')).toBeInTheDocument();
+    expect(screen.getByText(/It said 416 kcal/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Save workout'));
+    expect(addWorkout).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Push Workout', minutes: 44, calories: 277, notes: 'Watch: 416 kcal · HR avg 124, max 142 bpm',
+      sets: [{ exercise: 'Incline bench', reps: 8, weight: 0 }],
+    }));
   });
 });

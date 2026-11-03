@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { estimateBurn, estimated1RM, groupSets, liftHistory, liftRecords, newRecords, weeklyTotals } from '@/lib/workouts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { adjustWatchCalories, estimateBurn, estimated1RM, groupSets, liftHistory, liftRecords, newRecords, readWatchScreenshots, weeklyTotals } from '@/lib/workouts';
 import type { Workout } from '@/types';
 
 const gym = (id: string, date: string, sets: Workout['sets'], createdAt = 0): Workout => ({
@@ -61,5 +61,33 @@ describe('totals and estimates', () => {
     expect(weeks.map((w) => w.start)).toEqual(['2026-09-20', '2026-09-27', '2026-10-04']);
     expect(weeks[1]).toMatchObject({ workouts: 1, minutes: 45 });
     expect(weeks[2]).toMatchObject({ workouts: 2, minutes: 90, calories: 400 });
+  });
+});
+
+describe('watch screenshots', () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const answer = (o: Record<string, unknown>) => vi.fn(async () => new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(o) }] } }] }), { status: 200 }));
+
+  it('cuts a lifting session to about two thirds, leaves cardio as the watch said', () => {
+    expect(adjustWatchCalories('strength', 416)).toBe(277);
+    expect(adjustWatchCalories('cardio', 416)).toBe(416);
+  });
+
+  it('reads the summary off the screenshots and sends them all along', async () => {
+    const fetchMock = answer({ kind: 'strength', name: 'Strength training', minutes: 44, calories: 416, avgHeartRate: 124, maxHeartRate: 142 });
+    vi.stubGlobal('fetch', fetchMock);
+    const w = await readWatchScreenshots('k', [{ data: 'AAA', mimeType: 'image/jpeg' }, { data: 'BBB', mimeType: 'image/jpeg' }]);
+    expect(w).toMatchObject({ kind: 'strength', name: 'Strength training', minutes: 44, watchCalories: 416, calories: 277, avgHeartRate: 124, maxHeartRate: 142 });
+    const body = JSON.parse((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+    expect(body.contents[0].parts.filter((p: { inlineData?: unknown }) => p.inlineData)).toHaveLength(2);
+  });
+
+  it('ignores heart rates that make no sense and refuses screenshots without a workout', async () => {
+    vi.stubGlobal('fetch', answer({ kind: 'cardio', name: 'Outdoor run', minutes: 30, calories: 300, avgHeartRate: 0, maxHeartRate: 999 }));
+    const w = await readWatchScreenshots('k', [{ data: 'AAA', mimeType: 'image/jpeg' }]);
+    expect(w.avgHeartRate).toBeUndefined();
+    expect(w.maxHeartRate).toBeUndefined();
+    vi.stubGlobal('fetch', answer({ kind: 'other', name: '', minutes: 0, calories: 0 }));
+    await expect(readWatchScreenshots('k', [{ data: 'AAA', mimeType: 'image/jpeg' }])).rejects.toThrow();
   });
 });
