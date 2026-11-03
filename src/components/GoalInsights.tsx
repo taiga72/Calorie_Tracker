@@ -7,6 +7,7 @@ import { adaptiveTarget, formatForecastDate, ADAPTIVE_WINDOW_DAYS } from '@/lib/
 import { useGoalForecast } from '@/lib/useGoalForecast';
 import { fmtSignedChange, kgToUnit } from '@/lib/units';
 import { Target, Gauge, Check, PartyPopper, CalendarRange } from 'lucide-react';
+import { openSettings } from '@/lib/settingsLauncher';
 import type { WeightUnit } from '@/types';
 
 function fmtRate(kgPerWeek: number, unit: WeightUnit): string {
@@ -176,7 +177,7 @@ function Progress({ label, value, target }: { label: string; value: number; targ
 
 /**
  * Statistics → Goals: the goal plan at a glance — the phase you're in, what's
- * next, and any weekday adjustments. Edited in Settings → Goal plan.
+ * next, and any weekday adjustments. Edit opens Settings → Goal plan.
  */
 export function GoalPlanCard() {
   const { settings } = useStore();
@@ -196,10 +197,18 @@ export function GoalPlanCard() {
         <CalendarRange size={16} className="text-accent-600" />
         <h2 className="text-sm font-bold text-gray-900 dark:text-white">Goal plan</h2>
         <span className="ml-auto text-11 text-gray-400">Today {todayGoal.toLocaleString()} kcal</span>
+        <button
+          type="button"
+          onClick={() => openSettings('goalPlan')}
+          aria-label="Edit goal plan"
+          className="tap text-xs font-semibold text-accent-600"
+        >
+          Edit
+        </button>
       </div>
       {phases.length === 0 && adjusted.length === 0 ? (
         <p className="text-xs text-gray-400 mt-1">
-          One goal every day. In Settings → Goal plan you can plan phases (a cut, then maintenance…) or set different goals by weekday.
+          One goal every day. Tap Edit to plan phases (a cut, then maintenance…) or set different goals by weekday.
         </p>
       ) : (
         <div className="mt-2 space-y-2">

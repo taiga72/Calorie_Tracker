@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
+import type { SettingsSection } from '@/lib/settingsLauncher';
 import type { WeightUnit } from '@/types';
 import { unitToKg, kgToUnit } from '@/lib/units';
 import { downloadCsv, downloadWeightsCsv, downloadWorkoutsCsv } from '@/lib/csv';
@@ -28,16 +29,32 @@ import {
   ChevronDown, ChevronUp, Save, RefreshCw, Info,
 } from 'lucide-react';
 
-type Page = 'goals' | 'look' | 'account';
+type Page = 'goals' | 'app' | 'account';
 const PAGES: { key: Page; label: string; sub: string }[] = [
-  { key: 'goals', label: 'Goals', sub: 'Your plan and habits' },
-  { key: 'look', label: 'Look', sub: 'Make it yours' },
+  { key: 'goals', label: 'Goals', sub: 'Your goals and plan' },
+  { key: 'app', label: 'App', sub: 'Reminders, Health, coach and look' },
   { key: 'account', label: 'Account', sub: 'Profile, data and sign-in' },
 ];
 
-export function SettingsTab() {
+const SECTION: Record<SettingsSection, { page: Page; id: string }> = {
+  goalPlan: { page: 'goals', id: 'settings-goal-plan' },
+};
+
+/** `focus`: a section to open at (see lib/settingsLauncher); `onFocused` once it's shown. */
+export function SettingsTab({ focus, onFocused }: { focus?: SettingsSection | null; onFocused?: () => void } = {}) {
   const { notify } = useUndoToast();
-  const [page, setPage] = useState<Page>('goals');
+  const [page, setPage] = useState<Page>(focus ? SECTION[focus].page : 'goals');
+  useEffect(() => {
+    if (!focus) return;
+    setPage(SECTION[focus].page);
+    // After the page has rendered.
+    const t = setTimeout(() => {
+      document.getElementById(SECTION[focus].id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      onFocused?.();
+    }, 50);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
   const [slideFrom, setSlideFrom] = useState<'left' | 'right' | null>(null);
   const goToPage = (next: Page) => {
     if (next === page) return;
@@ -485,16 +502,16 @@ export function SettingsTab() {
 
       <GoalPlanSection />
 
-      <CoachMemorySection />
-
+        </>
+      )}
+      {page === 'app' && (
+        <>
       <RemindersSection key={restoreCount} />
 
       <HealthSection />
 
-        </>
-      )}
-      {page === 'look' && (
-        <>
+      <CoachMemorySection />
+
       <AppearanceSection />
 
       <LayoutSection />
@@ -507,7 +524,7 @@ export function SettingsTab() {
       <div className="card p-5 mt-5">
         <div className="flex items-center gap-2 mb-4">
           <User size={18} className="text-accent-600" />
-          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile</h2>
+          <h2 className="text-sm font-bold text-gray-900 dark:text-white">Profile and account</h2>
         </div>
         <div className="flex flex-col items-center mb-4">
           <button
@@ -560,10 +577,10 @@ export function SettingsTab() {
         >
           {profileSaved ? <><Check size={16} /> Saved</> : 'Save profile'}
         </button>
+        <div className="border-t border-gray-100 dark:border-gray-800 mt-5 pt-4">
+          <AccountSection bare />
+        </div>
       </div>
-
-
-      <AccountSection />
 
       {/* Backup & Export */}
       <div className="card p-5 mt-4">

@@ -212,7 +212,7 @@
     background-color: #636366;
     color: #fff;
   }
-  /* Taller segments with an icon over the label (Settings → Look). */
+  /* Taller segments with an icon over the label (Settings → App → Appearance). */
   .seg-tall { border-radius: 1rem; }
   .seg-tall .seg-item { flex-direction: column; gap: .25rem; border-radius: .8125rem; padding: .5rem .25rem; }
   [data-density="compact"] .seg-item { padding-top: .375rem; padding-bottom: .375rem; }

@@ -13,7 +13,8 @@ vi.mock('@/store', () => ({
   useStore: () => ({ meals, weights, settings, updateSettings }),
 }));
 
-const { AdaptiveTargetCard, GoalForecastCard } = await import('@/components/GoalInsights');
+const { AdaptiveTargetCard, GoalForecastCard, GoalPlanCard } = await import('@/components/GoalInsights');
+const { OPEN_SETTINGS_EVENT } = await import('@/lib/settingsLauncher');
 
 const daysAgo = (n: number) => toKey(addDays(new Date(), -n));
 
@@ -64,5 +65,17 @@ describe('GoalForecastCard', () => {
     weights = [];
     render(<UndoToastProvider><GoalForecastCard /></UndoToastProvider>);
     expect(screen.getByText(/Log your weight a few times/)).toBeInTheDocument();
+  });
+});
+
+describe('GoalPlanCard', () => {
+  it('has an Edit button that opens Settings at the goal plan', () => {
+    const onOpen = vi.fn();
+    window.addEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    render(<UndoToastProvider><GoalPlanCard /></UndoToastProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit goal plan' }));
+    window.removeEventListener(OPEN_SETTINGS_EVENT, onOpen);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+    expect((onOpen.mock.calls[0][0] as CustomEvent).detail).toBe('goalPlan');
   });
 });
