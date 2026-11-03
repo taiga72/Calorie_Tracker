@@ -58,7 +58,9 @@ describe('WorkoutForm', () => {
     await act(async () => { fireEvent.click(screen.getByText('Fill in with AI')); });
     expect(estimateWorkout).toHaveBeenCalledWith('k', 'bench 2x8 65kg', 80);
     expect(screen.getByDisplayValue('Push day')).toBeInTheDocument();
-    expect(screen.getAllByDisplayValue('Bench press')).toHaveLength(2);
+    // Both sets under one exercise.
+    expect(screen.getAllByDisplayValue('Bench press')).toHaveLength(1);
+    expect(screen.getByLabelText('Exercise 1 set 2 reps')).toHaveValue('8');
     fireEvent.click(screen.getByText('Save workout'));
     expect(addWorkout).toHaveBeenCalledWith(expect.objectContaining({ sets: [{ exercise: 'Bench press', reps: 8, weight: 65 }, { exercise: 'Bench press', reps: 8, weight: 65 }] }));
     expect(screen.getByText('🏆 New record: Bench press')).toBeInTheDocument();
@@ -116,17 +118,54 @@ describe('WorkoutForm', () => {
     renderForm();
     fireEvent.click(screen.getByText('Strength'));
     fireEvent.change(screen.getByPlaceholderText(/Upper body/), { target: { value: 'Push' } });
-    fireEvent.click(screen.getByText('Add set'));
-    fireEvent.change(screen.getByLabelText('Set 1 exercise'), { target: { value: 'Incline bench' } });
-    fireEvent.change(screen.getByLabelText('Set 1 reps'), { target: { value: '12' } });
-    fireEvent.change(screen.getByLabelText('Set 1 weight'), { target: { value: '22,5' } });
-    expect(screen.getByLabelText('Set 1 weight')).toHaveValue('22,5');
-    fireEvent.click(screen.getByText('Add set'));
-    fireEvent.change(screen.getByLabelText('Set 2 weight'), { target: { value: '22.5' } });
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'Incline bench' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 reps'), { target: { value: '12' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 weight'), { target: { value: '22,5' } });
+    expect(screen.getByLabelText('Exercise 1 set 1 weight')).toHaveValue('22,5');
+    fireEvent.click(screen.getByLabelText('Add set to exercise 1'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 2 weight'), { target: { value: '22.5' } });
     fireEvent.change(screen.getByLabelText('Weight unit for these sets'), { target: { value: 'lb' } });
     fireEvent.click(screen.getByText('Save workout'));
     const saved = addWorkout.mock.calls[0][0];
     // 22.5 lb ≈ 10.21 kg, stored in kg.
     expect(saved.sets?.map((x) => x.weight)).toEqual([10.21, 10.21]);
+  });
+
+  it('groups sets by exercise: add exercises, each with its own sets', () => {
+    renderForm();
+    fireEvent.click(screen.getByText('Strength'));
+    fireEvent.change(screen.getByPlaceholderText(/Upper body/), { target: { value: 'Push day' } });
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 1 name'), { target: { value: 'Bench press' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 reps'), { target: { value: '8' } });
+    fireEvent.change(screen.getByLabelText('Exercise 1 set 1 weight'), { target: { value: '60' } });
+    // A new set copies the one before.
+    fireEvent.click(screen.getByLabelText('Add set to exercise 1'));
+    expect(screen.getByLabelText('Exercise 1 set 2 weight')).toHaveValue('60');
+    fireEvent.click(screen.getByText('Add exercise'));
+    fireEvent.change(screen.getByLabelText('Exercise 2 name'), { target: { value: 'Dips' } });
+    fireEvent.change(screen.getByLabelText('Exercise 2 set 1 reps'), { target: { value: '12' } });
+    fireEvent.click(screen.getByText('Save workout'));
+    expect(addWorkout.mock.calls[0][0].sets).toEqual([
+      { exercise: 'Bench press', reps: 8, weight: 60 },
+      { exercise: 'Bench press', reps: 8, weight: 60 },
+      { exercise: 'Dips', reps: 12, weight: 0 },
+    ]);
+  });
+
+  it('opens a saved workout grouped by exercise, and can drop a whole exercise', () => {
+    const w: Workout = { id: 'w9', date: '2026-10-11', kind: 'strength', name: 'Push', minutes: 45, calories: 250, createdAt: 1, sets: [
+      { exercise: 'Bench press', reps: 8, weight: 60 }, { exercise: 'Dips', reps: 10, weight: 0 }, { exercise: 'Bench press', reps: 6, weight: 65 },
+    ] };
+    renderForm({ editWorkout: w });
+    expect(screen.getByLabelText('Exercise 1 name')).toHaveValue('Bench press');
+    expect(screen.getByLabelText('Exercise 1 set 2 weight')).toHaveValue('65');
+    expect(screen.getByLabelText('Exercise 2 name')).toHaveValue('Dips');
+    fireEvent.click(screen.getByLabelText('Remove exercise 2'));
+    fireEvent.click(screen.getByText('Save changes'));
+    expect(updateWorkout).toHaveBeenCalledWith('w9', expect.objectContaining({ sets: [
+      { exercise: 'Bench press', reps: 8, weight: 60 }, { exercise: 'Bench press', reps: 6, weight: 65 },
+    ] }));
   });
 });
