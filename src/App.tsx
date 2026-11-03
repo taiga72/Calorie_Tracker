@@ -10,6 +10,7 @@ import { SplashProvider, SplashReady, ScreenSkeleton } from '@/components/Splash
 import { useSplashReady } from '@/lib/splash';
 import { ReminderBanner } from '@/components/Reminders';
 import { useReminders } from '@/lib/useReminders';
+import { useHealthSync } from '@/lib/useHealthSync';
 import { isSupabaseConfigured } from '@/lib/supabaseClient';
 import { BottomNav } from '@/components/BottomNav';
 import { FAB } from '@/components/FAB';
@@ -143,6 +144,7 @@ function AppInner() {
   useEffect(() => { if (coachOpen) setCoachMounted(true); }, [coachOpen]);
   useEffect(() => { if (wizardOpen) setWizardMounted(true); }, [wizardOpen]);
   const reminder = useReminders(!loading);
+  useHealthSync(!loading);
 
   const openLog = (mode: 'food' | 'weight') => {
     setLogMode(mode);

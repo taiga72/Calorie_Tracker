@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { setNativeStatusBar } from '@/lib/native';
 import { applyAppearance, readAppearance, saveAppearance, setHapticsEnabled, DEFAULT_APPEARANCE, type Appearance } from '@/lib/appearance';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
@@ -63,6 +64,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
+    setNativeStatusBar(isDark);
   }, [isDark]);
 
   const setPreference = (p: ThemePreference) => {
