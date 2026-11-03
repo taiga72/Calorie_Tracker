@@ -6,7 +6,9 @@ afterEach(() => localStorage.clear());
 describe('appearance', () => {
   it('falls back to defaults for missing or unknown values', () => {
     expect(parseAppearance(null)).toEqual(DEFAULT_APPEARANCE);
-    expect(parseAppearance({ accent: 'neon', textSize: 'large', haptics: false })).toMatchObject({ accent: 'emerald', textSize: 'large', haptics: false });
+    expect(parseAppearance({ accent: 'neon', textSize: 'large', haptics: false })).toMatchObject({ accent: 'orange', textSize: 'large', haptics: false });
+    expect(parseAppearance({ accent: 'emerald' }).accent).toBe('orange');
+    expect(parseAppearance({ accent: 'green' }).accent).toBe('green');
   });
 
   it('persists on this device', () => {

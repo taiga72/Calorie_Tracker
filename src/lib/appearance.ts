@@ -5,7 +5,7 @@ import { isNative } from '@/lib/native';
  * attributes and CSS variables that index.css and tailwind.config.js read.
  */
 
-export type AccentId = 'emerald' | 'teal' | 'blue' | 'indigo' | 'violet' | 'pink' | 'slate';
+export type AccentId = 'orange' | 'green' | 'teal' | 'blue' | 'indigo' | 'violet' | 'pink' | 'slate';
 export type TextSize = 'standard' | 'large' | 'xlarge';
 export type Density = 'comfortable' | 'compact';
 export type BackgroundStyle = 'plain' | 'gradient' | 'texture';
@@ -26,7 +26,7 @@ export interface Appearance {
 }
 
 export const DEFAULT_APPEARANCE: Appearance = {
-  accent: 'emerald',
+  accent: 'orange',
   textSize: 'standard',
   density: 'comfortable',
   background: 'plain',
@@ -39,7 +39,8 @@ export const DEFAULT_APPEARANCE: Appearance = {
 
 /** Swatches for the picker (the 600 shade, as in buttons). */
 export const ACCENTS: { id: AccentId; label: string; swatch: string }[] = [
-  { id: 'emerald', label: 'Emerald', swatch: '#059669' },
+  { id: 'orange', label: 'Orange', swatch: '#ea580c' },
+  { id: 'green', label: 'Green', swatch: '#059669' },
   { id: 'teal', label: 'Teal', swatch: '#0d9488' },
   { id: 'blue', label: 'Blue', swatch: '#2563eb' },
   { id: 'indigo', label: 'Indigo', swatch: '#4f46e5' },
@@ -59,7 +60,9 @@ export function parseAppearance(raw: unknown): Appearance {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const d = DEFAULT_APPEARANCE;
   return {
-    accent: pick(o.accent, ACCENTS.map((a) => a.id), d.accent),
+    // 'emerald' was the default before the Tally rebrand; those settings move
+    // to the new orange default (green is still offered, as 'green').
+    accent: o.accent === 'emerald' ? 'orange' : pick(o.accent, ACCENTS.map((a) => a.id), d.accent),
     textSize: pick(o.textSize, ['standard', 'large', 'xlarge'] as const, d.textSize),
     density: pick(o.density, ['comfortable', 'compact'] as const, d.density),
     background: pick(o.background, ['plain', 'gradient', 'texture'] as const, d.background),
