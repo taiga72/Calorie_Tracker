@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Calorie Tracker</string>
+	<string>Tally</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -56,9 +56,9 @@
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 	<key>NSHealthShareUsageDescription</key>
-	<string>Calorie Tracker reads your workouts, heart rate during them, and weigh-ins from Apple Health so they appear in your log without typing.</string>
+	<string>Tally reads your workouts, heart rate during them, and weigh-ins from Apple Health so they appear in your log without typing.</string>
 	<key>NSHealthUpdateUsageDescription</key>
-	<string>Calorie Tracker saves the calories of meals you log to Apple Health.</string>
+	<string>Tally saves the calories of meals you log to Apple Health.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take a photo of a meal so the AI can estimate its calories.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

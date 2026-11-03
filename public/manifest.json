@@ -1,11 +1,11 @@
 {
-  "name": "Calorie Tracker",
-  "short_name": "Calorie Tracker",
+  "name": "Tally",
+  "short_name": "Tally",
   "description": "Track calories, macros, and weight with AI-powered meal estimation.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F4F5F6",
-  "theme_color": "#059669",
+  "theme_color": "#F4F5F6",
   "icons": [
     {
       "src": "/icon.svg",

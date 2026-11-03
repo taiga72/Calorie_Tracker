@@ -96,7 +96,7 @@ export function RemindersSection() {
                   ? "This browser can't show notifications — on iPhone, add the app to your Home Screen (Share → Add to Home Screen) and open it from there. You'll still get reminders inside the app."
                   : permission === 'denied'
                     ? isNative()
-                      ? 'Notifications are off for Calorie Tracker — turn them on in the iPhone Settings app → Notifications.'
+                      ? 'Notifications are off for Tally — turn them on in the iPhone Settings app → Notifications.'
                       : "Notifications are blocked for this app in your browser/phone settings. You'll still get reminders inside the app."
                     : "Allow notifications to get reminders when the app isn't on screen."}
               </span>

@@ -86,7 +86,7 @@ export function useSpeechInput(onText: (transcript: string, final: boolean) => v
       const { SpeechRecognition } = await import('@capgo/capacitor-speech-recognition');
       const perm = await SpeechRecognition.requestPermissions();
       if (perm.speechRecognition !== 'granted') {
-        setError('Allow Speech Recognition and the Microphone for Calorie Tracker in the iPhone Settings app.');
+        setError('Allow Speech Recognition and the Microphone for Tally in the iPhone Settings app.');
         return;
       }
       nativeTranscript.current = '';

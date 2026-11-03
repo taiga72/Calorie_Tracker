@@ -16,14 +16,14 @@ function Screen() {
 describe('SplashProvider', () => {
   it('covers the app until it reports ready, then fades out and goes away', async () => {
     render(<SplashProvider><Screen /></SplashProvider>);
-    const splash = screen.getByLabelText('Loading Calorie Tracker');
+    const splash = screen.getByLabelText('Loading Tally');
     expect(splash).not.toHaveClass('splash-out');
     expect(screen.getByText('app content')).toBeInTheDocument();
 
     act(() => markReady());
 
     await waitFor(() => expect(splash).toHaveClass('splash-out'));
-    await waitFor(() => expect(screen.queryByLabelText('Loading Calorie Tracker')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Loading Tally')).not.toBeInTheDocument());
   });
 });
 

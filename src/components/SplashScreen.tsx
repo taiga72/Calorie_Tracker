@@ -60,7 +60,7 @@ function MealRow({ w }: { w: 55 | 70 }) {
 /** The launch skeleton: kept in step with the static copy in index.html. */
 export function SplashScreen({ leaving = false }: { leaving?: boolean }) {
   return (
-    <div className={`splash${leaving ? ' splash-out' : ''}`} aria-label="Loading Calorie Tracker" role="status" aria-hidden={leaving}>
+    <div className={`splash${leaving ? ' splash-out' : ''}`} aria-label="Loading Tally" role="status" aria-hidden={leaving}>
       <div className="sk-page" aria-hidden="true">
         <div className="sk-head">
           <div style={{ flex: 1 }}><Bar w={40} /><div className="sk sk-title" /></div>

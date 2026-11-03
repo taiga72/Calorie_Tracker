@@ -232,7 +232,7 @@ export function SettingsTab() {
       try {
         const parsed = JSON.parse(reader.result as string) as BackupPayload;
         if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.meals)) {
-          notify("That file isn't a Calorie Tracker backup.", 'error');
+          notify("That file isn't a Tally backup.", 'error');
           return;
         }
         importBackup(parsed);
