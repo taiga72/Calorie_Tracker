@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Check, Trash2 } from 'lucide-react';
+import { cleanDecimal, parseDecimal } from '@/lib/decimal';
 import type { MealType, PinnedMeal } from '@/types';
 
 const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 type Macros = { protein: string; carbs: string; fat: string; fiber: string };
 
-const num = (v: string) => Math.max(0, Number(v) || 0);
+const num = (v: string) => Math.max(0, parseDecimal(v) || 0);
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
 interface PinEditorProps {
@@ -119,11 +120,11 @@ export function PinEditor({ pin, onSave, onDelete, onCancel }: PinEditorProps) {
         ] as const).map(([key, label, color]) => (
           <label key={key} className="field-box bg-gray-50 dark:bg-gray-800 rounded-xl p-2 text-center">
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
               aria-label={`${label} (g)`}
               value={macros[key]}
-              onChange={(e) => setMacros((m) => ({ ...m, [key]: e.target.value }))}
+              onChange={(e) => setMacros((m) => ({ ...m, [key]: cleanDecimal(e.target.value) }))}
               className={`w-full bg-transparent text-center text-sm font-bold outline-none ${color}`}
             />
             <span className="text-10 text-gray-400">{label} g</span>

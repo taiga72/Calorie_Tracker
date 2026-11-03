@@ -19,6 +19,7 @@ import { haptic } from '@/lib/appearance';
 import { lastLogMethod, mealTypeForTime, rememberLogMethod, type LogMethod } from '@/lib/logPrefs';
 import { friendlyAiError } from '@/lib/aiErrors';
 import { fmtGrams } from '@/lib/macros';
+import { cleanDecimal, parseDecimal } from '@/lib/decimal';
 import { WorkoutForm } from '@/components/WorkoutForm';
 
 type Mode = 'food' | 'weight' | 'exercise';
@@ -326,7 +327,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
   };
 
   const onSaveWeight = () => {
-    const v = parseFloat(weightVal);
+    const v = parseDecimal(weightVal);
     if (!v || v <= 0) { setError('Enter a valid weight.'); return; }
     haptic('success');
     if (weightDate) logWeightForDate(v, weightDate);
@@ -385,7 +386,7 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
       open={open}
       onClose={close}
       title={title}
-      action={isEdit ? { label: 'Save', onClick: onSaveEdit } : mode === 'weight' && !editingPin ? { label: 'Save', onClick: onSaveWeight, disabled: !(parseFloat(weightVal) > 0) } : undefined}
+      action={isEdit ? { label: 'Save', onClick: onSaveEdit } : mode === 'weight' && !editingPin ? { label: 'Save', onClick: onSaveWeight, disabled: !(parseDecimal(weightVal) > 0) } : undefined}
     >
       {/* Mode toggle (hidden in edit / weight-edit mode) */}
       {!isEdit && !isWeightEdit && !editingPin && (
@@ -859,10 +860,11 @@ export function LogModal({ open, onClose, targetDate, editMeal, weightDate, init
           )}
           <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
+              aria-label="Weight"
               value={weightVal}
-              onChange={(e) => setWeightVal(e.target.value)}
+              onChange={(e) => setWeightVal(cleanDecimal(e.target.value))}
               placeholder="0.0"
               className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
             />

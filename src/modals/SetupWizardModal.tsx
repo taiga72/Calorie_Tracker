@@ -6,6 +6,7 @@ import {
   type Sex, type ActivityLevel, type DeficitLevel, type HeightUnit, type InputWeightUnit,
   type CalcResult,
 } from '@/lib/mifflin';
+import { cleanDecimal, parseDecimal } from '@/lib/decimal';
 import { Flame, Activity, Check, ChevronRight, Target, TrendingDown, Utensils } from 'lucide-react';
 
 const SEXES: { key: Sex; label: string }[] = [
@@ -43,9 +44,9 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
 
   const buildResult = (): CalcResult | null => {
     const ageN = parseInt(age, 10);
-    const heightN = parseFloat(height);
-    const weightN = parseFloat(weight);
-    const goalN = parseFloat(goalWeight);
+    const heightN = parseDecimal(height);
+    const weightN = parseDecimal(weight);
+    const goalN = parseDecimal(goalWeight);
     if (!ageN || ageN < 10 || ageN > 120) { setError('Enter a valid age (10-120).'); return null; }
     if (!heightN || heightN <= 0) { setError('Enter a valid height.'); return null; }
     if (!weightN || weightN <= 0) { setError('Enter a valid current weight.'); return null; }
@@ -82,9 +83,9 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
   const canNext = (): boolean => {
     if (step === 0) return !!age && parseInt(age, 10) >= 10 && parseInt(age, 10) <= 120;
     if (step === 1) return sex !== null;
-    if (step === 2) return !!height && parseFloat(height) > 0;
-    if (step === 3) return !!weight && parseFloat(weight) > 0;
-    if (step === 4) return !!goalWeight && parseFloat(goalWeight) > 0;
+    if (step === 2) return !!height && parseDecimal(height) > 0;
+    if (step === 3) return !!weight && parseDecimal(weight) > 0;
+    if (step === 4) return !!goalWeight && parseDecimal(goalWeight) > 0;
     if (step === 5) return activity !== null;
     if (step === 6) return deficit !== null;
     return false;
@@ -105,9 +106,9 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
     if (!age || !height || !weight || !goalWeight || !sex || !activity) return null;
     return calculateTargets({
       age: parseInt(age, 10), sex,
-      height: parseFloat(height), heightUnit,
-      weight: parseFloat(weight), weightUnit,
-      goalWeight: parseFloat(goalWeight), activity, deficit,
+      height: parseDecimal(height), heightUnit,
+      weight: parseDecimal(weight), weightUnit,
+      goalWeight: parseDecimal(goalWeight), activity, deficit,
     });
   };
 
@@ -191,10 +192,10 @@ export function SetupWizardModal({ open, onClose }: { open: boolean; onClose: ()
           <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
             <input
               autoFocus
-              type="number"
+              type="text"
               inputMode="decimal"
               value={height}
-              onChange={(e) => setHeight(e.target.value)}
+              onChange={(e) => setHeight(cleanDecimal(e.target.value))}
               placeholder={heightUnit === 'cm' ? 'e.g. 175' : 'e.g. 69'}
               className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
             />
@@ -412,10 +413,10 @@ function NumberField({ value, onChange, unit, placeholder }: { value: string; on
     <div className="field-box flex items-center bg-gray-50 dark:bg-gray-800 rounded-2xl px-4 py-4">
       <input
         autoFocus
-        type="number"
+        type="text"
         inputMode="decimal"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(cleanDecimal(e.target.value))}
         placeholder={placeholder}
         className="flex-1 bg-transparent text-2xl font-bold text-gray-900 dark:text-white outline-none"
       />

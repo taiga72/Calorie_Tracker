@@ -7,6 +7,7 @@ import { kgToUnit, unitToKg } from '@/lib/units';
 import { haptic } from '@/lib/appearance';
 import { MILESTONE_KINDS, milestoneLabel, milestoneProgress } from '@/lib/milestones';
 import { Trophy, Plus, Trash2, Check, X, PartyPopper } from 'lucide-react';
+import { cleanDecimal, parseDecimal } from '@/lib/decimal';
 import type { Milestone, MilestoneKind } from '@/types';
 
 /** Your own milestones with progress; add and remove them here. */
@@ -86,7 +87,7 @@ function AddMilestone({ onDone }: { onDone: () => void }) {
   const [target, setTarget] = useState('');
   const [label, setLabel] = useState('');
   const latest = [...weights].sort((a, b) => a.date.localeCompare(b.date)).pop()?.weight;
-  const n = Number(target);
+  const n = parseDecimal(target);
   const valid = n > 0 && (kind !== 'weight' || latest !== undefined);
 
   const save = () => {
@@ -123,12 +124,12 @@ function AddMilestone({ onDone }: { onDone: () => void }) {
       </div>
       <div className="flex items-center gap-2">
         <input
-          type="number"
+          type="text"
           inputMode="decimal"
           aria-label="Milestone target"
           placeholder={kind === 'weight' ? (latest ? (kgToUnit(latest, unit) - (unit === 'kg' ? 2 : 5)).toFixed(0) : '') : kind === 'meals' ? '100' : '30'}
           value={target}
-          onChange={(e) => setTarget(e.target.value)}
+          onChange={(e) => setTarget(cleanDecimal(e.target.value))}
           className="w-24 bg-white dark:bg-gray-900 rounded-lg px-2.5 py-2 text-sm font-semibold text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-accent-500/30"
         />
         <span className="text-xs text-gray-500">{kindInfo.unitLabel(unit)}</span>

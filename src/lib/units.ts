@@ -1,3 +1,4 @@
+import { parseDecimal } from '@/lib/decimal';
 import type { WeightUnit } from '@/types';
 
 export const KG_TO_LB = 2.20462262;
@@ -28,7 +29,7 @@ export function fmtSignedChange(v: number, digits: number): string | null {
 
 /** A typed weight re-expressed in another unit (for switching kg ↔ lb mid-edit); text that isn't a number is kept. */
 export function convertWeightText(text: string, from: WeightUnit, to: WeightUnit, digits: number): string {
-  const v = parseFloat(text);
+  const v = parseDecimal(text);
   if (from === to || !Number.isFinite(v)) return text;
   return kgToUnit(unitToKg(v, from), to).toFixed(digits);
 }

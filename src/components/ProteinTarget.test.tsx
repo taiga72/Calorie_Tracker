@@ -27,7 +27,7 @@ describe('ProteinTarget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Per kg' }));
     expect(updatePrefs).toHaveBeenCalledWith({ proteinPerKg: 1.6 });
     rerender(<ProteinTarget grams="120" onGramsChange={vi.fn()} latestWeightKg={80} />);
-    expect(screen.getByLabelText('Protein grams per kg')).toHaveValue(1.6);
+    expect(screen.getByLabelText('Protein grams per kg')).toHaveValue('1.6');
     expect(screen.getByText('= 128 g')).toBeInTheDocument();
   });
 
