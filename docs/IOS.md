@@ -63,12 +63,26 @@ on inside the app.
 
 ## After a code change
 
+One command gets the latest code, builds it and installs it on the iPhone
+(plugged in and unlocked), without opening Xcode:
+
+```sh
+npm run ios:update
+```
+
+It asks which device to use: pick your iPhone with the arrow keys and press
+Return. Your Xcode signing settings are kept (`git pull --autostash` sets your
+local changes aside and puts them back).
+
+If it fails, do it the long way:
+
 ```sh
 git pull
 npm install
 npm run ios      # rebuilds the web app and copies it in
 ```
-then **▶ Run** in Xcode again.
+then **▶ Run** in Xcode again. The free Apple ID's 7-day renewal works the
+same way: either `npm run ios:update` or **▶ Run**.
 
 ## Apple Health
 

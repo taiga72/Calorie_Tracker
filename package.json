@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "ios": "vite build && cap sync ios",
-    "ios:open": "cap open ios"
+    "ios:open": "cap open ios",
+    "ios:update": "git pull --autostash && npm install && npm run ios && cap run ios --no-sync"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.2",
